@@ -1,46 +1,212 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { colors, shadow } from "../theme";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { formatFinnishDateTime, parseFinnishDateTime } from "../lib/dates";
 import { supabase } from "../lib/supabase";
+import { colors, shadow } from "../theme";
 
-type Match = { id: string; home: string; away: string; date?: string; venue?: string; score?: string; completed?: boolean };
+type SetScore = { home: number | null; away: number | null; tiebreak: boolean; homeTiebreak: string; awayTiebreak: string };
+type Match = { id: string; homeId: string; awayId: string; home: string; away: string; date?: string; venue?: string; setScores: SetScore[]; walkoverWinnerId?: string | null; completed?: boolean };
+
+const emptySetScores = (): SetScore[] => [{ home: null, away: null, tiebreak: false, homeTiebreak: "", awayTiebreak: "" }, { home: null, away: null, tiebreak: false, homeTiebreak: "", awayTiebreak: "" }, { home: null, away: null, tiebreak: false, homeTiebreak: "", awayTiebreak: "" }];
+
+function readSetScores(value: unknown): SetScore[] {
+  if (!Array.isArray(value)) return emptySetScores();
+  const parsed = value.slice(0, 3).map((set) => {
+    const item = set as { home?: unknown; away?: unknown; tiebreak?: unknown; homeTiebreak?: unknown; awayTiebreak?: unknown };
+    return { home: typeof item.home === "number" ? item.home : null, away: typeof item.away === "number" ? item.away : null, tiebreak: item.tiebreak === true, homeTiebreak: typeof item.homeTiebreak === "number" || typeof item.homeTiebreak === "string" ? String(item.homeTiebreak) : "", awayTiebreak: typeof item.awayTiebreak === "number" || typeof item.awayTiebreak === "string" ? String(item.awayTiebreak) : "" };
+  });
+  return [...parsed, ...emptySetScores()].slice(0, 3);
+}
+
+function formatSetResult(setScores: SetScore[], walkoverWinnerId: string | null | undefined, homeId: string, homeName: string, awayName: string) {
+  if (walkoverWinnerId) return `Luovutusvoitto: ${walkoverWinnerId === homeId ? homeName : awayName} (6-0, 6-0, 6-0)`;
+  const sets = setScores.filter((set) => set.home !== null && set.away !== null);
+  return sets.map((set) => `${set.home}-${set.away}${set.tiebreak ? ` (${set.homeTiebreak}-${set.awayTiebreak})` : ""}`).join(", ");
+}
+
+function isValidSet(set: SetScore) {
+  if (set.home === null || set.away === null || set.home === set.away) return false;
+  const high = Math.max(set.home, set.away);
+  const low = Math.min(set.home, set.away);
+  if (high === 6) return low <= 4 && !set.tiebreak;
+  if (high !== 7 || !((low === 5 && !set.tiebreak) || (low === 6 && set.tiebreak))) return false;
+  if (!set.tiebreak) return true;
+  const homeTiebreak = Number(set.homeTiebreak);
+  const awayTiebreak = Number(set.awayTiebreak);
+  const winnerIsHome = set.home === 7;
+  return Number.isInteger(homeTiebreak) && Number.isInteger(awayTiebreak)
+    && homeTiebreak >= 0 && awayTiebreak >= 0
+    && (winnerIsHome ? homeTiebreak : awayTiebreak) >= 7
+    && Math.abs(homeTiebreak - awayTiebreak) >= 2;
+}
 
 export default function GroupMatches({ groupId, teamId, teamName }: { groupId: string; teamId: string; teamName: string }) {
   const [matches, setMatches] = useState<Match[]>([]);
   const [selected, setSelected] = useState<Match | null>(null);
   const [date, setDate] = useState("");
   const [venue, setVenue] = useState("");
-  const [score, setScore] = useState("");
+  const [setScores, setSetScores] = useState<SetScore[]>(emptySetScores());
+  const [resultMode, setResultMode] = useState<"sets" | "walkover">("sets");
+  const [walkoverWinnerId, setWalkoverWinnerId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!supabase) return;
     const client = supabase;
     const loadMatches = async () => {
-      const { data } = await client.from("matches").select("id, home_team_id, away_team_id, status, scheduled_at, venue, home_score, away_score").eq("group_id", groupId);
-      const rows = (data ?? []) as { id: string; home_team_id: string; away_team_id: string; status: string; scheduled_at: string | null; venue: string | null; home_score: number | null; away_score: number | null }[];
+      const { data } = await client.from("matches").select("id,home_team_id,away_team_id,status,scheduled_at,venue,set_scores,walkover_winner_id").eq("group_id", groupId);
+      const rows = (data ?? []) as { id: string; home_team_id: string; away_team_id: string; status: string; scheduled_at: string | null; venue: string | null; set_scores: unknown; walkover_winner_id: string | null }[];
       const teamIds = [...new Set(rows.flatMap((row) => [row.home_team_id, row.away_team_id]))];
-      const { data: teamRows } = await client.from("teams").select("id, name").in("id", teamIds);
+      const { data: teamRows } = await client.from("teams").select("id,name").in("id", teamIds);
       const teamNames = new Map((teamRows ?? []).map((team) => [team.id, team.name]));
-      setMatches(rows.filter((row) => row.home_team_id === teamId || row.away_team_id === teamId).map((row) => ({ id: row.id, home: teamNames.get(row.home_team_id) ?? "Kotijoukkue", away: teamNames.get(row.away_team_id) ?? "Vastustaja", date: row.scheduled_at ?? undefined, venue: row.venue ?? undefined, score: row.home_score !== null && row.away_score !== null ? `${row.home_score}-${row.away_score}` : undefined, completed: row.status === "completed" })));
+      setMatches(rows.filter((row) => row.home_team_id === teamId || row.away_team_id === teamId).map((row) => ({
+        id: row.id,
+        homeId: row.home_team_id,
+        awayId: row.away_team_id,
+        home: teamNames.get(row.home_team_id) ?? "Kotijoukkue",
+        away: teamNames.get(row.away_team_id) ?? "Vierasjoukkue",
+        date: row.scheduled_at ?? undefined,
+        venue: row.venue ?? undefined,
+        setScores: readSetScores(row.set_scores),
+        walkoverWinnerId: row.walkover_winner_id,
+        completed: row.status === "completed",
+      })));
     };
     void loadMatches();
   }, [groupId, teamId]);
 
-  const openEditor = (match: Match) => { setSelected(match); setDate(match.date ?? ""); setVenue(match.venue ?? ""); setScore(match.score ?? ""); setError(""); };
-  const saveMatch = async () => {
-    if (score.trim() && !/^\d+\s*[-–]\s*\d+(,\s*\d+\s*[-–]\s*\d+)*$/.test(score.trim())) { setError("Syötä tulos muodossa 6-4, 6-3."); return; }
-    if (!selected) return;
-    const update = { date: date.trim() || undefined, venue: venue.trim() || undefined, score: score.trim() || undefined, completed: Boolean(score.trim()) };
-    setMatches((current) => current.map((match) => match.id === selected.id ? { ...match, ...update } : match));
-    if (supabase) {
-      const scores = score.trim().match(/^(\d+)\s*[-–]\s*(\d+)/);
-      await supabase.from("matches").update({ scheduled_at: date.trim() || null, venue: venue.trim() || null, home_score: scores ? Number(scores[1]) : null, away_score: scores ? Number(scores[2]) : null, status: score.trim() ? "completed" : "scheduled" }).eq("id", selected.id);
+  const openEditor = (match: Match) => {
+    setSelected(match);
+    setDate(formatFinnishDateTime(match.date));
+    setVenue(match.venue ?? "");
+    setSetScores(readSetScores(match.setScores));
+    setResultMode(match.walkoverWinnerId ? "walkover" : "sets");
+    setWalkoverWinnerId(match.walkoverWinnerId ?? null);
+    setError("");
+  };
+
+  const updateSet = (index: number, key: keyof SetScore, value: number | boolean | string | null) => {
+    setSetScores((current) => current.map((set, setIndex) => setIndex === index ? { ...set, [key]: value } : set));
+  };
+
+  const toggleScore = (index: number, team: "home" | "away", score: number) => {
+    updateSet(index, team, setScores[index][team] === score ? null : score);
+  };
+
+  const toggleTiebreak = (index: number) => {
+    const set = setScores[index];
+    updateSet(index, "tiebreak", !set.tiebreak);
+    if (set.tiebreak) {
+      updateSet(index, "homeTiebreak", "");
+      updateSet(index, "awayTiebreak", "");
     }
+  };
+
+  const saveMatch = async () => {
+    if (!selected || !supabase) return;
+    const scheduledAt = date.trim() ? parseFinnishDateTime(date) : null;
+    if (date.trim() && !scheduledAt) {
+      setError("Anna ajankohta muodossa DD-MM-YYYY HH:MM.");
+      return;
+    }
+
+    let homeSets = 0;
+    let awaySets = 0;
+    let completed = false;
+    let savedSetScores: SetScore[] = [];
+    let savedWalkoverWinnerId: string | null = null;
+
+    if (resultMode === "walkover") {
+      if (!walkoverWinnerId) {
+        setError("Valitse luovutusvoiton voittaja.");
+        return;
+      }
+      const winnerIsHome = walkoverWinnerId === selected.homeId;
+      homeSets = winnerIsHome ? 3 : 0;
+      awaySets = winnerIsHome ? 0 : 3;
+      savedSetScores = Array.from({ length: 3 }, () => ({ home: winnerIsHome ? 6 : 0, away: winnerIsHome ? 0 : 6, tiebreak: false, homeTiebreak: "", awayTiebreak: "" }));
+      savedWalkoverWinnerId = walkoverWinnerId;
+      completed = true;
+    } else {
+      const playedSets = setScores.filter((set) => set.home !== null && set.away !== null);
+      if (setScores.some((set) => (set.home === null) !== (set.away === null))) {
+        setError("Valitse molempien joukkueiden pisteet jokaiselle merkitylle setille.");
+        return;
+      }
+      if (playedSets.length !== 3 || playedSets.some((set) => !isValidSet(set))) {
+        setError("Kirjaa kaikki kolme kelvollista settiä. Setti päättyy 6-0 - 6-4, 7-5 tai 7-6. Tiebreakiin merkitään myös pisteet, vähintään 7 ja kahden pisteen erolla.");
+        return;
+      }
+      homeSets = playedSets.filter((set) => set.home! > set.away!).length;
+      awaySets = playedSets.filter((set) => set.away! > set.home!).length;
+      if (Math.max(homeSets, awaySets) < 2) {
+        setError("Ottelun voittajan tulee voittaa vähintään kaksi kolmesta setistä.");
+        return;
+      }
+      savedSetScores = playedSets;
+      completed = true;
+    }
+
+    const { error: updateError } = await supabase.from("matches").update({
+      scheduled_at: scheduledAt,
+      venue: venue.trim() || null,
+      home_score: completed ? homeSets : null,
+      away_score: completed ? awaySets : null,
+      set_scores: savedSetScores,
+      walkover_winner_id: savedWalkoverWinnerId,
+      status: completed ? "completed" : "scheduled",
+    }).eq("id", selected.id);
+    if (updateError) {
+      setError(`Ottelun tallennus epäonnistui: ${updateError.message}`);
+      return;
+    }
+
+    setMatches((current) => current.map((match) => match.id === selected.id ? {
+      ...match,
+      date: date.trim() || undefined,
+      venue: venue.trim() || undefined,
+      setScores: savedSetScores,
+      walkoverWinnerId: savedWalkoverWinnerId,
+      completed,
+    } : match));
     setSelected(null);
   };
 
-  return <View style={styles.section}><View style={styles.heading}><Text style={styles.title}>Otteluparit</Text><Text style={styles.counter}>{matches.filter((match) => match.completed).length} / {matches.length} pelattu</Text></View><Text style={styles.hint}>Lisää jokaiselle ottelulle aika ja paikka. Kirjaa lopputulos pelin jälkeen.</Text>{matches.length === 0 ? <Text style={styles.empty}>Otteluita ei ole vielä muodostettu tälle lohkolle.</Text> : matches.map((match) => <View key={match.id} style={styles.match}><View style={styles.matchTop}><Text style={styles.status}>{match.completed ? "PELATTU" : match.date ? "SOVITTU" : "AJANKOHTA SOPIMATTA"}</Text><Text style={styles.own}>OMA OTTELU</Text></View><View style={styles.teams}><Text style={[styles.team, match.home === teamName && styles.ownTeam]}>{match.home}</Text><Text style={styles.vs}>VS</Text><Text style={[styles.team, match.away === teamName && styles.ownTeam]}>{match.away}</Text></View>{match.completed ? <Text style={styles.result}>Lopputulos  {match.score}</Text> : match.date ? <Text style={styles.details}>◷ {match.date}   ·   ⌖ {match.venue}</Text> : null}<Pressable style={styles.editButton} onPress={() => openEditor(match)}><Text style={styles.editText}>{match.completed ? "Muokkaa tietoja ja tulosta" : match.date ? "Muokkaa ottelua" : "Lisää aika ja paikka"}</Text><Text style={styles.arrow}>→</Text></Pressable></View>)}<Modal visible={Boolean(selected)} transparent animationType="slide" onRequestClose={() => setSelected(null)}><View style={styles.modalBackdrop}><View style={styles.modal}><View style={styles.modalHeader}><Text style={styles.modalTitle}>{selected?.home} vs {selected?.away}</Text><Pressable onPress={() => setSelected(null)}><Text style={styles.close}>×</Text></Pressable></View><Text style={styles.fieldLabel}>OTTELUN AJANKOHTA</Text><TextInput value={date} onChangeText={setDate} placeholder="Esim. Su 6.9. klo 18.00" placeholderTextColor={colors.muted} style={styles.input} /><Text style={styles.fieldLabel}>PAIKKA</Text><TextInput value={venue} onChangeText={setVenue} placeholder="Esim. Hippos Padel" placeholderTextColor={colors.muted} style={styles.input} /><Text style={styles.fieldLabel}>LOPPUTULOS (PELIN JÄLKEEN)</Text><TextInput value={score} onChangeText={setScore} placeholder="Esim. 6-4, 6-3" placeholderTextColor={colors.muted} style={styles.input} /><Text style={styles.modalHint}>Jätä tulos tyhjäksi, jos ottelua ei ole vielä pelattu.</Text>{error ? <Text style={styles.error}>{error}</Text> : null}<Pressable style={styles.save} onPress={saveMatch}><Text style={styles.saveText}>Tallenna ottelun tiedot</Text></Pressable></View></View></Modal></View>;
+  return <View style={styles.section}>
+    <View style={styles.heading}><Text style={styles.title}>Otteluparit</Text><Text style={styles.counter}>{matches.filter((match) => match.completed).length} / {matches.length} pelattu</Text></View>
+    <Text style={styles.hint}>Lisää ottelulle aika ja paikka. Kirjaa lopputulokseen aina kaikki kolme settiä.</Text>
+    {matches.length === 0 ? <Text style={styles.empty}>Otteluita ei ole vielä muodostettu tälle lohkolle.</Text> : matches.map((match) => <View key={match.id} style={styles.match}>
+      <View style={styles.matchTop}><Text style={styles.status}>{match.completed ? "PELATTU" : match.date ? "SOVITTU" : "AJANKOHTA SOPIMATTA"}</Text><Text style={styles.own}>OMA OTTELU</Text></View>
+      <View style={styles.teams}><Text style={[styles.team, match.home === teamName && styles.ownTeam]}>{match.home}</Text><Text style={styles.vs}>VS</Text><Text style={[styles.team, match.away === teamName && styles.ownTeam]}>{match.away}</Text></View>
+      {match.completed ? <Text style={styles.result}>Lopputulos {formatSetResult(match.setScores, match.walkoverWinnerId, match.homeId, match.home, match.away)}</Text> : match.date ? <Text style={styles.details}>Ajankohta {formatFinnishDateTime(match.date)} · {match.venue || "Paikka sopimatta"}</Text> : null}
+      <Pressable style={styles.editButton} onPress={() => openEditor(match)}><Text style={styles.editText}>{match.completed ? "Muokkaa tietoja ja tulosta" : match.date ? "Muokkaa ottelua" : "Lisää aika ja paikka"}</Text><Text style={styles.arrow}>→</Text></Pressable>
+    </View>)}
+    <Modal visible={Boolean(selected)} transparent animationType="slide" onRequestClose={() => setSelected(null)}>
+      <View style={styles.modalBackdrop}><ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled"><View style={styles.modal}>
+        <View style={styles.modalHeader}><Text style={styles.modalTitle}>{selected?.home} vs {selected?.away}</Text><Pressable onPress={() => setSelected(null)}><Text style={styles.close}>×</Text></Pressable></View>
+        <Text style={styles.fieldLabel}>OTTELUN AJANKOHTA</Text>
+        <TextInput value={date} onChangeText={setDate} placeholder="DD-MM-YYYY HH:MM" placeholderTextColor={colors.muted} style={styles.input} />
+        <Text style={styles.fieldLabel}>PELIPAIKKA</Text>
+        <TextInput value={venue} onChangeText={setVenue} placeholder="Esim. Padel Center" placeholderTextColor={colors.muted} style={styles.input} />
+        <Text style={styles.fieldLabel}>LOPPUTULOS</Text>
+        <View style={styles.modeRow}><Pressable onPress={() => setResultMode("sets")} style={[styles.mode, resultMode === "sets" && styles.modeSelected]}><Text style={[styles.modeText, resultMode === "sets" && styles.modeTextSelected]}>Setit</Text></Pressable><Pressable onPress={() => setResultMode("walkover")} style={[styles.walkoverMode, resultMode === "walkover" && styles.walkoverModeSelected]}><Text style={[styles.walkoverModeText, resultMode === "walkover" && styles.walkoverModeTextSelected]}>Luovutusvoitto</Text></Pressable></View>
+        {resultMode === "walkover" ? <View style={styles.walkover}><Text style={styles.walkoverHint}>Valitse luovutusvoiton saanut joukkue.</Text><Pressable onPress={() => setWalkoverWinnerId(selected?.homeId ?? null)} style={[styles.winner, walkoverWinnerId === selected?.homeId && styles.winnerSelected]}><Text style={[styles.winnerText, walkoverWinnerId === selected?.homeId && styles.winnerTextSelected]}>{selected?.home}</Text></Pressable><Pressable onPress={() => setWalkoverWinnerId(selected?.awayId ?? null)} style={[styles.winner, walkoverWinnerId === selected?.awayId && styles.winnerSelected]}><Text style={[styles.winnerText, walkoverWinnerId === selected?.awayId && styles.winnerTextSelected]}>{selected?.away}</Text></Pressable></View> : <>{setScores.map((set, index) => <View key={index} style={styles.setCard}>
+          <Text style={styles.setTitle}>SETTI {index + 1}</Text>
+          <Text style={styles.scoreLabel}>{selected?.home}</Text><View style={styles.scorePicker}>{[0, 1, 2, 3, 4, 5, 6, 7].map((score) => <Pressable key={score} onPress={() => toggleScore(index, "home", score)} style={[styles.scoreButton, set.home === score && styles.scoreButtonSelected]}><Text style={[styles.scoreText, set.home === score && styles.scoreTextSelected]}>{score}</Text></Pressable>)}</View>
+          <Text style={styles.scoreLabel}>{selected?.away}</Text><View style={styles.scorePicker}>{[0, 1, 2, 3, 4, 5, 6, 7].map((score) => <Pressable key={score} onPress={() => toggleScore(index, "away", score)} style={[styles.scoreButton, set.away === score && styles.scoreButtonSelected]}><Text style={[styles.scoreText, set.away === score && styles.scoreTextSelected]}>{score}</Text></Pressable>)}</View>
+          <Pressable onPress={() => toggleTiebreak(index)} style={[styles.tiebreak, set.tiebreak && styles.tiebreakSelected]}><Text style={[styles.tiebreakText, set.tiebreak && styles.tiebreakTextSelected]}>Tiebreak</Text></Pressable>{set.tiebreak ? <View style={styles.tiebreakInputs}><View style={styles.tiebreakField}><Text style={styles.tiebreakLabel}>{selected?.home}</Text><TextInput value={set.homeTiebreak} onChangeText={(value) => updateSet(index, "homeTiebreak", value.replace(/[^0-9]/g, ""))} keyboardType="number-pad" placeholder="0" placeholderTextColor={colors.muted} style={styles.tiebreakInput} /></View><View style={styles.tiebreakField}><Text style={styles.tiebreakLabel}>{selected?.away}</Text><TextInput value={set.awayTiebreak} onChangeText={(value) => updateSet(index, "awayTiebreak", value.replace(/[^0-9]/g, ""))} keyboardType="number-pad" placeholder="0" placeholderTextColor={colors.muted} style={styles.tiebreakInput} /></View></View> : null}
+        </View>)}</>}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <Pressable onPress={() => void saveMatch()} style={styles.save}><Text style={styles.saveText}>Tallenna ottelu</Text></Pressable>
+      </View></ScrollView></View>
+    </Modal>
+  </View>;
 }
 
-const styles = StyleSheet.create({ section: { marginTop: 25, paddingHorizontal: 18 }, heading: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }, eyebrow: { color: colors.greenBright, fontSize: 10, letterSpacing: 1.2, fontWeight: "900" }, title: { color: colors.ink, fontSize: 21, fontWeight: "800", marginTop: 5 }, counter: { color: colors.muted, fontSize: 11, fontWeight: "700" }, hint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 9, marginBottom: 12 }, empty: { color: colors.muted, fontSize: 13, paddingVertical: 12 }, match: { backgroundColor: colors.surface, borderRadius: 16, padding: 15, marginBottom: 10, ...shadow }, matchTop: { flexDirection: "row", justifyContent: "space-between" }, status: { color: colors.muted, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, own: { color: colors.coral, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, teams: { flexDirection: "row", alignItems: "center", marginTop: 13 }, team: { color: colors.ink, fontSize: 14, fontWeight: "800", flex: 1 }, ownTeam: { color: colors.green }, vs: { color: colors.muted, fontSize: 9, fontWeight: "900", marginHorizontal: 9 }, details: { color: colors.muted, fontSize: 11, marginTop: 10 }, result: { color: colors.greenBright, fontSize: 12, fontWeight: "800", marginTop: 10 }, editButton: { borderTopWidth: 1, borderTopColor: colors.line, marginTop: 13, paddingTop: 12, flexDirection: "row" }, editText: { color: colors.green, fontWeight: "800", fontSize: 12 }, arrow: { color: colors.coral, fontSize: 17, marginLeft: "auto", marginTop: -4 }, waiting: { color: colors.muted, fontSize: 11, marginTop: 12, fontStyle: "italic" }, modalBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(16,37,27,0.45)" }, modal: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, paddingBottom: 32 }, modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }, modalTitle: { color: colors.ink, fontSize: 20, fontWeight: "800" }, close: { color: colors.muted, fontSize: 30, fontWeight: "300" }, fieldLabel: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 12, marginBottom: 7 }, input: { borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 13, color: colors.ink, fontSize: 14 }, modalHint: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 10 }, error: { color: colors.coral, fontSize: 12, marginTop: 8 }, save: { backgroundColor: colors.green, padding: 16, borderRadius: 13, alignItems: "center", marginTop: 18 }, saveText: { color: colors.surface, fontWeight: "800", fontSize: 14 } });
+const styles = StyleSheet.create({
+  section: { marginTop: 25, paddingHorizontal: 18 }, heading: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }, title: { color: colors.ink, fontSize: 21, fontWeight: "800" }, counter: { color: colors.muted, fontSize: 11, fontWeight: "700" }, hint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 9, marginBottom: 12 }, empty: { color: colors.muted, fontSize: 13, paddingVertical: 12 }, match: { backgroundColor: colors.surface, borderRadius: 16, padding: 15, marginBottom: 10, ...shadow }, matchTop: { flexDirection: "row", justifyContent: "space-between" }, status: { color: colors.muted, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, own: { color: colors.coral, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, teams: { flexDirection: "row", alignItems: "center", marginTop: 13 }, team: { color: colors.ink, fontSize: 14, fontWeight: "800", flex: 1 }, ownTeam: { color: colors.green }, vs: { color: colors.muted, fontSize: 9, fontWeight: "900", marginHorizontal: 9 }, details: { color: colors.muted, fontSize: 11, marginTop: 10 }, result: { color: colors.greenBright, fontSize: 12, fontWeight: "800", marginTop: 10 }, editButton: { borderTopWidth: 1, borderTopColor: colors.line, marginTop: 13, paddingTop: 12, flexDirection: "row" }, editText: { color: colors.green, fontWeight: "800", fontSize: 12 }, arrow: { color: colors.coral, fontSize: 17, marginLeft: "auto", marginTop: -4 }, modalBackdrop: { flex: 1, backgroundColor: "rgba(16,37,27,0.45)" }, modalScroll: { flexGrow: 1, justifyContent: "flex-end" }, modal: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, paddingBottom: 32 }, modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }, modalTitle: { color: colors.ink, fontSize: 20, fontWeight: "800", flex: 1 }, close: { color: colors.green, fontSize: 28, lineHeight: 28, fontWeight: "700" }, fieldLabel: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 13, marginBottom: 7 }, input: { borderWidth: 1, borderColor: colors.line, borderRadius: 12, color: colors.ink, padding: 13, backgroundColor: colors.surface }, modeRow: { flexDirection: "row", gap: 8 }, mode: { flex: 1, borderWidth: 1, borderColor: colors.line, padding: 12, borderRadius: 10, alignItems: "center" }, modeSelected: { backgroundColor: colors.green, borderColor: colors.green }, modeText: { color: colors.ink, fontWeight: "800", fontSize: 12 }, modeTextSelected: { color: colors.surface }, setCard: { backgroundColor: colors.mint, borderRadius: 12, padding: 12, marginTop: 12 }, setTitle: { color: colors.green, fontSize: 10, letterSpacing: 1, fontWeight: "900" }, scoreLabel: { color: colors.ink, fontSize: 12, fontWeight: "800", marginTop: 11 }, scorePicker: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 }, scoreButton: { width: 32, height: 32, borderRadius: 8, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }, scoreButtonSelected: { backgroundColor: colors.green, borderColor: colors.green }, scoreText: { color: colors.ink, fontWeight: "800" }, scoreTextSelected: { color: colors.surface }, tiebreak: { alignSelf: "flex-start", borderWidth: 1, borderColor: colors.line, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 8, marginTop: 11 }, tiebreakSelected: { backgroundColor: colors.coral, borderColor: colors.coral }, tiebreakText: { color: colors.ink, fontSize: 11, fontWeight: "800" }, tiebreakTextSelected: { color: colors.surface }, tiebreakInputs: { flexDirection: "row", gap: 8, marginTop: 10 }, tiebreakField: { flex: 1 }, tiebreakLabel: { color: colors.ink, fontSize: 11, fontWeight: "800", marginBottom: 5 }, tiebreakInput: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.coral, borderRadius: 9, color: colors.ink, fontSize: 16, fontWeight: "800", padding: 10, textAlign: "center" }, walkover: { backgroundColor: colors.mint, borderRadius: 12, padding: 12, marginTop: 12 }, walkoverHint: { color: colors.muted, fontSize: 12, marginBottom: 8 }, winner: { borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 12, backgroundColor: colors.surface, marginTop: 8 }, winnerSelected: { backgroundColor: colors.green, borderColor: colors.green }, winnerText: { color: colors.ink, fontWeight: "800" }, winnerTextSelected: { color: colors.surface }, error: { color: colors.coral, fontSize: 12, lineHeight: 18, marginTop: 14 }, save: { backgroundColor: colors.green, borderRadius: 13, padding: 15, alignItems: "center", marginTop: 20 }, saveText: { color: colors.surface, fontWeight: "800" },
+  walkoverMode: { borderWidth: 1, borderColor: colors.coral, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 9, alignSelf: "center" },
+  walkoverModeSelected: { backgroundColor: colors.coral },
+  walkoverModeText: { color: colors.coral, fontSize: 11, fontWeight: "800" },
+  walkoverModeTextSelected: { color: colors.surface },
+});

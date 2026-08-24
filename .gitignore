@@ -1,5 +1,12 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
+# Environment variables — keep example files but ignore actual keys
+.env
+.env.production
+.env.local
+.env.*.local
+# .env.example, .env.development, .env.production.example are version-controlled
+
 # dependencies
 node_modules/
 
