@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "tahtiliiga",
+    "name": "Tähtiliiga",
     "slug": "tahtiliiga",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -28,7 +28,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#123F2A",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
