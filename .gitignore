@@ -32,7 +32,13 @@ yarn-error.*
 
 # local env files
 .env
+.env.*
+!.env.example
 .env*.local
+
+# logs and reports
+*.log
+coverage/
 
 # typescript
 *.tsbuildinfo
@@ -42,3 +48,7 @@ example
 # generated native folders
 /ios
 /android
+
+# Supabase local development
+supabase/.temp/
+supabase/.branches/
