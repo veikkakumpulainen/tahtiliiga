@@ -16,7 +16,7 @@ type Profile = {
 };
 
 const genderOptions = [["male", "Mies"], ["female", "Nainen"], ["other", "Muu"], ["prefer_not_to_say", "En halua kertoa"]] as const;
-const skillLevels = ["A", "B", "C", "D"] as const;
+const skillLevels = ["Miesten A", "Miesten B", "Miesten C", "Miesten D", "Miesten E", "Naisten A", "Naisten B", "Naisten C", "Naisten D", "Naisten E"] as const;
 
 export default function EditProfileScreen() {
   const { session, loading: loadingSession } = useAuth();
@@ -60,19 +60,25 @@ export default function EditProfileScreen() {
     }
     setSaving(true);
     setMessage("");
-    const { error } = await supabase.from("profiles").update({
+    const values = {
       first_name: firstName.trim(),
       last_name: lastName.trim(),
       phone: phone.trim() || null,
       gender,
       skill_level: skillLevel,
-    }).eq("id", session.user.id);
+    };
+    const { error } = await supabase.from("profiles").update(values).eq("id", session.user.id);
     setSaving(false);
     if (error) {
       setMessage(`Tallennus epäonnistui: ${error.message}`);
       return;
     }
-    setProfile((current) => current ? { ...current, first_name: firstName.trim(), last_name: lastName.trim(), phone: phone.trim() || null, gender, skill_level: skillLevel } : current);
+    const { error: authError } = await supabase.auth.updateUser({ data: values });
+    if (authError) {
+      setMessage(`Profiili tallennettiin, mutta Authentication-tietojen päivitys epäonnistui: ${authError.message}`);
+      return;
+    }
+    setProfile((current) => current ? { ...current, ...values } : current);
     setMessage("Profiilin tiedot tallennettu.");
   };
 
@@ -103,9 +109,9 @@ export default function EditProfileScreen() {
       </View>
 
       <Text style={styles.label}>TAITOTASO</Text>
-      <View style={styles.levels}>
-        {skillLevels.map((level) => <Pressable key={level} onPress={() => setSkillLevel(skillLevel === level ? null : level)} style={[styles.level, skillLevel === level && styles.levelSelected]}>
-          <Text style={[styles.levelText, skillLevel === level && styles.levelTextSelected]}>{level}</Text>
+      <View style={styles.options}>
+        {skillLevels.map((level) => <Pressable key={level} onPress={() => setSkillLevel(skillLevel === level ? null : level)} style={[styles.option, skillLevel === level && styles.optionSelected]}>
+          <Text style={[styles.optionText, skillLevel === level && styles.optionTextSelected]}>{level}</Text>
         </Pressable>)}
       </View>
 

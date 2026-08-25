@@ -115,7 +115,7 @@ export default function HomeScreen() {
             {unreadGroupIds.has(selectedTeam.groupId) ? <View style={styles.buttonUnreadDot} /> : null}
             <Text style={styles.arrow}>→</Text>
           </Pressable></Link>
-          <GroupMatches groupId={selectedTeam.groupId} teamId={selectedTeam.id} teamName={selectedTeam.name} />
+          <GroupMatches teamId={selectedTeam.id} teamName={selectedTeam.name} />
         </> : <Text style={styles.cardNote}>Lohkochat ja otteluparit aukeavat sarjan alkaessa.</Text>}
       </View> : null}
     </>}

@@ -1,27 +1,122 @@
 import { Link, router } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { colors } from "../../theme";
-import { supabase } from "../../lib/supabase";
 import ScreenHeader from "../../components/ScreenHeader";
+import { supabase } from "../../lib/supabase";
+import { colors } from "../../theme";
+
+const genderOptions = [["male", "Mies"], ["female", "Nainen"], ["other", "Muu"], ["prefer_not_to_say", "En halua kertoa"]] as const;
+const profileSkillLevels = ["Miesten A", "Miesten B", "Miesten C", "Miesten D", "Miesten E", "Naisten A", "Naisten B", "Naisten C", "Naisten D", "Naisten E"] as const;
 
 export default function RegisterScreen() {
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", password: "", confirmation: "", gender: "", skillLevel: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
   const update = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
+
   const register = async () => {
-    if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.password) { setError("Täytä kaikki pakolliset kentät."); return; }
-    if (form.password.length < 8) { setError("Salasanassa tulee olla vähintään 8 merkkiä."); return; }
-    if (form.password !== form.confirmation) { setError("Salasanojen tulee olla samat."); return; }
-    if (!supabase) { setError("Supabase-yhteyttä ei ole määritetty."); return; }
-    setLoading(true); setError("");
-    const { data, error: authError } = await supabase.auth.signUp({ email: form.email.trim(), password: form.password, options: { data: { first_name: form.firstName.trim(), last_name: form.lastName.trim(), phone: form.phone.trim(), gender: form.gender || null, skill_level: form.skillLevel || null } } });
+    if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.password) {
+      setError("Täytä kaikki pakolliset kentät.");
+      return;
+    }
+    if (form.password.length < 8) {
+      setError("Salasanassa tulee olla vähintään 8 merkkiä.");
+      return;
+    }
+    if (form.password !== form.confirmation) {
+      setError("Salasanojen tulee olla samat.");
+      return;
+    }
+    if (!supabase) {
+      setError("Supabase-yhteyttä ei ole määritetty.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    const { data, error: authError } = await supabase.auth.signUp({
+      email: form.email.trim(),
+      password: form.password,
+      options: {
+        data: {
+          first_name: form.firstName.trim(),
+          last_name: form.lastName.trim(),
+          phone: form.phone.trim(),
+          gender: form.gender || null,
+          skill_level: form.skillLevel || null,
+        },
+      },
+    });
     setLoading(false);
-    if (authError) { setError(authError.message.includes("already") ? "Sähköpostiosoite on jo käytössä." : `Tilin luominen epäonnistui: ${authError.message}`); return; }
-    if (data.session) router.replace("/(tabs)/home"); else setError("Tili luotiin. Tarkista sähköpostisi ja vahvista tili ennen kirjautumista.");
+
+    if (authError) {
+      setError(authError.message.includes("already") ? "Sähköpostiosoite on jo käytössä." : `Tilin luominen epäonnistui: ${authError.message}`);
+      return;
+    }
+    if (data.session) router.replace("/(tabs)/home");
+    else setError("Tili luotiin. Tarkista sähköpostisi ja vahvista tili ennen kirjautumista.");
   };
-  return <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === "ios" ? "padding" : undefined}><ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"><ScreenHeader eyebrow="TÄHTILIIGA" title="Luo käyttäjätili" subtitle="Liity sarjaan ja löydä seuraava pelisi." />{([["firstName", "ETUNIMI", "Matti"], ["lastName", "SUKUNIMI", "Meikäläinen"], ["email", "SÄHKÖPOSTI", "sinä@esimerkki.fi"], ["phone", "PUHELIN (VALINNAINEN)", "+358 40 123 4567"]] as const).map(([key, label, placeholder]) => <View key={key}><Text style={styles.label}>{label}</Text><TextInput value={form[key]} onChangeText={(value) => update(key, value)} placeholder={placeholder} placeholderTextColor={colors.muted} autoCapitalize={key === "email" ? "none" : "words"} keyboardType={key === "email" ? "email-address" : key === "phone" ? "phone-pad" : "default"} style={styles.input} /></View>)}<Text style={styles.label}>SUKUPUOLI (VALINNAINEN)</Text><View style={styles.options}>{[["male", "Mies"], ["female", "Nainen"], ["other", "Muu"], ["prefer_not_to_say", "En halua kertoa"]].map(([value, label]) => <Pressable key={value} onPress={() => update("gender", value)} style={[styles.option, form.gender === value && styles.optionSelected]}><Text style={[styles.optionText, form.gender === value && styles.optionTextSelected]}>{label}</Text></Pressable>)}</View><Text style={styles.label}>TAITOTASO (VALINNAINEN)</Text><View style={styles.levels}>{["A", "B", "C", "D"].map((level) => <Pressable key={level} onPress={() => update("skillLevel", level)} style={[styles.level, form.skillLevel === level && styles.levelSelected]}><Text style={[styles.levelText, form.skillLevel === level && styles.levelTextSelected]}>{level}</Text></Pressable>)}</View><Text style={styles.label}>SALASANA</Text><TextInput value={form.password} onChangeText={(value) => update("password", value)} secureTextEntry placeholder="Vähintään 8 merkkiä" placeholderTextColor={colors.muted} style={styles.input} /><Text style={styles.label}>VAHVISTA SALASANA</Text><TextInput value={form.confirmation} onChangeText={(value) => update("confirmation", value)} secureTextEntry placeholder="Kirjoita salasana uudelleen" placeholderTextColor={colors.muted} style={styles.input} />{error ? <Text style={styles.error}>{error}</Text> : null}<Pressable style={styles.button} onPress={register} disabled={loading}>{loading ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.buttonText}>Luo tili</Text>}</Pressable><Text style={styles.footer}>Onko sinulla jo tili? <Link href="/(auth)/login" style={styles.link}>Kirjaudu sisään</Link></Text></ScrollView></KeyboardAvoidingView>;
+
+  return <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScreenHeader eyebrow="TÄHTILIIGA" title="Luo käyttäjätili" subtitle="Liity sarjaan ja löydä seuraava pelisi." />
+
+      {([[
+        "firstName", "ETUNIMI", "Matti",
+      ], [
+        "lastName", "SUKUNIMI", "Meikäläinen",
+      ], [
+        "email", "SÄHKÖPOSTI", "sinä@esimerkki.fi",
+      ], [
+        "phone", "PUHELIN (VALINNAINEN)", "+358 40 123 4567",
+      ]] as const).map(([key, label, placeholder]) => <View key={key}>
+        <Text style={styles.label}>{label}</Text>
+        <TextInput value={form[key]} onChangeText={(value) => update(key, value)} placeholder={placeholder} placeholderTextColor={colors.muted} autoCapitalize={key === "email" ? "none" : "words"} keyboardType={key === "email" ? "email-address" : key === "phone" ? "phone-pad" : "default"} style={styles.input} />
+      </View>)}
+
+      <Text style={styles.label}>SUKUPUOLI (VALINNAINEN)</Text>
+      <View style={styles.options}>
+        {genderOptions.map(([value, label]) => <Pressable key={value} onPress={() => update("gender", form.gender === value ? "" : value)} style={[styles.option, form.gender === value && styles.optionSelected]}>
+          <Text style={[styles.optionText, form.gender === value && styles.optionTextSelected]}>{label}</Text>
+        </Pressable>)}
+      </View>
+
+      <Text style={styles.label}>TAITOTASO (VALINNAINEN)</Text>
+      <View style={styles.options}>
+        {profileSkillLevels.map((level) => <Pressable key={level} onPress={() => update("skillLevel", form.skillLevel === level ? "" : level)} style={[styles.option, form.skillLevel === level && styles.optionSelected]}>
+          <Text style={[styles.optionText, form.skillLevel === level && styles.optionTextSelected]}>{level}</Text>
+        </Pressable>)}
+      </View>
+
+      <Text style={styles.label}>SALASANA</Text>
+      <TextInput value={form.password} onChangeText={(value) => update("password", value)} secureTextEntry placeholder="Vähintään 8 merkkiä" placeholderTextColor={colors.muted} style={styles.input} />
+
+      <Text style={styles.label}>VAHVISTA SALASANA</Text>
+      <TextInput value={form.confirmation} onChangeText={(value) => update("confirmation", value)} secureTextEntry placeholder="Kirjoita salasana uudelleen" placeholderTextColor={colors.muted} style={styles.input} />
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <Pressable style={styles.button} onPress={() => void register()} disabled={loading}>
+        {loading ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.buttonText}>Luo tili</Text>}
+      </Pressable>
+      <Text style={styles.footer}>Onko sinulla jo tili? <Link href="/(auth)/login" style={styles.link}>Kirjaudu sisään</Link></Text>
+    </ScrollView>
+  </KeyboardAvoidingView>;
 }
 
-const styles = StyleSheet.create({ page: { flex: 1, backgroundColor: colors.canvas }, content: { paddingBottom: 40 }, label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 13, marginBottom: 7, marginHorizontal: 24 }, input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 13, color: colors.ink, fontSize: 15, padding: 14, marginHorizontal: 24 }, options: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginHorizontal: 24 }, option: { borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.surface }, optionSelected: { backgroundColor: colors.green, borderColor: colors.green }, optionText: { color: colors.ink, fontSize: 12, fontWeight: "700" }, optionTextSelected: { color: colors.surface }, levels: { flexDirection: "row", gap: 8, marginHorizontal: 24 }, level: { width: 48, height: 42, borderWidth: 1, borderColor: colors.line, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface }, levelSelected: { backgroundColor: colors.lime, borderColor: colors.greenBright }, levelText: { color: colors.ink, fontSize: 14, fontWeight: "900" }, levelTextSelected: { color: colors.green }, error: { color: colors.coral, fontSize: 12, marginTop: 11, lineHeight: 18, marginHorizontal: 24 }, button: { backgroundColor: colors.green, borderRadius: 13, padding: 16, alignItems: "center", marginTop: 22, marginHorizontal: 24 }, buttonText: { color: colors.surface, fontSize: 15, fontWeight: "800" }, footer: { color: colors.muted, textAlign: "center", marginTop: 22, fontSize: 13 }, link: { color: colors.greenBright, fontWeight: "800" } });
+const styles = StyleSheet.create({
+  page: { flex: 1, backgroundColor: colors.canvas },
+  content: { paddingBottom: 40 },
+  label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 13, marginBottom: 7, marginHorizontal: 24 },
+  input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 13, color: colors.ink, fontSize: 15, padding: 14, marginHorizontal: 24 },
+  options: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginHorizontal: 24 },
+  option: { borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.surface },
+  optionSelected: { backgroundColor: colors.green, borderColor: colors.green },
+  optionText: { color: colors.ink, fontSize: 12, fontWeight: "700" },
+  optionTextSelected: { color: colors.surface },
+  error: { color: colors.coral, fontSize: 12, marginTop: 11, lineHeight: 18, marginHorizontal: 24 },
+  button: { backgroundColor: colors.green, borderRadius: 13, padding: 16, alignItems: "center", marginTop: 22, marginHorizontal: 24 },
+  buttonText: { color: colors.surface, fontSize: 15, fontWeight: "800" },
+  footer: { color: colors.muted, textAlign: "center", marginTop: 22, fontSize: 13 },
+  link: { color: colors.greenBright, fontWeight: "800" },
+});

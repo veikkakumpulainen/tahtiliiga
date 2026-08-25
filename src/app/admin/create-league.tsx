@@ -7,7 +7,7 @@ import { parseFinnishDate } from "../../lib/dates";
 import { supabase } from "../../lib/supabase";
 import { colors } from "../../theme";
 
-type RoundForm = { name: string; startDate: string; endDate: string };
+type RoundForm = { name: string; startDate: string; endDate: string; roundType: "regular" | "qualification" };
 
 const router = { ...expoRouter, back: () => expoRouter.replace("/admin" as never) };
 
@@ -17,7 +17,7 @@ export default function CreateLeagueScreen() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [deadline, setDeadline] = useState("");
-  const [rounds, setRounds] = useState<RoundForm[]>([{ name: "Kierros 1", startDate: "", endDate: "" }]);
+  const [rounds, setRounds] = useState<RoundForm[]>([{ name: "", startDate: "", endDate: "", roundType: "regular" }]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -26,7 +26,7 @@ export default function CreateLeagueScreen() {
   };
 
   const addRound = () => {
-    setRounds((current) => [...current, { name: `Kierros ${current.length + 1}`, startDate: "", endDate: "" }]);
+    setRounds((current) => [...current, { name: "", startDate: "", endDate: "", roundType: "regular" }]);
   };
 
   const removeRound = (index: number) => {
@@ -41,6 +41,7 @@ export default function CreateLeagueScreen() {
       name: round.name.trim(),
       startDate: parseFinnishDate(round.startDate),
       endDate: parseFinnishDate(round.endDate),
+      roundType: round.roundType,
     }));
 
     if (!supabase || !session?.user.id || !name.trim() || !parsedStartDate || !parsedEndDate) {
@@ -93,6 +94,7 @@ export default function CreateLeagueScreen() {
       name: round.name,
       start_date: round.startDate,
       end_date: round.endDate,
+      round_type: round.roundType,
     })));
     setSaving(false);
     if (roundsError) {
@@ -115,10 +117,15 @@ export default function CreateLeagueScreen() {
 
     <View style={styles.roundHeading}><Text style={styles.roundTitle}>Kierrokset</Text><Pressable onPress={addRound} style={styles.addRound} accessibilityRole="button" accessibilityLabel="Lisää kierros"><Text style={styles.addRoundText}>+</Text></Pressable></View>
     {rounds.map((round, index) => <View key={index} style={styles.round}>
-      <View style={styles.roundTop}><Text style={styles.roundNumber}>KIERROS {index + 1}</Text>{rounds.length > 1 ? <Pressable onPress={() => removeRound(index)}><Text style={styles.removeRound}>Poista</Text></Pressable> : null}</View>
+      {rounds.length > 1 ? <View style={styles.roundTop}><Pressable onPress={() => removeRound(index)}><Text style={styles.removeRound}>Poista</Text></Pressable></View> : null}
       <TextInput value={round.name} onChangeText={(value) => updateRound(index, "name", value)} placeholder="Kierroksen nimi" placeholderTextColor={colors.muted} style={styles.roundInput} />
       <TextInput value={round.startDate} onChangeText={(value) => updateRound(index, "startDate", value)} placeholder="Alkaa DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.roundInput} />
       <TextInput value={round.endDate} onChangeText={(value) => updateRound(index, "endDate", value)} placeholder="Päättyy DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.roundInput} />
+      <Text style={styles.roundTypeLabel}>KIERROKSEN TYYPPI</Text>
+      <View style={styles.roundTypes}>
+        <Pressable onPress={() => updateRound(index, "roundType", "regular")} style={[styles.roundType, round.roundType === "regular" && styles.roundTypeSelected]}><Text style={[styles.roundTypeText, round.roundType === "regular" && styles.roundTypeTextSelected]}>Tavallinen</Text></Pressable>
+        <Pressable onPress={() => updateRound(index, "roundType", "qualification")} style={[styles.roundType, round.roundType === "qualification" && styles.roundTypeSelected]}><Text style={[styles.roundTypeText, round.roundType === "qualification" && styles.roundTypeTextSelected]}>Karsinta</Text></Pressable>
+      </View>
     </View>)}
 
     {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -137,10 +144,15 @@ const styles = StyleSheet.create({
   addRound: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
   addRoundText: { color: colors.surface, fontSize: 26, lineHeight: 30, fontWeight: "500" },
   round: { backgroundColor: colors.mint, borderRadius: 12, padding: 13, marginHorizontal: 22, marginTop: 12 },
-  roundTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
-  roundNumber: { color: colors.green, fontSize: 10, letterSpacing: 1, fontWeight: "900" },
+  roundTop: { alignItems: "flex-end", marginBottom: 2 },
   removeRound: { color: colors.coral, fontSize: 12, fontWeight: "800" },
   roundInput: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 10, color: colors.ink, padding: 12, marginTop: 8 },
+  roundTypeLabel: { color: colors.muted, fontSize: 9, fontWeight: "900", letterSpacing: 0.8, marginTop: 15 },
+  roundTypes: { flexDirection: "row", gap: 8, marginTop: 8 },
+  roundType: { backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 9, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9 },
+  roundTypeSelected: { backgroundColor: colors.green, borderColor: colors.green },
+  roundTypeText: { color: colors.ink, fontSize: 12, fontWeight: "800" },
+  roundTypeTextSelected: { color: colors.surface },
   error: { color: colors.coral, fontSize: 12, lineHeight: 18, marginHorizontal: 22, marginTop: 18 },
   button: { backgroundColor: colors.green, borderRadius: 13, padding: 16, alignItems: "center", marginHorizontal: 22, marginTop: 24 },
   buttonText: { color: colors.surface, fontWeight: "800", fontSize: 14 },
