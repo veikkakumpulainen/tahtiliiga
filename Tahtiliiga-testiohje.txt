@@ -1,0 +1,88 @@
+TÄHTILIIGA — TESTIVERSION ESITTELY
+
+MIKÄ TÄHTILIIGA ON?
+
+Tähtiliiga on sovellus padel-sarjapelaamisen järjestämiseen. Sen avulla pelaajat
+voivat ilmoittautua sarjoihin joukkueena, sopia otteluajat oman lohkonsa kanssa
+chatissa, kirjata ottelutulokset ja seurata sarjataulukoita. Tavoitteena on
+tehdä harrastesarjan pyörittämisestä helppoa sekä järjestäjälle että
+pelaajille.
+
+Tämä on testiversio. Haluaisin kuulla mikä toimii, mikä ei, ja mikä tuntuu
+sekavalta — myös pienet ja "tyhmältä tuntuvat" huomiot ovat tervetulleita.
+
+
+MITEN PÄÄSET ALKUUN
+
+1. Luo käyttäjätili (etu- ja sukunimi, sähköposti, salasana). Voit halutessasi
+   kertoa myös taitotasosi ja sukupuolesi profiiliisi.
+2. Selaa "Osallistuminen"-välilehdeltä avoimia sarjoja.
+3. Ilmoittaudu joukkueella: hae ja lisää 1-2 pelikaveria (joukkueessa on
+   2-3 pelaajaa), valitse kapteeni ja joukkueen taitotaso.
+4. Kun sarjan järjestäjä käynnistää sarjan ja julkaisee lohkot, näet oman
+   lohkosi otteluparit kotisivulla ja pääset lohkosi chattiin.
+
+
+OMINAISUUDET, JOTKA SOVELLUKSESSA JO OVAT
+
+Käyttäjätili ja profiili
+ - Rekisteröityminen sähköpostilla ja salasanalla
+ - Salasanan palautus sähköpostilla
+ - Profiilin muokkaus: nimi, puhelin, sukupuoli, taitotaso
+
+Sarjat ja joukkueet
+ - Avoimien sarjojen selaus ja ilmoittautuminen
+ - Joukkueen kokoaminen (2-3 pelaajaa) pelaajahaulla
+ - Kapteenin valinta
+ - Sarjan kierrosaikataulu näkyvissä omalla kotisivulla
+
+Lohkot ja ottelut
+ - Lohkojako ja otteluparien muodostus automaattisesti, kun sarja käynnistetään
+ - Ottelun ajan ja paikan sopiminen
+ - Ottelutuloksen kirjaus erittäin (setit, tiebreakit) tai luovutusvoittona
+ - Kokoonpanon valinta ottelukohtaisesti, jos joukkueessa on enemmän kuin
+   2 pelaajaa
+ - Varapelaajan käyttö: varapelaaja haetaan ja lisätään otteluun, ja
+   vastustajajoukkueen tulee hyväksyä varapelaaja ennen kuin tulos voidaan
+   kirjata
+ - Karsintakierrokset (vain voittajan kirjaus) ja tavalliset kierrokset
+   (täydet erätulokset)
+
+Tulokset
+ - Lohkokohtaiset tulostaulukot
+ - Koko sarjan yhteenlaskettu tulostaulukko
+ - Sijoitukset päivittyvät automaattisesti kirjattujen tulosten perusteella
+
+Viestintä
+ - Oman lohkon reaaliaikainen ryhmächatti otteluaikojen sopimiseen
+ - Lukemattomien viestien merkintä
+
+Sarjan hallinta (järjestäjälle)
+ - Sarjojen luonti ja muokkaus
+ - Kierrosten (karsinta/tavallinen) hallinta
+ - Lohkojen ja joukkueiden hallinta
+ - Joukkueiden kokoonpanon muokkaus poikkeustilanteissa
+ - Sarjan ja joukkueiden poisto
+
+
+MITÄ EI VIELÄ OLE / TIEDOSSA OLEVAT RAJOITUKSET
+
+ - Ei push-ilmoituksia (esim. uudesta chat-viestistä tai hyväksyntäpyynnöstä
+   ei tule ilmoitusta, ellet ole juuri sillä hetkellä sovelluksessa)
+ - Ei maksujen seurantaa sovelluksessa
+ - Kaikki tekstit ovat suomeksi
+
+
+MITÄ KANNATTAA ERITYISESTI TESTATA
+
+ - Joukkueen ilmoittautuminen ja pelikaverin haku
+ - Ottelutuloksen kirjaaminen (myös virheellisillä erätuloksilla — pitäisi
+   antaa selkeä virheilmoitus, ei jumiutua)
+ - Varapelaajan lisääminen ja hyväksyminen vastapuolen näkökulmasta
+ - Lohkochatin toimivuus ja lukemattomien viestien merkintä
+ - Toimiiko sovellus järkevästi huonolla verkkoyhteydellä
+
+MITEN ANNAT PALAUTETTA
+
+[Lisää tähän oma yhteystietosi tai palautekanava, esim. WhatsApp-ryhmä,
+sähköposti tai lomakelinkki]
