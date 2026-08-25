@@ -1,0 +1,10 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/admin/league/:id/register-team", "destination": "/admin/league/[id]/register-team.html" },
+    { "source": "/admin/league/:id", "destination": "/admin/league/[id].html" },
+    { "source": "/group/:id/chat", "destination": "/group/[id]/chat.html" },
+    { "source": "/league/:id/register", "destination": "/league/[id]/register.html" },
+    { "source": "/(.*)", "destination": "/+not-found.html" }
+  ]
+}
