@@ -7,7 +7,7 @@ import { supabase } from "../../lib/supabase";
 import { colors, shadow } from "../../theme";
 
 type League = { id: string; name: string; status: string };
-type Standing = { group_id: string; group_name: string; team_id: string; team_name: string; played: number; wins: number; losses: number; points: number };
+type Standing = { group_id: string; group_name: string; team_id: string; team_name: string; played: number; wins: number; losses: number; points: number; rank_position?: number };
 
 export default function StandingsScreen() {
   const { session } = useAuth();
@@ -60,7 +60,7 @@ export default function StandingsScreen() {
     }
     setLoadingStandings(true);
     setError("");
-    const functionName = standingsView === "total" ? "get_league_total_standings" : "get_league_standings";
+    const functionName = standingsView === "total" ? "get_league_total_standings" : "get_league_standings_with_tiebreakers";
     const { data, error: standingsError } = await supabase.rpc(functionName, { target_league_id: selectedLeagueId });
     if (standingsError) {
       setError(`Tulostaulukon lataus epäonnistui: ${standingsError.message}`);
@@ -75,6 +75,7 @@ export default function StandingsScreen() {
         wins: Number(row.wins),
         losses: Number(row.losses),
         points: Number(row.points),
+        rank_position: row.rank_position === undefined ? undefined : Number(row.rank_position),
       })));
     }
     setLoadingStandings(false);
@@ -127,7 +128,7 @@ export default function StandingsScreen() {
               </View>)}
             </View>
           </View> : groupIds.map((groupId, groupIndex) => {
-            const groupStandings = standings.filter((standing) => standing.group_id === groupId).sort((left, right) => right.points - left.points || right.wins - left.wins || left.team_name.localeCompare(right.team_name));
+            const groupStandings = standings.filter((standing) => standing.group_id === groupId).sort((left, right) => (left.rank_position ?? Number.MAX_SAFE_INTEGER) - (right.rank_position ?? Number.MAX_SAFE_INTEGER));
             return <View key={`group-${groupId}-${groupIndex}`} style={styles.groupSection}>
               <Text style={styles.groupName}>{groupStandings[0]?.group_name}</Text>
               <View style={styles.table}>
@@ -135,7 +136,7 @@ export default function StandingsScreen() {
                   <Text style={[styles.headCell, styles.rank]}>SIJA</Text><Text style={[styles.headCell, styles.team]}>JOUKKUE</Text><Text style={styles.headCell}>O</Text><Text style={styles.headCell}>V</Text><Text style={styles.headCell}>H</Text><Text style={styles.headCell}>P</Text>
                 </View>
                 {groupStandings.map((row, index) => <View key={`group-${groupId}-team-${row.team_id}-${index}`} style={styles.row}>
-                  <Text style={[styles.cell, styles.rank]}>{index + 1}</Text><Text style={[styles.cell, styles.team]}>{row.team_name}</Text><Text style={styles.cell}>{row.played}</Text><Text style={styles.cell}>{row.wins}</Text><Text style={styles.cell}>{row.losses}</Text><Text style={[styles.cell, styles.points]}>{row.points}</Text>
+                  <Text style={[styles.cell, styles.rank]}>{row.rank_position ?? index + 1}</Text><Text style={[styles.cell, styles.team]}>{row.team_name}</Text><Text style={styles.cell}>{row.played}</Text><Text style={styles.cell}>{row.wins}</Text><Text style={styles.cell}>{row.losses}</Text><Text style={[styles.cell, styles.points]}>{row.points}</Text>
                 </View>)}
               </View>
             </View>;

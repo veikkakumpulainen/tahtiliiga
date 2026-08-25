@@ -76,24 +76,17 @@ export default function TeamRegistrationScreen() {
     setSaving(true);
     setError("");
     const memberIds = [session.user.id, ...selectedPlayers.map((player) => player.id)];
-    const { data: team, error: teamError } = await supabase.from("teams").insert({
-      league_id: leagueId,
-      name: teamName.trim(),
-      skill_level: skillLevel,
-      skill_description: skillDescription.trim() || null,
-      captain_id: captainId,
-      created_by: session.user.id,
-    }).select("id").single();
-    if (teamError || !team) {
-      setSaving(false);
-      setError(teamError?.message ?? "Joukkueen luonti epäonnistui.");
-      return;
-    }
-
-    const { error: membersError } = await supabase.from("team_members").insert(memberIds.map((userId) => ({ team_id: team.id, user_id: userId, is_captain: userId === captainId })));
+    const { error: membersError } = await supabase.rpc("create_team_with_members", {
+      target_league_id: leagueId,
+      team_name: teamName.trim(),
+      team_skill_level: skillLevel,
+      team_skill_description: skillDescription.trim(),
+      target_captain_id: captainId,
+      member_ids: memberIds,
+    });
     setSaving(false);
     if (membersError) {
-      setError(`Joukkue luotiin, mutta pelaajien lisääminen epäonnistui: ${membersError.message}`);
+      setError(`Joukkueen luonti epäonnistui: ${membersError.message}`);
       return;
     }
     router.replace("/(tabs)/home");

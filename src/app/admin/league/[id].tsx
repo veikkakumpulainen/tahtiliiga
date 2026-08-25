@@ -1,5 +1,5 @@
-import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import ScreenHeader from "../../../components/ScreenHeader";
 import { supabase } from "../../../lib/supabase";
@@ -12,6 +12,8 @@ type Group = { id: string; name: string; status: string };
 type Team = { id: string; name: string; skill_level: string; skill_description: string | null };
 type Assignment = { id: string; group_id: string; team_id: string };
 type LeagueRound = { id: string; name: string; start_date: string; end_date: string; round_type: "regular" | "qualification"; status: "draft" | "active" | "completed" };
+type RosterPlayer = { id: string; name: string; isCaptain: boolean };
+type PlayerSearchResult = { id: string; first_name: string; last_name: string };
 
 const teamInfoStyles = StyleSheet.create({
   actions: { flexDirection: "row", alignItems: "center", gap: 12 },
@@ -56,6 +58,31 @@ const roundStyles = StyleSheet.create({
   typeOptionTextSelected: { color: colors.surface },
 });
 
+const rosterStyles = StyleSheet.create({
+  teamSearchResult: { backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 10, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 7, padding: 12 },
+  teamSearchResultSelected: { borderColor: colors.green, borderWidth: 2 },
+  teamSearchName: { color: colors.ink, fontWeight: "800" },
+  teamSearchMeta: { color: colors.muted, fontSize: 12 },
+  rosterPanel: { backgroundColor: colors.mint, borderRadius: 12, marginTop: 12, padding: 14 },
+  rosterTitle: { color: colors.ink, fontSize: 16, fontWeight: "800" },
+  rosterHint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 6 },
+  rosterPlayer: { alignItems: "center", backgroundColor: colors.surface, borderRadius: 10, flexDirection: "row", justifyContent: "space-between", marginTop: 8, padding: 10 },
+  captainChoice: { flex: 1 },
+  captainChoiceText: { color: colors.ink, fontSize: 13, fontWeight: "700" },
+  captainChoiceTextSelected: { color: colors.green },
+  rosterSave: { alignItems: "center", borderColor: colors.green, borderRadius: 10, borderWidth: 1, marginTop: 10, padding: 11 },
+  rosterSaveText: { color: colors.green, fontWeight: "800" },
+  rosterLabel: { color: colors.muted, fontSize: 9, fontWeight: "900", letterSpacing: 1, marginTop: 16 },
+  rosterDelete: { alignItems: "center", borderColor: colors.coral, borderRadius: 10, borderWidth: 1, marginTop: 16, padding: 11 },
+  rosterDeleteText: { color: colors.coral, fontWeight: "800" },
+  deleteConfirm: { backgroundColor: colors.surface, borderColor: colors.coral, borderRadius: 10, borderWidth: 1, marginTop: 16, padding: 12 },
+  deleteConfirmText: { color: colors.ink, fontSize: 12, lineHeight: 18, marginBottom: 10 },
+  confirmDelete: { alignItems: "center", backgroundColor: colors.coral, borderRadius: 9, flex: 1, padding: 10 },
+  confirmDeleteText: { color: colors.surface, fontSize: 12, fontWeight: "800" },
+  cancelDelete: { alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
+  cancelDeleteText: { color: colors.muted, fontSize: 12, fontWeight: "800" },
+});
+
 export default function LeagueManagementScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [league, setLeague] = useState<League | null>(null);
@@ -72,6 +99,14 @@ export default function LeagueManagementScreen() {
   const [roundForm, setRoundForm] = useState({ name: "", startDate: "", endDate: "" });
   const [groupName, setGroupName] = useState("");
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  const [teamSearch, setTeamSearch] = useState("");
+  const [managedTeam, setManagedTeam] = useState<Team | null>(null);
+  const [roster, setRoster] = useState<RosterPlayer[]>([]);
+  const [rosterCaptainId, setRosterCaptainId] = useState<string | null>(null);
+  const [playerSearch, setPlayerSearch] = useState("");
+  const [playerSearchResults, setPlayerSearchResults] = useState<PlayerSearchResult[]>([]);
+  const [searchingPlayers, setSearchingPlayers] = useState(false);
+  const [confirmTeamDelete, setConfirmTeamDelete] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
@@ -89,7 +124,7 @@ export default function LeagueManagementScreen() {
     const { data: assignmentData } = groupIds.length ? await client.from("group_teams").select("id,group_id,team_id").in("group_id", groupIds) : { data: [] };
     setLeague(leagueData); setStartDate(formatFinnishDate(leagueData?.start_date)); setEndDate(leagueData?.end_date ? formatFinnishDate(leagueData.end_date) : ""); setDeadline(leagueData?.registration_deadline ? formatFinnishDate(leagueData.registration_deadline) : ""); setRounds(roundData ?? []); setGroups(groupData ?? []); setTeams(teamData ?? []); setAssignments(assignmentData ?? []); setLoading(false);
   };
-  useEffect(() => { void load(); }, [id]);
+  useFocusEffect(useCallback(() => { void load(); }, [id]));
   const saveChanges = async () => { if (!supabase || !league) return; const start = parseFinnishDate(startDate); const end = parseFinnishDate(endDate); const registrationDeadline = deadline.trim() ? parseFinnishDate(deadline) : null; if (!start || !end) { setMessage("Anna sarjan alku- ja loppupäivä muodossa DD-MM-YYYY."); return; } if (end < start) { setMessage("Sarjan loppupäivä ei voi olla ennen aloituspäivää."); return; } if (deadline.trim() && !registrationDeadline) { setMessage("Anna deadline muodossa DD-MM-YYYY."); return; } if (registrationDeadline && registrationDeadline > start) { setMessage("Deadline ei voi olla sarjan alkamispäivän jälkeen."); return; } const { error } = await supabase.from("leagues").update({ name: league.name.trim(), start_date: start, end_date: end, registration_deadline: registrationDeadline }).eq("id", league.id); if (error) setMessage(`Tallennus epäonnistui: ${error.message}`); else { setLeague({ ...league, start_date: start, end_date: end, registration_deadline: registrationDeadline }); setMessage("Sarjan muutokset tallennettu."); } };
   const createRound = async () => { if (!supabase || !league) return; const start = parseFinnishDate(newRound.startDate); const end = parseFinnishDate(newRound.endDate); const leagueStart = parseFinnishDate(startDate); const leagueEnd = parseFinnishDate(endDate); if (!newRound.name.trim() || !start || !end) { setMessage("Anna kierrokselle nimi sekä alku- ja loppupäivä."); return; } if (!leagueStart || !leagueEnd || start < leagueStart || end > leagueEnd || end < start) { setMessage("Kierroksen päivämäärien tulee olla sarjan päivämäärien sisällä."); return; } const { error } = await supabase.from("league_rounds").insert({ league_id: league.id, name: newRound.name.trim(), start_date: start, end_date: end, round_type: newRound.roundType }); if (error) { setMessage(`Kierroksen lisäys epäonnistui: ${error.message}`); return; } setNewRound({ name: "", startDate: "", endDate: "", roundType: "regular" }); setAddingRound(false); await load(); };
   const startEditingRound = (round: LeagueRound) => { setAddingRound(false); setEditingRound(round); setRoundForm({ name: round.name, startDate: formatFinnishDate(round.start_date), endDate: formatFinnishDate(round.end_date) }); };
@@ -107,6 +142,10 @@ export default function LeagueManagementScreen() {
   const removeGroup = async (groupId: string) => { if (!supabase) return; const { error } = await supabase.from("groups").delete().eq("id", groupId); if (error) setMessage(error.message); else await load(); };
   const assignTeam = async (groupId: string, teamId: string) => { if (!supabase) return; const { error } = await supabase.from("group_teams").insert({ group_id: groupId, team_id: teamId }); if (error) setMessage(error.message); else await load(); };
   const removeAssignment = async (assignmentId: string) => { if (!supabase) return; const { error } = await supabase.from("group_teams").delete().eq("id", assignmentId); if (error) setMessage(error.message); else await load(); };
+  const loadRoster = async (team: Team) => { if (!supabase) return; const { data, error } = await supabase.from("team_members").select("user_id,is_captain,profiles(first_name,last_name)").eq("team_id", team.id); if (error) { setMessage(`Joukkueen pelaajien lataus epäonnistui: ${error.message}`); return; } const players = ((data ?? []) as { user_id: string; is_captain: boolean; profiles: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null }[]).map((member) => { const profile = Array.isArray(member.profiles) ? member.profiles[0] : member.profiles; return { id: member.user_id, name: profile ? `${profile.first_name} ${profile.last_name}` : "Pelaaja", isCaptain: member.is_captain }; }); setManagedTeam(team); setRoster(players); setRosterCaptainId(players.find((player) => player.isCaptain)?.id ?? null); setPlayerSearch(""); setPlayerSearchResults([]); };
+  const searchRosterPlayers = async () => { if (!supabase || !league || playerSearch.trim().length < 2) { setMessage("Kirjoita pelaajan nimestä vähintään kaksi merkkiä."); return; } setSearchingPlayers(true); const { data, error } = await supabase.rpc("search_profiles_by_name", { search_query: playerSearch.trim(), target_league_id: league.id }); setSearchingPlayers(false); if (error) { setMessage(`Pelaajahaku epäonnistui: ${error.message}`); return; } setPlayerSearchResults(((data ?? []) as PlayerSearchResult[]).filter((player) => !roster.some((member) => member.id === player.id))); };
+  const updateRoster = async (removedUserId: string | null, addedUserId: string | null) => { if (!supabase || !managedTeam) return; const { error } = await supabase.rpc("admin_update_team_roster", { target_team_id: managedTeam.id, removed_user_id: removedUserId, added_user_id: addedUserId, new_captain_id: rosterCaptainId }); if (error) { setMessage(`Joukkueen pelaajien muokkaus epäonnistui: ${error.message}`); return; } if (!removedUserId && !addedUserId) { setManagedTeam(null); setRoster([]); setRosterCaptainId(null); setTeamSearch(""); setPlayerSearch(""); setPlayerSearchResults([]); } else await loadRoster(managedTeam); await load(); };
+  const deleteManagedTeam = async () => { if (!supabase || !managedTeam) return; const { error } = await supabase.rpc("admin_delete_team", { target_team_id: managedTeam.id }); if (error) { setMessage(`Joukkueen poisto epäonnistui: ${error.message}`); return; } setManagedTeam(null); setRoster([]); setRosterCaptainId(null); setTeamSearch(""); setPlayerSearch(""); setPlayerSearchResults([]); setConfirmTeamDelete(false); await load(); };
   const deleteLeague = async () => { if (!supabase || !league) return; const { error } = await supabase.rpc("delete_league_with_data", { target_league_id: league.id }); if (error) setMessage(`Poisto epäonnistui: ${error.message}`); else router.replace("/admin" as never); };
   if (loading) return <View style={styles.loading}>
 <ActivityIndicator color={colors.lime} />
@@ -173,6 +212,18 @@ export default function LeagueManagementScreen() {
 <Pressable onPress={() => void createRound()} style={roundStyles.save}><Text style={roundStyles.saveText}>Tallenna kierros</Text></Pressable>
 <Pressable onPress={() => setAddingRound(false)} style={roundStyles.cancel}><Text style={roundStyles.cancelText}>Peruuta</Text></Pressable>
 </View>
+</View> : null}<Text style={styles.sectionTitle}>Joukkueet</Text>
+<View style={styles.inline}>
+<TextInput value={teamSearch} onChangeText={setTeamSearch} placeholder="Hae joukkueen nimellä" placeholderTextColor={colors.muted} style={[styles.input, styles.inlineInput]} />
+</View>
+{teamSearch.trim().length >= 2 ? teams.filter((team) => team.name.toLocaleLowerCase().includes(teamSearch.trim().toLocaleLowerCase())).map((team) => <Pressable key={team.id} onPress={() => void loadRoster(team)} style={[rosterStyles.teamSearchResult, managedTeam?.id === team.id && rosterStyles.teamSearchResultSelected]}><Text style={rosterStyles.teamSearchName}>{team.name}</Text><Text style={rosterStyles.teamSearchMeta}>Taso {team.skill_level}</Text></Pressable>) : null}
+{managedTeam ? <View style={rosterStyles.rosterPanel}>
+<Text style={rosterStyles.rosterTitle}>{managedTeam.name}</Text>
+<Text style={rosterStyles.rosterHint}>Valitse kapteeni painamalla pelaajaa. Pelaajamuutokset ovat poikkeustilanteita varten.</Text>
+{roster.map((player) => <View key={player.id} style={rosterStyles.rosterPlayer}><Pressable onPress={() => setRosterCaptainId(player.id)} style={rosterStyles.captainChoice}><Text style={[rosterStyles.captainChoiceText, rosterCaptainId === player.id && rosterStyles.captainChoiceTextSelected]}>{player.name}{rosterCaptainId === player.id ? " · Kapteeni" : ""}</Text></Pressable><Pressable onPress={() => void updateRoster(player.id, null)}><Text style={styles.delete}>Poista</Text></Pressable></View>)}
+<Pressable onPress={() => void updateRoster(null, null)} style={rosterStyles.rosterSave}><Text style={rosterStyles.rosterSaveText}>Tallenna muutokset</Text></Pressable>
+{roster.length < 3 ? <><Text style={rosterStyles.rosterLabel}>LISÄÄ KORVAAVA PELAAJA</Text><View style={styles.inline}><TextInput value={playerSearch} onChangeText={setPlayerSearch} placeholder="Hae pelaajan nimellä" placeholderTextColor={colors.muted} style={[styles.input, styles.inlineInput]} /><Pressable onPress={() => void searchRosterPlayers()} disabled={searchingPlayers} style={styles.small}>{searchingPlayers ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.smallText}>Hae</Text>}</Pressable></View>{playerSearchResults.map((player) => <Pressable key={player.id} onPress={() => void updateRoster(null, player.id)} style={styles.add}><Text style={styles.addText}>+ Lisää {player.first_name} {player.last_name}</Text></Pressable>)}</> : <Text style={rosterStyles.rosterHint}>Joukkueessa on jo kolme pelaajaa. Poista pelaaja ennen uuden lisäämistä.</Text>}
+{confirmTeamDelete ? <View style={rosterStyles.deleteConfirm}><Text style={rosterStyles.deleteConfirmText}>Poistetaanko joukkue sekä sen lohkojaot, ottelut ja pelaajajäsenyydet?</Text><View style={styles.inline}><Pressable onPress={() => void deleteManagedTeam()} style={rosterStyles.confirmDelete}><Text style={rosterStyles.confirmDeleteText}>Vahvista poisto</Text></Pressable><Pressable onPress={() => setConfirmTeamDelete(false)} style={rosterStyles.cancelDelete}><Text style={rosterStyles.cancelDeleteText}>Peruuta</Text></Pressable></View></View> : <Pressable onPress={() => setConfirmTeamDelete(true)} style={rosterStyles.rosterDelete}><Text style={rosterStyles.rosterDeleteText}>Poista joukkue sarjasta</Text></Pressable>}
 </View> : null}<Text style={styles.sectionTitle}>Lohkot</Text>
 <View style={styles.inline}>
 <TextInput value={groupName} onChangeText={setGroupName} placeholder="Uuden lohkon nimi" placeholderTextColor={colors.muted} style={[styles.input, styles.inlineInput]} />

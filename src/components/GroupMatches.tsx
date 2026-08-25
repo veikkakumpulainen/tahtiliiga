@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { colors, shadow } from "../theme";
 
 type SetScore = { home: number | null; away: number | null; tiebreak: boolean; homeTiebreak: string; awayTiebreak: string };
-type Match = { id: string; homeId: string; awayId: string; home: string; away: string; homeScore?: number | null; awayScore?: number | null; homePlayerOneId?: string | null; homePlayerTwoId?: string | null; awayPlayerOneId?: string | null; awayPlayerTwoId?: string | null; date?: string; venue?: string; setScores: SetScore[]; walkoverWinnerId?: string | null; completed?: boolean; qualification?: boolean };
+type Match = { id: string; homeId: string; awayId: string; home: string; away: string; homeScore?: number | null; awayScore?: number | null; homePlayerOneId?: string | null; homePlayerTwoId?: string | null; awayPlayerOneId?: string | null; awayPlayerTwoId?: string | null; homeSubstituteId?: string | null; awaySubstituteId?: string | null; homeSubstituteName?: string; awaySubstituteName?: string; homeSubstituteApproved?: boolean; awaySubstituteApproved?: boolean; date?: string; venue?: string; setScores: SetScore[]; walkoverWinnerId?: string | null; completed?: boolean; qualification?: boolean };
 type LineupPlayer = { team_id: string; player_id: string; first_name: string; last_name: string };
 
 const emptySetScores = (): SetScore[] => [{ home: null, away: null, tiebreak: false, homeTiebreak: "", awayTiebreak: "" }, { home: null, away: null, tiebreak: false, homeTiebreak: "", awayTiebreak: "" }, { home: null, away: null, tiebreak: false, homeTiebreak: "", awayTiebreak: "" }];
@@ -53,20 +53,28 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
   const [lineupOptions, setLineupOptions] = useState<LineupPlayer[]>([]);
   const [homeLineup, setHomeLineup] = useState<string[]>([]);
   const [awayLineup, setAwayLineup] = useState<string[]>([]);
+  const [homeSubstituteId, setHomeSubstituteId] = useState<string | null>(null);
+  const [awaySubstituteId, setAwaySubstituteId] = useState<string | null>(null);
+  const [substituteSearchTeam, setSubstituteSearchTeam] = useState<"home" | "away" | null>(null);
+  const [substituteSearchQuery, setSubstituteSearchQuery] = useState("");
+  const [substituteResults, setSubstituteResults] = useState<LineupPlayer[]>([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!supabase) return;
     const client = supabase;
     const loadMatches = async () => {
-      const query = client.from("matches").select("id,home_team_id,away_team_id,home_score,away_score,home_player_one_id,home_player_two_id,away_player_one_id,away_player_two_id,status,scheduled_at,venue,set_scores,walkover_winner_id,league_rounds!inner(status,round_type)");
+      const query = client.from("matches").select("id,home_team_id,away_team_id,home_score,away_score,home_player_one_id,home_player_two_id,away_player_one_id,away_player_two_id,home_substitute_player_id,away_substitute_player_id,home_substitute_approved_by,away_substitute_approved_by,status,scheduled_at,venue,set_scores,walkover_winner_id,league_rounds!inner(status,round_type)");
       const { data } = isAdmin && groupId
         ? await query.eq("group_id", groupId).eq("league_rounds.status", "active")
         : await client.rpc("get_active_team_matches", { target_team_id: teamId });
-      const rows = (data ?? []) as { id: string; home_team_id: string; away_team_id: string; home_team_name?: string; away_team_name?: string; home_score: number | null; away_score: number | null; home_player_one_id: string | null; home_player_two_id: string | null; away_player_one_id: string | null; away_player_two_id: string | null; status: string; scheduled_at: string | null; venue: string | null; set_scores: unknown; walkover_winner_id: string | null; round_type?: string; league_rounds: { status: string; round_type: string } | { status: string; round_type: string }[] | null }[];
+      const rows = (data ?? []) as { id: string; home_team_id: string; away_team_id: string; home_team_name?: string; away_team_name?: string; home_score: number | null; away_score: number | null; home_player_one_id: string | null; home_player_two_id: string | null; away_player_one_id: string | null; away_player_two_id: string | null; home_substitute_player_id: string | null; away_substitute_player_id: string | null; home_substitute_approved_by?: string | null; away_substitute_approved_by?: string | null; home_substitute_name?: string; away_substitute_name?: string; home_substitute_approved?: boolean; away_substitute_approved?: boolean; status: string; scheduled_at: string | null; venue: string | null; set_scores: unknown; walkover_winner_id: string | null; round_type?: string; league_rounds: { status: string; round_type: string } | { status: string; round_type: string }[] | null }[];
       const teamIds = [...new Set(rows.flatMap((row) => [row.home_team_id, row.away_team_id]))];
       const { data: teamRows } = isAdmin ? await client.from("teams").select("id,name").in("id", teamIds) : { data: [] };
       const teamNames = new Map((teamRows ?? []).map((team) => [team.id, team.name]));
+      const substituteIds = [...new Set(rows.flatMap((row) => [row.home_substitute_player_id, row.away_substitute_player_id]).filter((playerId): playerId is string => Boolean(playerId)))];
+      const { data: substituteRows } = isAdmin && substituteIds.length ? await client.from("profiles").select("id,first_name,last_name").in("id", substituteIds) : { data: [] };
+      const substituteNames = new Map((substituteRows ?? []).map((player) => [player.id, `${player.first_name} ${player.last_name}`]));
       setMatches(rows.filter((row) => isAdmin || row.home_team_id === teamId || row.away_team_id === teamId).map((row) => ({
         id: row.id,
         homeId: row.home_team_id,
@@ -79,6 +87,12 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
         homePlayerTwoId: row.home_player_two_id,
         awayPlayerOneId: row.away_player_one_id,
         awayPlayerTwoId: row.away_player_two_id,
+        homeSubstituteId: row.home_substitute_player_id,
+        awaySubstituteId: row.away_substitute_player_id,
+        homeSubstituteName: row.home_substitute_name ?? substituteNames.get(row.home_substitute_player_id ?? ""),
+        awaySubstituteName: row.away_substitute_name ?? substituteNames.get(row.away_substitute_player_id ?? ""),
+        homeSubstituteApproved: row.home_substitute_approved ?? Boolean(row.home_substitute_approved_by),
+        awaySubstituteApproved: row.away_substitute_approved ?? Boolean(row.away_substitute_approved_by),
         date: row.scheduled_at ?? undefined,
         venue: row.venue ?? undefined,
         setScores: readSetScores(row.set_scores),
@@ -100,6 +114,11 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
     setQualificationWinnerId(match.homeScore != null && match.awayScore != null ? match.homeScore > match.awayScore ? match.homeId : match.awayId : null);
     setHomeLineup([match.homePlayerOneId, match.homePlayerTwoId].filter((playerId): playerId is string => Boolean(playerId)));
     setAwayLineup([match.awayPlayerOneId, match.awayPlayerTwoId].filter((playerId): playerId is string => Boolean(playerId)));
+    setHomeSubstituteId(match.homeSubstituteId ?? null);
+    setAwaySubstituteId(match.awaySubstituteId ?? null);
+    setSubstituteSearchTeam(null);
+    setSubstituteSearchQuery("");
+    setSubstituteResults([]);
     const { data } = await supabase?.rpc("get_active_match_lineup_options", { target_match_id: match.id }) ?? { data: [] };
     setLineupOptions((data ?? []) as LineupPlayer[]);
     setError("");
@@ -108,6 +127,32 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
   const toggleLineupPlayer = (team: "home" | "away", playerId: string) => {
     const setLineup = team === "home" ? setHomeLineup : setAwayLineup;
     setLineup((current) => current.includes(playerId) ? current.filter((id) => id !== playerId) : current.length < 2 ? [...current, playerId] : current);
+  };
+
+  const searchSubstitutes = async () => {
+    if (!supabase || !selected || !substituteSearchTeam || substituteSearchQuery.trim().length < 2) return;
+    const targetTeamId = substituteSearchTeam === "home" ? selected.homeId : selected.awayId;
+    const { data, error: searchError } = await supabase.rpc("search_match_substitutes", { target_match_id: selected.id, target_team_id: targetTeamId, search_query: substituteSearchQuery.trim() });
+    if (searchError) { setError(`Varapelaajahaku epäonnistui: ${searchError.message}`); return; }
+    setSubstituteResults(((data ?? []) as { id: string; first_name: string; last_name: string }[]).map((player) => ({ team_id: targetTeamId, player_id: player.id, first_name: player.first_name, last_name: player.last_name })));
+  };
+
+  const selectSubstitute = (team: "home" | "away", playerId: string) => {
+    const setLineup = team === "home" ? setHomeLineup : setAwayLineup;
+    const setSubstitute = team === "home" ? setHomeSubstituteId : setAwaySubstituteId;
+    setSubstitute(playerId);
+    setLineup((current) => current.includes(playerId) ? current : current.length < 2 ? [...current, playerId] : [current[0], playerId]);
+    setSubstituteSearchTeam(null);
+    setSubstituteSearchQuery("");
+    setSubstituteResults([]);
+  };
+
+  const approveSubstitute = async (match: Match, team: "home" | "away") => {
+    if (!supabase) return;
+    const substituteTeamId = team === "home" ? match.homeId : match.awayId;
+    const { error: approvalError } = await supabase.rpc("approve_match_substitute", { target_match_id: match.id, substitute_team_id: substituteTeamId });
+    if (approvalError) { setError(`Varapelaajan hyväksyntä epäonnistui: ${approvalError.message}`); return; }
+    setMatches((current) => current.map((item) => item.id === match.id ? { ...item, homeSubstituteApproved: team === "home" ? true : item.homeSubstituteApproved, awaySubstituteApproved: team === "away" ? true : item.awaySubstituteApproved } : item));
   };
 
   const updateSet = (index: number, key: keyof SetScore, value: number | boolean | string | null) => {
@@ -181,19 +226,28 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
       completed = true;
     }
 
-    const { error: updateError } = await supabase.from("matches").update({
-      scheduled_at: scheduledAt,
-      venue: venue.trim() || null,
-      home_score: completed ? homeSets : null,
-      away_score: completed ? awaySets : null,
-      home_player_one_id: homeLineup[0] ?? null,
-      home_player_two_id: homeLineup[1] ?? null,
-      away_player_one_id: awayLineup[0] ?? null,
-      away_player_two_id: awayLineup[1] ?? null,
-      set_scores: savedSetScores,
-      walkover_winner_id: savedWalkoverWinnerId,
-      status: completed ? "completed" : "scheduled",
-    }).eq("id", selected.id);
+    if (completed && !savedWalkoverWinnerId && (
+      (lineupOptions.filter((player) => player.team_id === selected.homeId).length > 2 && homeLineup.length !== 2)
+      || (lineupOptions.filter((player) => player.team_id === selected.awayId).length > 2 && awayLineup.length !== 2)
+    )) {
+      setError("Valitse kaksi pelaajaa jokaiselle yli kaksihenkiselle joukkueelle ennen tuloksen tallennusta.");
+      return;
+    }
+
+    const { error: updateError } = await supabase.rpc("save_match_details", {
+      target_match_id: selected.id,
+      target_scheduled_at: scheduledAt,
+      target_venue: venue.trim(),
+      target_home_score: completed ? homeSets : null,
+      target_away_score: completed ? awaySets : null,
+      target_set_scores: savedSetScores,
+      target_walkover_winner_id: savedWalkoverWinnerId,
+      target_status: completed ? "completed" : "scheduled",
+      requested_home_lineup: homeLineup,
+      requested_away_lineup: awayLineup,
+      requested_home_substitute_id: homeSubstituteId,
+      requested_away_substitute_id: awaySubstituteId,
+    });
     if (updateError) {
       setError(`Ottelun tallennus epäonnistui: ${updateError.message}`);
       return;
@@ -209,6 +263,8 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
       homePlayerTwoId: homeLineup[1] ?? null,
       awayPlayerOneId: awayLineup[0] ?? null,
       awayPlayerTwoId: awayLineup[1] ?? null,
+      homeSubstituteId,
+      awaySubstituteId,
       setScores: savedSetScores,
       walkoverWinnerId: savedWalkoverWinnerId,
       completed,
@@ -222,6 +278,8 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
     {matches.length === 0 ? <Text style={styles.empty}>Otteluita ei ole vielä muodostettu tälle lohkolle.</Text> : matches.map((match) => <View key={match.id} style={styles.match}>
       <View style={styles.matchTop}><Text style={styles.status}>{match.completed ? "PELATTU" : match.date ? "SOVITTU" : "AJANKOHTA SOPIMATTA"}</Text><Text style={styles.own}>{isAdmin ? "HALLINTA" : "OMA OTTELU"}</Text></View>
       <View style={styles.teams}><Text style={[styles.team, match.home === teamName && styles.ownTeam]}>{match.home}</Text><Text style={styles.vs}>VS</Text><Text style={[styles.team, match.away === teamName && styles.ownTeam]}>{match.away}</Text></View>
+      {match.homeSubstituteId ? <View style={styles.substituteNotice}><Text style={styles.substituteNoticeText}>{match.home}: varapelaaja {match.homeSubstituteName ?? "valittu"}{match.homeSubstituteApproved ? " · Hyväksytty" : " · Odottaa hyväksyntää"}</Text>{(isAdmin || teamId === match.awayId) && !match.homeSubstituteApproved ? <Pressable onPress={() => void approveSubstitute(match, "home")}><Text style={styles.approveText}>Hyväksy varapelaaja</Text></Pressable> : null}</View> : null}
+      {match.awaySubstituteId ? <View style={styles.substituteNotice}><Text style={styles.substituteNoticeText}>{match.away}: varapelaaja {match.awaySubstituteName ?? "valittu"}{match.awaySubstituteApproved ? " · Hyväksytty" : " · Odottaa hyväksyntää"}</Text>{(isAdmin || teamId === match.homeId) && !match.awaySubstituteApproved ? <Pressable onPress={() => void approveSubstitute(match, "away")}><Text style={styles.approveText}>Hyväksy varapelaaja</Text></Pressable> : null}</View> : null}
       {match.completed ? <Text style={styles.result}>{match.qualification ? `Voittaja: ${(match.homeScore ?? 0) > (match.awayScore ?? 0) ? match.home : match.away}` : `Lopputulos ${formatSetResult(match.setScores, match.walkoverWinnerId, match.homeId, match.home, match.away)}`}</Text> : match.date ? <Text style={styles.details}>Ajankohta {formatFinnishDateTime(match.date)} · {match.venue || "Paikka sopimatta"}</Text> : null}
       <Pressable style={styles.editButton} onPress={() => void openEditor(match)}><Text style={styles.editText}>{match.completed ? match.qualification ? "Muokkaa voittajaa" : "Muokkaa tietoja ja tulosta" : match.qualification ? "Merkitse voittaja" : match.date ? "Muokkaa ottelua" : "Lisää aika ja paikka"}</Text><Text style={styles.arrow}>→</Text></Pressable>
     </View>)}
@@ -232,8 +290,9 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
         <TextInput value={date} onChangeText={setDate} placeholder="DD-MM-YYYY HH:MM" placeholderTextColor={colors.muted} style={styles.input} />
         <Text style={styles.fieldLabel}>PELIPAIKKA</Text>
         <TextInput value={venue} onChangeText={setVenue} placeholder="Esim. Padel Center" placeholderTextColor={colors.muted} style={styles.input} />
-        {(isAdmin || selected?.homeId === teamId) ? <><Text style={styles.fieldLabel}>{selected?.home} - PELAAJAT (2)</Text><View style={styles.lineup}>{lineupOptions.filter((player) => player.team_id === selected?.homeId).map((player) => <Pressable key={player.player_id} onPress={() => toggleLineupPlayer("home", player.player_id)} style={[styles.lineupPlayer, homeLineup.includes(player.player_id) && styles.lineupPlayerSelected]}><Text style={[styles.lineupPlayerText, homeLineup.includes(player.player_id) && styles.lineupPlayerTextSelected]}>{player.first_name} {player.last_name}</Text></Pressable>)}</View></> : null}
-        {(isAdmin || selected?.awayId === teamId) ? <><Text style={styles.fieldLabel}>{selected?.away} - PELAAJAT (2)</Text><View style={styles.lineup}>{lineupOptions.filter((player) => player.team_id === selected?.awayId).map((player) => <Pressable key={player.player_id} onPress={() => toggleLineupPlayer("away", player.player_id)} style={[styles.lineupPlayer, awayLineup.includes(player.player_id) && styles.lineupPlayerSelected]}><Text style={[styles.lineupPlayerText, awayLineup.includes(player.player_id) && styles.lineupPlayerTextSelected]}>{player.first_name} {player.last_name}</Text></Pressable>)}</View></> : null}
+        {(isAdmin || selected?.homeId === teamId) ? <><Text style={styles.fieldLabel}>{selected?.home} - PELAAJAT (2)</Text><View style={styles.lineup}>{lineupOptions.filter((player) => player.team_id === selected?.homeId).map((player) => <Pressable key={player.player_id} onPress={() => toggleLineupPlayer("home", player.player_id)} style={[styles.lineupPlayer, homeLineup.includes(player.player_id) && styles.lineupPlayerSelected]}><Text style={[styles.lineupPlayerText, homeLineup.includes(player.player_id) && styles.lineupPlayerTextSelected]}>{player.first_name} {player.last_name}</Text></Pressable>)}</View><Pressable onPress={() => setSubstituteSearchTeam("home")} style={styles.substituteButton}><Text style={styles.substituteButtonText}>Käytä varapelaajaa</Text></Pressable></> : null}
+        {(isAdmin || selected?.awayId === teamId) ? <><Text style={styles.fieldLabel}>{selected?.away} - PELAAJAT (2)</Text><View style={styles.lineup}>{lineupOptions.filter((player) => player.team_id === selected?.awayId).map((player) => <Pressable key={player.player_id} onPress={() => toggleLineupPlayer("away", player.player_id)} style={[styles.lineupPlayer, awayLineup.includes(player.player_id) && styles.lineupPlayerSelected]}><Text style={[styles.lineupPlayerText, awayLineup.includes(player.player_id) && styles.lineupPlayerTextSelected]}>{player.first_name} {player.last_name}</Text></Pressable>)}</View><Pressable onPress={() => setSubstituteSearchTeam("away")} style={styles.substituteButton}><Text style={styles.substituteButtonText}>Käytä varapelaajaa</Text></Pressable></> : null}
+        {substituteSearchTeam ? <><Text style={styles.fieldLabel}>HAE VARAPELAAJAA</Text><View style={styles.substituteSearchRow}><TextInput value={substituteSearchQuery} onChangeText={setSubstituteSearchQuery} placeholder="Hae nimellä" placeholderTextColor={colors.muted} style={[styles.input, styles.substituteSearchInput]} /><Pressable onPress={() => void searchSubstitutes()} style={styles.substituteButton}><Text style={styles.substituteButtonText}>Hae</Text></Pressable></View>{substituteResults.map((player) => <Pressable key={player.player_id} onPress={() => selectSubstitute(substituteSearchTeam, player.player_id)} style={styles.substituteResult}><Text style={styles.substituteResultText}>{player.first_name} {player.last_name}</Text><Text style={styles.substituteButtonText}>Valitse</Text></Pressable>)}</> : null}
         {selected?.qualification ? <><Text style={styles.fieldLabel}>KARSINTAOTTELUN VOITTAJA</Text>
         <View style={styles.walkover}><Pressable onPress={() => setQualificationWinnerId(selected.homeId)} style={[styles.winner, qualificationWinnerId === selected.homeId && styles.winnerSelected]}><Text style={[styles.winnerText, qualificationWinnerId === selected.homeId && styles.winnerTextSelected]}>{selected.home}</Text></Pressable><Pressable onPress={() => setQualificationWinnerId(selected.awayId)} style={[styles.winner, qualificationWinnerId === selected.awayId && styles.winnerSelected]}><Text style={[styles.winnerText, qualificationWinnerId === selected.awayId && styles.winnerTextSelected]}>{selected.away}</Text></Pressable></View></> : <><Text style={styles.fieldLabel}>LOPPUTULOS</Text>
         <View style={styles.modeRow}><Pressable onPress={() => setResultMode("sets")} style={[styles.mode, resultMode === "sets" && styles.modeSelected]}><Text style={[styles.modeText, resultMode === "sets" && styles.modeTextSelected]}>Setit</Text></Pressable><Pressable onPress={() => setResultMode("walkover")} style={[styles.walkoverMode, resultMode === "walkover" && styles.walkoverModeSelected]}><Text style={[styles.walkoverModeText, resultMode === "walkover" && styles.walkoverModeTextSelected]}>Luovutusvoitto</Text></Pressable></View>
@@ -261,4 +320,13 @@ const styles = StyleSheet.create({
   lineupPlayerSelected: { backgroundColor: colors.green, borderColor: colors.green },
   lineupPlayerText: { color: colors.ink, fontSize: 12, fontWeight: "800" },
   lineupPlayerTextSelected: { color: colors.surface },
+  substituteButton: { alignSelf: "flex-start", borderColor: colors.green, borderRadius: 9, borderWidth: 1, marginTop: 9, paddingHorizontal: 10, paddingVertical: 8 },
+  substituteButtonText: { color: colors.green, fontSize: 12, fontWeight: "800" },
+  substituteSearchRow: { flexDirection: "row", gap: 8 },
+  substituteSearchInput: { flex: 1 },
+  substituteResult: { alignItems: "center", backgroundColor: colors.mint, borderRadius: 9, flexDirection: "row", justifyContent: "space-between", marginTop: 7, padding: 10 },
+  substituteResultText: { color: colors.ink, fontSize: 13, fontWeight: "700" },
+  substituteNotice: { backgroundColor: colors.mint, borderRadius: 9, marginTop: 9, padding: 10 },
+  substituteNoticeText: { color: colors.ink, fontSize: 12, fontWeight: "700" },
+  approveText: { color: colors.green, fontSize: 12, fontWeight: "900", marginTop: 7 },
 });

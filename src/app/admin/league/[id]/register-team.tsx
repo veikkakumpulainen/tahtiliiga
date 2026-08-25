@@ -63,24 +63,17 @@ export default function AdminTeamRegistrationScreen() {
 
     setSaving(true);
     setMessage("");
-    const { data: team, error: teamError } = await supabase.from("teams").insert({
-      league_id: leagueId,
-      name: name.trim(),
-      skill_level: skillLevel,
-      captain_id: captainId,
-      created_by: session.user.id,
-    }).select("id").single();
-    if (teamError || !team) {
+    const { error: createError } = await supabase.rpc("create_team_with_members", {
+      target_league_id: leagueId,
+      team_name: name.trim(),
+      team_skill_level: skillLevel,
+      team_skill_description: "",
+      target_captain_id: captainId,
+      member_ids: selectedPlayers.map((player) => player.id),
+    });
+    if (createError) {
       setSaving(false);
-      setMessage(`Joukkueen lisäys epäonnistui: ${teamError?.message ?? "Tuntematon virhe."}`);
-      return;
-    }
-
-    const { error: membersError } = await supabase.from("team_members").insert(selectedPlayers.map((player) => ({ team_id: team.id, user_id: player.id, is_captain: player.id === captainId })));
-    if (membersError) {
-      await supabase.from("teams").delete().eq("id", team.id);
-      setSaving(false);
-      setMessage(`Joukkueen jäsenten lisäys epäonnistui: ${membersError.message}`);
+      setMessage(`Joukkueen lisäys epäonnistui: ${createError.message}`);
       return;
     }
     setSaving(false);
