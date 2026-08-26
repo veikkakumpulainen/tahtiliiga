@@ -5,11 +5,11 @@ import ScreenHeader from "../../components/ScreenHeader";
 import { supabase } from "../../lib/supabase";
 import { colors } from "../../theme";
 
-const genderOptions = [["male", "Mies"], ["female", "Nainen"], ["other", "Muu"], ["prefer_not_to_say", "En halua kertoa"]] as const;
-const profileSkillLevels = ["Miesten A", "Miesten B", "Miesten C", "Miesten D", "Miesten E", "Naisten A", "Naisten B", "Naisten C", "Naisten D", "Naisten E"] as const;
+const skillCategories = [["Miesten", "Miesten tasot"], ["Naisten", "Naisten tasot"]] as const;
+const skillLevelLetters = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
 
 export default function RegisterScreen() {
-  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", password: "", confirmation: "", gender: "", skillLevel: "" });
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", password: "", confirmation: "", skillCategory: "", skillLevel: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -43,7 +43,6 @@ export default function RegisterScreen() {
           first_name: form.firstName.trim(),
           last_name: form.lastName.trim(),
           phone: form.phone.trim(),
-          gender: form.gender || null,
           skill_level: form.skillLevel || null,
         },
       },
@@ -75,19 +74,21 @@ export default function RegisterScreen() {
         <TextInput value={form[key]} onChangeText={(value) => update(key, value)} placeholder={placeholder} placeholderTextColor={colors.muted} autoCapitalize={key === "email" ? "none" : "words"} keyboardType={key === "email" ? "email-address" : key === "phone" ? "phone-pad" : "default"} style={styles.input} />
       </View>)}
 
-      <Text style={styles.label}>SUKUPUOLI (VALINNAINEN)</Text>
+      <Text style={styles.label}>TAITOTASO (VALINNAINEN)</Text>
       <View style={styles.options}>
-        {genderOptions.map(([value, label]) => <Pressable key={value} onPress={() => update("gender", form.gender === value ? "" : value)} style={[styles.option, form.gender === value && styles.optionSelected]}>
-          <Text style={[styles.optionText, form.gender === value && styles.optionTextSelected]}>{label}</Text>
+        {skillCategories.map(([value, label]) => <Pressable key={value} onPress={() => setForm((current) => ({ ...current, skillCategory: current.skillCategory === value ? "" : value, skillLevel: "" }))} style={[styles.option, form.skillCategory === value && styles.optionSelected]}>
+          <Text style={[styles.optionText, form.skillCategory === value && styles.optionTextSelected]}>{label}</Text>
         </Pressable>)}
       </View>
 
-      <Text style={styles.label}>TAITOTASO (VALINNAINEN)</Text>
-      <View style={styles.options}>
-        {profileSkillLevels.map((level) => <Pressable key={level} onPress={() => update("skillLevel", form.skillLevel === level ? "" : level)} style={[styles.option, form.skillLevel === level && styles.optionSelected]}>
-          <Text style={[styles.optionText, form.skillLevel === level && styles.optionTextSelected]}>{level}</Text>
-        </Pressable>)}
-      </View>
+      {form.skillCategory ? <View style={styles.options}>
+        {skillLevelLetters.map((letter) => {
+          const value = `${form.skillCategory} ${letter}`;
+          return <Pressable key={letter} onPress={() => update("skillLevel", form.skillLevel === value ? "" : value)} style={[styles.option, form.skillLevel === value && styles.optionSelected]}>
+            <Text style={[styles.optionText, form.skillLevel === value && styles.optionTextSelected]}>{letter}</Text>
+          </Pressable>;
+        })}
+      </View> : null}
 
       <Text style={styles.label}>SALASANA</Text>
       <TextInput value={form.password} onChangeText={(value) => update("password", value)} secureTextEntry placeholder="Vähintään 8 merkkiä" placeholderTextColor={colors.muted} style={styles.input} />

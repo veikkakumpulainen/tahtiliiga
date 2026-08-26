@@ -11,12 +11,11 @@ type Profile = {
   last_name: string;
   email: string;
   phone: string | null;
-  gender: string | null;
   skill_level: string | null;
 };
 
-const genderOptions = [["male", "Mies"], ["female", "Nainen"], ["other", "Muu"], ["prefer_not_to_say", "En halua kertoa"]] as const;
-const skillLevels = ["Miesten A", "Miesten B", "Miesten C", "Miesten D", "Miesten E", "Naisten A", "Naisten B", "Naisten C", "Naisten D", "Naisten E"] as const;
+const skillCategories = [["Miesten", "Miesten tasot"], ["Naisten", "Naisten tasot"]] as const;
+const skillLevelLetters = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
 
 export default function EditProfileScreen() {
   const { session, loading: loadingSession } = useAuth();
@@ -24,7 +23,7 @@ export default function EditProfileScreen() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
-  const [gender, setGender] = useState<string | null>(null);
+  const [skillCategory, setSkillCategory] = useState("");
   const [skillLevel, setSkillLevel] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -35,7 +34,7 @@ export default function EditProfileScreen() {
     const client = supabase;
     const loadProfile = async () => {
       setLoading(true);
-      const { data, error } = await client.from("profiles").select("first_name,last_name,email,phone,gender,skill_level").eq("id", session.user.id).maybeSingle();
+      const { data, error } = await client.from("profiles").select("first_name,last_name,email,phone,skill_level").eq("id", session.user.id).maybeSingle();
       if (error || !data) {
         setMessage(error?.message ?? "Profiilia ei löytynyt.");
       } else {
@@ -44,8 +43,9 @@ export default function EditProfileScreen() {
         setFirstName(current.first_name);
         setLastName(current.last_name);
         setPhone(current.phone ?? "");
-        setGender(current.gender);
         setSkillLevel(current.skill_level);
+        const category = skillCategories.find(([value]) => current.skill_level?.startsWith(`${value} `))?.[0];
+        setSkillCategory(category ?? "");
       }
       setLoading(false);
     };
@@ -64,7 +64,6 @@ export default function EditProfileScreen() {
       first_name: firstName.trim(),
       last_name: lastName.trim(),
       phone: phone.trim() || null,
-      gender,
       skill_level: skillLevel,
     };
     const { error } = await supabase.from("profiles").update(values).eq("id", session.user.id);
@@ -101,19 +100,21 @@ export default function EditProfileScreen() {
       <Text style={styles.label}>PUHELIN</Text>
       <TextInput value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+358 40 123 4567" placeholderTextColor={colors.muted} style={styles.input} />
 
-      <Text style={styles.label}>SUKUPUOLI</Text>
+      <Text style={styles.label}>TAITOTASO</Text>
       <View style={styles.options}>
-        {genderOptions.map(([value, label]) => <Pressable key={value} onPress={() => setGender(gender === value ? null : value)} style={[styles.option, gender === value && styles.optionSelected]}>
-          <Text style={[styles.optionText, gender === value && styles.optionTextSelected]}>{label}</Text>
+        {skillCategories.map(([value, label]) => <Pressable key={value} onPress={() => { const next = skillCategory === value ? "" : value; setSkillCategory(next); setSkillLevel(null); }} style={[styles.option, skillCategory === value && styles.optionSelected]}>
+          <Text style={[styles.optionText, skillCategory === value && styles.optionTextSelected]}>{label}</Text>
         </Pressable>)}
       </View>
 
-      <Text style={styles.label}>TAITOTASO</Text>
-      <View style={styles.options}>
-        {skillLevels.map((level) => <Pressable key={level} onPress={() => setSkillLevel(skillLevel === level ? null : level)} style={[styles.option, skillLevel === level && styles.optionSelected]}>
-          <Text style={[styles.optionText, skillLevel === level && styles.optionTextSelected]}>{level}</Text>
-        </Pressable>)}
-      </View>
+      {skillCategory ? <View style={styles.options}>
+        {skillLevelLetters.map((letter) => {
+          const value = `${skillCategory} ${letter}`;
+          return <Pressable key={letter} onPress={() => setSkillLevel(skillLevel === value ? null : value)} style={[styles.option, skillLevel === value && styles.optionSelected]}>
+            <Text style={[styles.optionText, skillLevel === value && styles.optionTextSelected]}>{letter}</Text>
+          </Pressable>;
+        })}
+      </View> : null}
 
       {message ? <Text style={message.startsWith("Tallennus") || message.startsWith("Profiilin") ? styles.success : styles.error}>{message}</Text> : null}
       <Pressable onPress={() => void saveProfile()} disabled={saving} style={styles.save}>

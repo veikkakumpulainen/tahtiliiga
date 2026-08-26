@@ -1,12 +1,12 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import ScreenHeader from "../../../components/ScreenHeader";
 import { useAuth } from "../../../hooks/useAuth";
 import { supabase } from "../../../lib/supabase";
 import { colors } from "../../../theme";
 
-const levels = ["A", "B", "C", "D", "E"] as const;
+const levels = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
 type Player = { id: string; first_name: string; last_name: string };
 
 export default function TeamRegistrationScreen() {
@@ -23,14 +23,11 @@ export default function TeamRegistrationScreen() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const searchPlayers = async () => {
-    if (!supabase || searchQuery.trim().length < 2) {
-      setError("Kirjoita pelaajan nimestä vähintään kaksi merkkiä.");
-      return;
-    }
+  const searchPlayers = async (query: string) => {
+    if (!supabase) return;
     setSearching(true);
     setError("");
-    const { data, error: searchError } = await supabase.rpc("search_profiles_by_name", { search_query: searchQuery.trim(), target_league_id: leagueId });
+    const { data, error: searchError } = await supabase.rpc("search_profiles_by_name", { search_query: query, target_league_id: leagueId });
     setSearching(false);
     if (searchError) {
       setError(`Pelaajahaku epäonnistui: ${searchError.message}`);
@@ -38,6 +35,17 @@ export default function TeamRegistrationScreen() {
     }
     setSearchResults(((data ?? []) as Player[]).filter((player) => player.id !== session?.user.id && !selectedPlayers.some((selected) => selected.id === player.id)));
   };
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const timeout = setTimeout(() => void searchPlayers(query), 350);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
   const selectPlayer = (player: Player) => {
     if (selectedPlayers.length >= 2) return;
@@ -101,7 +109,7 @@ export default function TeamRegistrationScreen() {
       <TextInput value={teamName} onChangeText={setTeamName} placeholder="Esim. Padel Tähdet" placeholderTextColor={colors.muted} style={styles.input} />
 
       <Text style={styles.label}>PELAAJIEN HAKU</Text>
-      <View style={styles.searchRow}><TextInput value={searchQuery} onChangeText={setSearchQuery} placeholder="Hae nimellä" placeholderTextColor={colors.muted} style={[styles.input, styles.searchInput]} /><Pressable onPress={() => void searchPlayers()} disabled={searching} style={styles.searchButton}>{searching ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.searchButtonText}>Hae</Text>}</Pressable></View>
+      <View style={styles.searchRow}><TextInput value={searchQuery} onChangeText={setSearchQuery} placeholder="Hae nimellä" placeholderTextColor={colors.muted} style={[styles.input, styles.searchInput]} />{searching ? <ActivityIndicator color={colors.green} /> : null}</View>
       {searchResults.map((player) => <Pressable key={player.id} onPress={() => selectPlayer(player)} disabled={selectedPlayers.length >= 2} style={styles.result}><Text style={styles.resultText}>{player.first_name} {player.last_name}</Text><Text style={styles.resultAdd}>Lisää</Text></Pressable>)}
 
       <Text style={styles.label}>JOUKKUEEN PELAAJAT</Text>
@@ -112,7 +120,7 @@ export default function TeamRegistrationScreen() {
       <View style={styles.captains}>{captainChoices.map((choice) => <Pressable key={choice.id} onPress={() => setCaptainId(choice.id)} style={[styles.captain, captainId === choice.id && styles.captainSelected]}><Text style={[styles.captainText, captainId === choice.id && styles.captainTextSelected]}>{choice.name}</Text></Pressable>)}</View>
 
       <Text style={styles.label}>TAITOTASO</Text>
-      <View style={styles.levels}>{levels.map((level) => <Pressable key={level} onPress={() => setSkillLevel(level)} style={[styles.level, skillLevel === level && styles.levelSelected]}><Text style={[styles.levelText, skillLevel === level && styles.levelTextSelected]}>{level}</Text></Pressable>)}</View>
+      <View style={styles.levels}>{levels.map((level) => <Pressable key={level} onPress={() => setSkillLevel(level)} style={[styles.level, level === "Aloittelija" && styles.levelWide, skillLevel === level && styles.levelSelected]}><Text style={[styles.levelText, level === "Aloittelija" && styles.levelTextSmall, skillLevel === level && styles.levelTextSelected]}>{level}</Text></Pressable>)}</View>
 
       <Text style={styles.label}>LISÄTIETO TAITOTASOSTA (VALINNAINEN)</Text>
       <TextInput value={skillDescription} onChangeText={setSkillDescription} multiline placeholder="Kertokaa lyhyesti joukkueen kokemuksesta..." placeholderTextColor={colors.muted} style={[styles.input, styles.textarea]} />
@@ -124,5 +132,5 @@ export default function TeamRegistrationScreen() {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: colors.canvas }, content: { paddingBottom: 40 }, body: { padding: 22, paddingTop: 22 }, label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 17, marginBottom: 7 }, input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, color: colors.ink, padding: 14 }, textarea: { minHeight: 88, textAlignVertical: "top" }, searchRow: { flexDirection: "row", gap: 8 }, searchInput: { flex: 1 }, searchButton: { alignItems: "center", backgroundColor: colors.green, borderRadius: 12, justifyContent: "center", paddingHorizontal: 16 }, searchButtonText: { color: colors.surface, fontWeight: "800" }, result: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 10, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 7, padding: 12 }, resultText: { color: colors.ink, fontWeight: "700" }, resultAdd: { color: colors.green, fontSize: 12, fontWeight: "800" }, member: { color: colors.ink, backgroundColor: colors.surface, borderRadius: 10, fontSize: 13, fontWeight: "700", marginTop: 7, padding: 12 }, memberRow: { alignItems: "center", flexDirection: "row", gap: 8 }, remove: { color: colors.coral, fontSize: 12, fontWeight: "800" }, captains: { gap: 8 }, captain: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 12 }, captainSelected: { backgroundColor: colors.lime, borderColor: colors.greenBright }, captainText: { color: colors.ink, fontSize: 13, fontWeight: "700" }, captainTextSelected: { color: colors.green }, levels: { flexDirection: "row", gap: 9 }, level: { width: 48, height: 42, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }, levelSelected: { backgroundColor: colors.lime, borderColor: colors.greenBright }, levelText: { color: colors.ink, fontWeight: "900" }, levelTextSelected: { color: colors.green }, error: { color: colors.coral, fontSize: 12, lineHeight: 18, marginTop: 12 }, button: { backgroundColor: colors.green, borderRadius: 13, alignItems: "center", padding: 16, marginTop: 22 }, buttonText: { color: colors.surface, fontSize: 14, fontWeight: "800" }, cancel: { alignItems: "center", padding: 16 }, cancelText: { color: colors.muted, fontWeight: "800" },
+  page: { flex: 1, backgroundColor: colors.canvas }, content: { paddingBottom: 40 }, body: { padding: 22, paddingTop: 22 }, label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 17, marginBottom: 7 }, input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, color: colors.ink, padding: 14 }, textarea: { minHeight: 88, textAlignVertical: "top" }, searchRow: { flexDirection: "row", gap: 8, alignItems: "center" }, searchInput: { flex: 1 }, result: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 10, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 7, padding: 12 }, resultText: { color: colors.ink, fontWeight: "700" }, resultAdd: { color: colors.green, fontSize: 12, fontWeight: "800" }, member: { color: colors.ink, backgroundColor: colors.surface, borderRadius: 10, fontSize: 13, fontWeight: "700", marginTop: 7, padding: 12 }, memberRow: { alignItems: "center", flexDirection: "row", gap: 8 }, remove: { color: colors.coral, fontSize: 12, fontWeight: "800" }, captains: { gap: 8 }, captain: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 12 }, captainSelected: { backgroundColor: colors.lime, borderColor: colors.greenBright }, captainText: { color: colors.ink, fontSize: 13, fontWeight: "700" }, captainTextSelected: { color: colors.green }, levels: { flexDirection: "row", flexWrap: "wrap", gap: 9 }, level: { width: 48, height: 42, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }, levelWide: { width: "auto" }, levelSelected: { backgroundColor: colors.lime, borderColor: colors.greenBright }, levelText: { color: colors.ink, fontWeight: "900" }, levelTextSmall: { fontSize: 12 }, levelTextSelected: { color: colors.green }, error: { color: colors.coral, fontSize: 12, lineHeight: 18, marginTop: 12 }, button: { backgroundColor: colors.green, borderRadius: 13, alignItems: "center", padding: 16, marginTop: 22 }, buttonText: { color: colors.surface, fontSize: 14, fontWeight: "800" }, cancel: { alignItems: "center", padding: 16 }, cancelText: { color: colors.muted, fontWeight: "800" },
 });

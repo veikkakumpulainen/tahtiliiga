@@ -3,7 +3,7 @@ import { ActivityIndicator, Text, View } from "react-native";
 import { colors } from "../../theme";
 import { useAuth } from "../../hooks/useAuth";
 
-const tabs = [["home", "Koti", "⌂"], ["standings", "Tulokset", "▥"], ["participation", "Osallistuminen", "＋"], ["info", "Info", "i"]] as const;
+const tabs = [["home", "Koti", "⌂"], ["leagues", "Sarjat", "▥"], ["info", "Info", "i"]] as const;
 
 export default function TabLayout() {
   const { session, loading } = useAuth();

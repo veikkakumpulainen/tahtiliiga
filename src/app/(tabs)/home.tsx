@@ -27,6 +27,7 @@ export default function HomeScreen() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [unreadGroupIds, setUnreadGroupIds] = useState<Set<string>>(new Set());
+  const [teamCounts, setTeamCounts] = useState<Record<string, number>>({});
 
   const loadHome = useCallback(async () => {
     if (!supabase || !session?.user.id) return;
@@ -41,18 +42,20 @@ export default function HomeScreen() {
     const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : []);
     const leagueIds = [...new Set(teamRows.map((team) => team.league_id))];
     const teamIds = teamRows.map((team) => team.id);
-    const [{ data: leagueRows }, { data: groupRows }] = await Promise.all([
+    const [{ data: leagueRows }, { data: groupRows }, { data: teamCountRows }] = await Promise.all([
       leagueIds.length ? client.from("leagues").select("id, name, start_date, status").in("id", leagueIds) : Promise.resolve({ data: [] }),
       teamIds.length ? client.from("group_teams").select("team_id, group_id, groups(id, name)").in("team_id", teamIds) : Promise.resolve({ data: [] }),
+      leagueIds.length ? client.rpc("get_league_team_counts", { target_league_ids: leagueIds }) : Promise.resolve({ data: [] }),
     ]);
+    setTeamCounts(Object.fromEntries((teamCountRows ?? []).map((row: { league_id: string; team_count: number }) => [row.league_id, Number(row.team_count)])));
 
     const groupIds = (groupRows ?? []).map((group) => group.group_id);
     if (groupIds.length) {
-      const { data: messages } = await client.from("group_messages").select("group_id, created_at").in("group_id", groupIds).order("created_at", { ascending: false });
+      const { data: messages } = await client.from("group_messages").select("group_id, user_id, created_at").in("group_id", groupIds).order("created_at", { ascending: false });
       const unread = new Set<string>();
       for (const groupId of groupIds) {
         const lastRead = await AsyncStorage.getItem(`group-chat-read-${groupId}`);
-        if ((messages ?? []).some((message) => message.group_id === groupId && (!lastRead || message.created_at > lastRead))) unread.add(groupId);
+        if ((messages ?? []).some((message) => message.group_id === groupId && message.user_id !== session.user.id && (!lastRead || message.created_at > lastRead))) unread.add(groupId);
       }
       setUnreadGroupIds(unread);
     } else {
@@ -93,7 +96,7 @@ export default function HomeScreen() {
     {teams.length === 0 ? <View style={styles.emptyState}>
       <Text style={styles.emptyTitle}>Et ole vielä ilmoittautunut sarjaan.</Text>
       <Text style={styles.emptyCopy}>Selaa avoimia sarjoja ja kokoa oma joukkueesi.</Text>
-      <Link href="/(tabs)/participation" asChild><Pressable style={styles.browseButton}><Text style={styles.browseText}>Selaa sarjoja</Text><Text style={styles.arrow}>→</Text></Pressable></Link>
+      <Link href={{ pathname: "/(tabs)/leagues", params: { filter: "open" } }} asChild><Pressable style={styles.browseButton}><Text style={styles.browseText}>Selaa sarjoja</Text><Text style={styles.arrow}>→</Text></Pressable></Link>
     </View> : <>
       <View style={styles.sectionHeading}><Text style={styles.title}>Omat sarjat</Text></View>
       {teams.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selector}>
@@ -108,7 +111,14 @@ export default function HomeScreen() {
         <Text style={styles.cardLabel}>JOUKKUE</Text>
         <Text style={styles.teamName}>{selectedTeam.name}</Text>
         <LeagueRoundSchedule leagueId={selectedTeam.leagueId} />
-        {selectedTeam.leagueStatus !== "ongoing" ? <><Text style={styles.cardLabel}>ALKAMISPÄIVÄ</Text><Text style={styles.season}>{selectedTeam.startDate || "Ei ilmoitettu"}</Text></> : null}
+        {selectedTeam.leagueStatus !== "ongoing" ? <>
+          <Text style={styles.cardLabel}>ALKAMISPÄIVÄ</Text><Text style={styles.season}>{selectedTeam.startDate || "Ei ilmoitettu"}</Text>
+          <Text style={styles.cardLabel}>JOUKKUEITA ILMOITTAUTUNUT</Text><Text style={styles.season}>{teamCounts[selectedTeam.leagueId] ?? 0}</Text>
+          <Link href={`/league/${selectedTeam.leagueId}/teams` as never} asChild><Pressable style={styles.chatButton}>
+            <Text style={styles.chatButtonText}>Näytä ilmoittautuneet joukkueet</Text>
+            <Text style={styles.arrow}>→</Text>
+          </Pressable></Link>
+        </> : null}
         {selectedTeam.leagueStatus === "ongoing" && selectedTeam.groupId ? <>
           <Link href={`/group/${selectedTeam.groupId}/chat`} asChild><Pressable style={styles.chatButton}>
             <Text style={styles.chatButtonText}>Lohkochat</Text>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { formatFinnishDateTime, parseFinnishDateTime } from "../lib/dates";
 import { supabase } from "../lib/supabase";
 import { colors, shadow } from "../theme";
@@ -60,7 +60,9 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
   const [substituteSearchTeam, setSubstituteSearchTeam] = useState<"home" | "away" | null>(null);
   const [substituteSearchQuery, setSubstituteSearchQuery] = useState("");
   const [substituteResults, setSubstituteResults] = useState<LineupPlayer[]>([]);
+  const [searchingSubstitutes, setSearchingSubstitutes] = useState(false);
   const [error, setError] = useState("");
+  const [editorSection, setEditorSection] = useState<"details" | "result">("details");
 
   useEffect(() => {
     if (!supabase) return;
@@ -78,7 +80,19 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
       const { data: playerRows } = isAdmin && playerIds.length ? await client.from("profiles").select("id,first_name,last_name,skill_level").in("id", playerIds) : { data: [] };
       const playerNames = new Map((playerRows ?? []).map((player) => [player.id, `${player.first_name} ${player.last_name}`]));
       const substituteSkillLevels = new Map((playerRows ?? []).map((player) => [player.id, player.skill_level as string | null]));
-      setMatches(rows.filter((row) => isAdmin || row.home_team_id === teamId || row.away_team_id === teamId).map((row) => ({
+      const relevantRows = rows.filter((row) => isAdmin || row.home_team_id === teamId || row.away_team_id === teamId);
+      const rosterEntries = await Promise.all(relevantRows.map(async (row) => {
+        const { data: rosterData } = await client.rpc("get_active_match_lineup_options", { target_match_id: row.id });
+        return [row.id, (rosterData ?? []) as LineupPlayer[]] as const;
+      }));
+      const rosterByMatch = new Map(rosterEntries);
+      setMatches(relevantRows.map((row) => {
+        const roster = rosterByMatch.get(row.id) ?? [];
+        const homeRoster = roster.filter((player) => player.team_id === row.home_team_id);
+        const awayRoster = roster.filter((player) => player.team_id === row.away_team_id);
+        const homeAuto = !row.home_player_one_id && homeRoster.length === 2 ? homeRoster : null;
+        const awayAuto = !row.away_player_one_id && awayRoster.length === 2 ? awayRoster : null;
+        return {
         id: row.id,
         homeId: row.home_team_id,
         awayId: row.away_team_id,
@@ -86,14 +100,14 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
         away: row.away_team_name ?? teamNames.get(row.away_team_id) ?? "Vierasjoukkue",
         homeScore: row.home_score,
         awayScore: row.away_score,
-        homePlayerOneId: row.home_player_one_id,
-        homePlayerTwoId: row.home_player_two_id,
-        awayPlayerOneId: row.away_player_one_id,
-        awayPlayerTwoId: row.away_player_two_id,
-        homePlayerOneName: row.home_player_one_name ?? playerNames.get(row.home_player_one_id ?? ""),
-        homePlayerTwoName: row.home_player_two_name ?? playerNames.get(row.home_player_two_id ?? ""),
-        awayPlayerOneName: row.away_player_one_name ?? playerNames.get(row.away_player_one_id ?? ""),
-        awayPlayerTwoName: row.away_player_two_name ?? playerNames.get(row.away_player_two_id ?? ""),
+        homePlayerOneId: row.home_player_one_id ?? homeAuto?.[0]?.player_id ?? null,
+        homePlayerTwoId: row.home_player_two_id ?? homeAuto?.[1]?.player_id ?? null,
+        awayPlayerOneId: row.away_player_one_id ?? awayAuto?.[0]?.player_id ?? null,
+        awayPlayerTwoId: row.away_player_two_id ?? awayAuto?.[1]?.player_id ?? null,
+        homePlayerOneName: row.home_player_one_name ?? playerNames.get(row.home_player_one_id ?? "") ?? (homeAuto?.[0] ? `${homeAuto[0].first_name} ${homeAuto[0].last_name}` : undefined),
+        homePlayerTwoName: row.home_player_two_name ?? playerNames.get(row.home_player_two_id ?? "") ?? (homeAuto?.[1] ? `${homeAuto[1].first_name} ${homeAuto[1].last_name}` : undefined),
+        awayPlayerOneName: row.away_player_one_name ?? playerNames.get(row.away_player_one_id ?? "") ?? (awayAuto?.[0] ? `${awayAuto[0].first_name} ${awayAuto[0].last_name}` : undefined),
+        awayPlayerTwoName: row.away_player_two_name ?? playerNames.get(row.away_player_two_id ?? "") ?? (awayAuto?.[1] ? `${awayAuto[1].first_name} ${awayAuto[1].last_name}` : undefined),
         homeSubstituteId: row.home_substitute_player_id,
         awaySubstituteId: row.away_substitute_player_id,
         homeSubstituteName: row.home_substitute_name ?? playerNames.get(row.home_substitute_player_id ?? ""),
@@ -108,13 +122,15 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
         walkoverWinnerId: row.walkover_winner_id,
         completed: row.status === "completed",
         qualification: (row.round_type ?? (Array.isArray(row.league_rounds) ? row.league_rounds[0] : row.league_rounds)?.round_type) === "qualification",
-      })));
+        };
+      }));
     };
     void loadMatches();
   }, [groupId, isAdmin, teamId]);
 
-  const openEditor = async (match: Match) => {
+  const openEditor = async (match: Match, section: "details" | "result" = "details") => {
     setSelected(match);
+    setEditorSection(section);
     setDate(formatFinnishDateTime(match.date));
     setVenue(match.venue ?? "");
     setSetScores(readSetScores(match.setScores));
@@ -137,7 +153,11 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
 
   const toggleLineupPlayer = (team: "home" | "away", playerId: string) => {
     const setLineup = team === "home" ? setHomeLineup : setAwayLineup;
+    const substituteId = team === "home" ? homeSubstituteId : awaySubstituteId;
+    const setSubstitute = team === "home" ? setHomeSubstituteId : setAwaySubstituteId;
+    const setSubstituteName = team === "home" ? setHomeSubstituteName : setAwaySubstituteName;
     setLineup((current) => current.includes(playerId) ? current.filter((id) => id !== playerId) : current.length < 2 ? [...current, playerId] : current);
+    if (playerId === substituteId) { setSubstitute(null); setSubstituteName(undefined); }
   };
 
   const lineupWithSubstitute = (team: "home" | "away"): (LineupPlayer & { isSubstitute?: boolean })[] => {
@@ -159,13 +179,26 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
     return roster ? `${roster.first_name} ${roster.last_name}` : undefined;
   };
 
-  const searchSubstitutes = async () => {
-    if (!supabase || !selected || !substituteSearchTeam || substituteSearchQuery.trim().length < 2) return;
-    const targetTeamId = substituteSearchTeam === "home" ? selected.homeId : selected.awayId;
-    const { data, error: searchError } = await supabase.rpc("search_match_substitutes", { target_match_id: selected.id, target_team_id: targetTeamId, search_query: substituteSearchQuery.trim() });
+  const searchSubstitutes = async (team: "home" | "away", query: string) => {
+    if (!supabase || !selected) return;
+    const targetTeamId = team === "home" ? selected.homeId : selected.awayId;
+    setSearchingSubstitutes(true);
+    const { data, error: searchError } = await supabase.rpc("search_match_substitutes", { target_match_id: selected.id, target_team_id: targetTeamId, search_query: query });
+    setSearchingSubstitutes(false);
     if (searchError) { setError(`Varapelaajahaku epäonnistui: ${searchError.message}`); return; }
     setSubstituteResults(((data ?? []) as { id: string; first_name: string; last_name: string }[]).map((player) => ({ team_id: targetTeamId, player_id: player.id, first_name: player.first_name, last_name: player.last_name })));
   };
+
+  useEffect(() => {
+    const query = substituteSearchQuery.trim();
+    if (!substituteSearchTeam || query.length < 2) {
+      setSubstituteResults([]);
+      return;
+    }
+    const timeout = setTimeout(() => void searchSubstitutes(substituteSearchTeam, query), 350);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [substituteSearchQuery, substituteSearchTeam]);
 
   const selectSubstitute = (team: "home" | "away", playerId: string, firstName: string, lastName: string) => {
     const setLineup = team === "home" ? setHomeLineup : setAwayLineup;
@@ -268,6 +301,9 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
       return;
     }
 
+    const finalHomeSubstituteId = homeSubstituteId && homeLineup.includes(homeSubstituteId) ? homeSubstituteId : null;
+    const finalAwaySubstituteId = awaySubstituteId && awayLineup.includes(awaySubstituteId) ? awaySubstituteId : null;
+
     const { error: updateError } = await supabase.rpc("save_match_details", {
       target_match_id: selected.id,
       target_scheduled_at: scheduledAt,
@@ -279,8 +315,8 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
       target_status: completed ? "completed" : "scheduled",
       requested_home_lineup: homeLineup,
       requested_away_lineup: awayLineup,
-      requested_home_substitute_id: homeSubstituteId,
-      requested_away_substitute_id: awaySubstituteId,
+      requested_home_substitute_id: finalHomeSubstituteId,
+      requested_away_substitute_id: finalAwaySubstituteId,
     });
     if (updateError) {
       setError(`Ottelun tallennus epäonnistui: ${updateError.message}`);
@@ -301,12 +337,12 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
       homePlayerTwoName: resolvePlayerName("home", homeLineup[1]),
       awayPlayerOneName: resolvePlayerName("away", awayLineup[0]),
       awayPlayerTwoName: resolvePlayerName("away", awayLineup[1]),
-      homeSubstituteId,
-      awaySubstituteId,
-      homeSubstituteName: homeSubstituteId ? homeSubstituteName : undefined,
-      awaySubstituteName: awaySubstituteId ? awaySubstituteName : undefined,
-      homeSubstituteApproved: homeSubstituteId && homeSubstituteId === selected.homeSubstituteId ? selected.homeSubstituteApproved : false,
-      awaySubstituteApproved: awaySubstituteId && awaySubstituteId === selected.awaySubstituteId ? selected.awaySubstituteApproved : false,
+      homeSubstituteId: finalHomeSubstituteId,
+      awaySubstituteId: finalAwaySubstituteId,
+      homeSubstituteName: finalHomeSubstituteId ? homeSubstituteName : undefined,
+      awaySubstituteName: finalAwaySubstituteId ? awaySubstituteName : undefined,
+      homeSubstituteApproved: finalHomeSubstituteId && finalHomeSubstituteId === selected.homeSubstituteId ? selected.homeSubstituteApproved : false,
+      awaySubstituteApproved: finalAwaySubstituteId && finalAwaySubstituteId === selected.awaySubstituteId ? selected.awaySubstituteApproved : false,
       setScores: savedSetScores,
       walkoverWinnerId: savedWalkoverWinnerId,
       completed,
@@ -314,16 +350,38 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
     setSelected(null);
   };
 
+  const homeRosterCount = lineupOptions.filter((player) => player.team_id === selected?.homeId).length;
+  const awayRosterCount = lineupOptions.filter((player) => player.team_id === selected?.awayId).length;
+  const homeLineupReady = homeRosterCount <= 2 || homeLineup.length === 2;
+  const awayLineupReady = awayRosterCount <= 2 || awayLineup.length === 2;
+  const homeSubstituteReady = !homeSubstituteId || (homeSubstituteId === selected?.homeSubstituteId && Boolean(selected?.homeSubstituteApproved));
+  const awaySubstituteReady = !awaySubstituteId || (awaySubstituteId === selected?.awaySubstituteId && Boolean(selected?.awaySubstituteApproved));
+  const resultEntryReady = homeLineupReady && awayLineupReady && homeSubstituteReady && awaySubstituteReady;
+
+  const joinTeamNames = (names: string[]) => names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} ja ${names[names.length - 1]}`;
+  const pendingLineupTeams = [!homeLineupReady && selected?.home, !awayLineupReady && selected?.away].filter((name): name is string => Boolean(name));
+  const pendingApprovalTeams = [!homeSubstituteReady && selected?.away, !awaySubstituteReady && selected?.home].filter((name): name is string => Boolean(name));
+  const resultEntryHint = [
+    pendingLineupTeams.length > 0 ? `Tuloksen merkkaaminen aukeaa, kun ${joinTeamNames(pendingLineupTeams)} ${pendingLineupTeams.length > 1 ? "ovat lukinneet" : "on lukinnut"} pelaajansa otteluun.` : "",
+    pendingApprovalTeams.length > 0 ? `Tuloksen merkkaus aukeaa, kun ${joinTeamNames(pendingApprovalTeams)} ${pendingApprovalTeams.length > 1 ? "ovat hyväksyneet" : "on hyväksynyt"} varapelaajan.` : "",
+  ].filter(Boolean).join(" ");
+
   return <View style={styles.section}>
     <View style={styles.heading}><Text style={styles.title}>Otteluparit</Text><Text style={styles.counter}>{matches.filter((match) => match.completed).length} / {matches.length} pelattu</Text></View>
     <Text style={styles.hint}>Lisää ottelulle aika ja paikka. Tavallisessa ottelussa kirjataan erät, karsinnassa vain voittaja.</Text>
     {matches.length === 0 ? <Text style={styles.empty}>Otteluita ei ole vielä muodostettu tälle lohkolle.</Text> : matches.map((match) => <View key={match.id} style={styles.match}>
       <View style={styles.matchTop}><Text style={styles.status}>{match.completed ? "PELATTU" : match.date ? "SOVITTU" : "AJANKOHTA SOPIMATTA"}</Text><Text style={styles.own}>{isAdmin ? "HALLINTA" : "OMA OTTELU"}</Text></View>
-      <View style={styles.teams}><Text style={[styles.team, match.home === teamName && styles.ownTeam]}>{match.home}</Text><Text style={styles.vs}>VS</Text><Text style={[styles.team, match.away === teamName && styles.ownTeam]}>{match.away}</Text></View>
-      {(match.homePlayerOneId || match.homePlayerTwoId || match.awayPlayerOneId || match.awayPlayerTwoId) ? <View style={styles.lineupSummary}>
-        <View style={styles.lineupSummaryRow}><Text style={styles.lineupSummaryLabel}>{match.home}</Text><Text style={styles.lineupSummaryNames}>{[match.homePlayerOneName, match.homePlayerTwoName].filter(Boolean).join(" / ") || "Ei valittu"}</Text></View>
-        <View style={styles.lineupSummaryRow}><Text style={styles.lineupSummaryLabel}>{match.away}</Text><Text style={styles.lineupSummaryNames}>{[match.awayPlayerOneName, match.awayPlayerTwoName].filter(Boolean).join(" / ") || "Ei valittu"}</Text></View>
-      </View> : null}
+      <View style={styles.teams}>
+        <View style={styles.teamColumn}>
+          <Text style={[styles.team, match.home === teamName && styles.ownTeam]}>{match.home}</Text>
+          {(match.homePlayerOneId || match.homePlayerTwoId) ? <Text style={styles.teamPlayers}>{[match.homePlayerOneName, match.homePlayerTwoName].filter(Boolean).join(" / ")}</Text> : null}
+        </View>
+        <Text style={styles.vs}>VS</Text>
+        <View style={styles.teamColumn}>
+          <Text style={[styles.team, match.away === teamName && styles.ownTeam]}>{match.away}</Text>
+          {(match.awayPlayerOneId || match.awayPlayerTwoId) ? <Text style={styles.teamPlayers}>{[match.awayPlayerOneName, match.awayPlayerTwoName].filter(Boolean).join(" / ")}</Text> : null}
+        </View>
+      </View>
       {match.homeSubstituteId ? <View style={styles.substituteCard}>
         <Text style={styles.substituteCardLabel}>{match.home.toUpperCase()} · VARAPELAAJA</Text>
         <Text style={styles.substituteCardName}>{match.homeSubstituteName ?? "Varapelaaja"}</Text>
@@ -337,36 +395,45 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
         {match.awaySubstituteApproved ? <Text style={styles.substituteApproved}>✓ Hyväksytty</Text> : (isAdmin || teamId === match.homeId) ? <Pressable onPress={() => void approveSubstitute(match, "away")} style={styles.approveButton}><Text style={styles.approveButtonText}>Hyväksy varapelaaja</Text></Pressable> : <Text style={styles.substituteWaiting}>Odottaa vastustajan hyväksyntää</Text>}
       </View> : null}
       {match.completed ? <Text style={styles.result}>{match.qualification ? `Voittaja: ${(match.homeScore ?? 0) > (match.awayScore ?? 0) ? match.home : match.away}` : `Lopputulos ${formatSetResult(match.setScores, match.walkoverWinnerId, match.homeId, match.home, match.away)}`}</Text> : match.date ? <Text style={styles.details}>Ajankohta {formatFinnishDateTime(match.date)} · {match.venue || "Paikka sopimatta"}</Text> : null}
-      <Pressable style={styles.editButton} onPress={() => void openEditor(match)}><Text style={styles.editText}>{match.completed ? match.qualification ? "Muokkaa voittajaa" : "Muokkaa tietoja ja tulosta" : match.qualification ? "Merkitse voittaja" : match.date ? "Muokkaa ottelua" : "Lisää aika ja paikka"}</Text><Text style={styles.arrow}>→</Text></Pressable>
+      <View style={styles.editButton}>
+        <Pressable style={styles.editSingle} onPress={() => void openEditor(match)}><Text style={styles.editText}>Muokkaa tietoja</Text><Text style={styles.arrow}>→</Text></Pressable>
+      </View>
     </View>)}
     <Modal visible={Boolean(selected)} transparent animationType="slide" onRequestClose={() => setSelected(null)}>
       <View style={styles.modalBackdrop}><ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled"><View style={styles.modal}>
         <View style={styles.modalHeader}><Text style={styles.modalTitle}>{selected?.home} vs {selected?.away}</Text><Pressable onPress={() => setSelected(null)}><Text style={styles.close}>×</Text></Pressable></View>
+        <View style={styles.modeRow}>
+          <Pressable onPress={() => setEditorSection("details")} style={[styles.mode, editorSection === "details" && styles.modeSelected]}><Text style={[styles.modeText, editorSection === "details" && styles.modeTextSelected]}>Tiedot</Text></Pressable>
+          <Pressable onPress={() => setEditorSection("result")} style={[styles.mode, editorSection === "result" && styles.modeSelected]}><Text style={[styles.modeText, editorSection === "result" && styles.modeTextSelected]}>Tulos</Text></Pressable>
+        </View>
+        {editorSection === "details" ? <>
         <Text style={styles.fieldLabel}>OTTELUN AJANKOHTA</Text>
         <TextInput value={date} onChangeText={setDate} placeholder="DD-MM-YYYY HH:MM" placeholderTextColor={colors.muted} style={styles.input} />
         <Text style={styles.fieldLabel}>PELIPAIKKA</Text>
         <TextInput value={venue} onChangeText={setVenue} placeholder="Esim. Padel Center" placeholderTextColor={colors.muted} style={styles.input} />
         {(isAdmin || selected?.homeId === teamId) ? <><Text style={styles.fieldLabel}>{selected?.home} - PELAAJAT (2)</Text><View style={styles.lineup}>{lineupWithSubstitute("home").map((player) => <Pressable key={player.player_id} onPress={() => toggleLineupPlayer("home", player.player_id)} style={[styles.lineupPlayer, homeLineup.includes(player.player_id) && styles.lineupPlayerSelected]}><Text style={[styles.lineupPlayerText, homeLineup.includes(player.player_id) && styles.lineupPlayerTextSelected]}>{player.first_name} {player.last_name}{player.isSubstitute ? " (varapelaaja)" : ""}</Text></Pressable>)}</View><Pressable onPress={() => setSubstituteSearchTeam("home")} style={styles.substituteButton}><Text style={styles.substituteButtonText}>Käytä varapelaajaa</Text></Pressable></> : null}
         {(isAdmin || selected?.awayId === teamId) ? <><Text style={styles.fieldLabel}>{selected?.away} - PELAAJAT (2)</Text><View style={styles.lineup}>{lineupWithSubstitute("away").map((player) => <Pressable key={player.player_id} onPress={() => toggleLineupPlayer("away", player.player_id)} style={[styles.lineupPlayer, awayLineup.includes(player.player_id) && styles.lineupPlayerSelected]}><Text style={[styles.lineupPlayerText, awayLineup.includes(player.player_id) && styles.lineupPlayerTextSelected]}>{player.first_name} {player.last_name}{player.isSubstitute ? " (varapelaaja)" : ""}</Text></Pressable>)}</View><Pressable onPress={() => setSubstituteSearchTeam("away")} style={styles.substituteButton}><Text style={styles.substituteButtonText}>Käytä varapelaajaa</Text></Pressable></> : null}
-        {substituteSearchTeam ? <><Text style={styles.fieldLabel}>HAE VARAPELAAJAA</Text><View style={styles.substituteSearchRow}><TextInput value={substituteSearchQuery} onChangeText={setSubstituteSearchQuery} placeholder="Hae nimellä" placeholderTextColor={colors.muted} style={[styles.input, styles.substituteSearchInput]} /><Pressable onPress={() => void searchSubstitutes()} style={styles.substituteButton}><Text style={styles.substituteButtonText}>Hae</Text></Pressable></View>{substituteResults.map((player) => <Pressable key={player.player_id} onPress={() => selectSubstitute(substituteSearchTeam, player.player_id, player.first_name, player.last_name)} style={styles.substituteResult}><Text style={styles.substituteResultText}>{player.first_name} {player.last_name}</Text><Text style={styles.substituteButtonText}>Valitse</Text></Pressable>)}</> : null}
-        {selected?.qualification ? <><Text style={styles.fieldLabel}>KARSINTAOTTELUN VOITTAJA</Text>
-        <View style={styles.walkover}><Pressable onPress={() => setQualificationWinnerId(selected.homeId)} style={[styles.winner, qualificationWinnerId === selected.homeId && styles.winnerSelected]}><Text style={[styles.winnerText, qualificationWinnerId === selected.homeId && styles.winnerTextSelected]}>{selected.home}</Text></Pressable><Pressable onPress={() => setQualificationWinnerId(selected.awayId)} style={[styles.winner, qualificationWinnerId === selected.awayId && styles.winnerSelected]}><Text style={[styles.winnerText, qualificationWinnerId === selected.awayId && styles.winnerTextSelected]}>{selected.away}</Text></Pressable></View></> : <><Text style={styles.fieldLabel}>LOPPUTULOS</Text>
+        {substituteSearchTeam ? <><Text style={styles.fieldLabel}>HAE VARAPELAAJAA</Text><View style={styles.substituteSearchRow}><TextInput value={substituteSearchQuery} onChangeText={setSubstituteSearchQuery} placeholder="Hae nimellä" placeholderTextColor={colors.muted} style={[styles.input, styles.substituteSearchInput]} />{searchingSubstitutes ? <ActivityIndicator color={colors.green} /> : null}</View>{substituteResults.map((player) => <Pressable key={player.player_id} onPress={() => selectSubstitute(substituteSearchTeam, player.player_id, player.first_name, player.last_name)} style={styles.substituteResult}><Text style={styles.substituteResultText}>{player.first_name} {player.last_name}</Text><Text style={styles.substituteButtonText}>Valitse</Text></Pressable>)}</> : null}
+        </> : <>
+        {selected?.qualification ? (resultEntryReady ? <><Text style={styles.fieldLabel}>KARSINTAOTTELUN VOITTAJA</Text>
+        <View style={styles.walkover}><Pressable onPress={() => setQualificationWinnerId(selected.homeId)} style={[styles.winner, qualificationWinnerId === selected.homeId && styles.winnerSelected]}><Text style={[styles.winnerText, qualificationWinnerId === selected.homeId && styles.winnerTextSelected]}>{selected.home}</Text></Pressable><Pressable onPress={() => setQualificationWinnerId(selected.awayId)} style={[styles.winner, qualificationWinnerId === selected.awayId && styles.winnerSelected]}><Text style={[styles.winnerText, qualificationWinnerId === selected.awayId && styles.winnerTextSelected]}>{selected.away}</Text></Pressable></View></> : <View style={styles.walkover}><Text style={styles.walkoverHint}>{resultEntryHint}</Text></View>) : <><Text style={styles.fieldLabel}>LOPPUTULOS</Text>
         <View style={styles.modeRow}><Pressable onPress={() => setResultMode("sets")} style={[styles.mode, resultMode === "sets" && styles.modeSelected]}><Text style={[styles.modeText, resultMode === "sets" && styles.modeTextSelected]}>Setit</Text></Pressable><Pressable onPress={() => setResultMode("walkover")} style={[styles.walkoverMode, resultMode === "walkover" && styles.walkoverModeSelected]}><Text style={[styles.walkoverModeText, resultMode === "walkover" && styles.walkoverModeTextSelected]}>Luovutusvoitto</Text></Pressable></View>
-        {resultMode === "walkover" ? <View style={styles.walkover}><Text style={styles.walkoverHint}>Valitse luovutusvoiton saanut joukkue.</Text><Pressable onPress={() => setWalkoverWinnerId(selected?.homeId ?? null)} style={[styles.winner, walkoverWinnerId === selected?.homeId && styles.winnerSelected]}><Text style={[styles.winnerText, walkoverWinnerId === selected?.homeId && styles.winnerTextSelected]}>{selected?.home}</Text></Pressable><Pressable onPress={() => setWalkoverWinnerId(selected?.awayId ?? null)} style={[styles.winner, walkoverWinnerId === selected?.awayId && styles.winnerSelected]}><Text style={[styles.winnerText, walkoverWinnerId === selected?.awayId && styles.winnerTextSelected]}>{selected?.away}</Text></Pressable></View> : <>{setScores.map((set, index) => <View key={index} style={styles.setCard}>
+        {resultMode === "walkover" ? <View style={styles.walkover}><Text style={styles.walkoverHint}>Valitse luovutusvoiton saanut joukkue.</Text><Pressable onPress={() => setWalkoverWinnerId(selected?.homeId ?? null)} style={[styles.winner, walkoverWinnerId === selected?.homeId && styles.winnerSelected]}><Text style={[styles.winnerText, walkoverWinnerId === selected?.homeId && styles.winnerTextSelected]}>{selected?.home}</Text></Pressable><Pressable onPress={() => setWalkoverWinnerId(selected?.awayId ?? null)} style={[styles.winner, walkoverWinnerId === selected?.awayId && styles.winnerSelected]}><Text style={[styles.winnerText, walkoverWinnerId === selected?.awayId && styles.winnerTextSelected]}>{selected?.away}</Text></Pressable></View> : !resultEntryReady ? <View style={styles.walkover}><Text style={styles.walkoverHint}>{resultEntryHint} Luovutusvoiton voi merkata ilman kokoonpanoja.</Text></View> : <>{setScores.map((set, index) => <View key={index} style={styles.setCard}>
           <Text style={styles.setTitle}>SETTI {index + 1}</Text>
           <Text style={styles.scoreLabel}>{selected?.home}</Text><View style={styles.scorePicker}>{[0, 1, 2, 3, 4, 5, 6, 7].map((score) => <Pressable key={score} onPress={() => toggleScore(index, "home", score)} style={[styles.scoreButton, set.home === score && styles.scoreButtonSelected]}><Text style={[styles.scoreText, set.home === score && styles.scoreTextSelected]}>{score}</Text></Pressable>)}</View>
           <Text style={styles.scoreLabel}>{selected?.away}</Text><View style={styles.scorePicker}>{[0, 1, 2, 3, 4, 5, 6, 7].map((score) => <Pressable key={score} onPress={() => toggleScore(index, "away", score)} style={[styles.scoreButton, set.away === score && styles.scoreButtonSelected]}><Text style={[styles.scoreText, set.away === score && styles.scoreTextSelected]}>{score}</Text></Pressable>)}</View>
           <Pressable onPress={() => toggleTiebreak(index)} style={[styles.tiebreak, set.tiebreak && styles.tiebreakSelected]}><Text style={[styles.tiebreakText, set.tiebreak && styles.tiebreakTextSelected]}>Tiebreak</Text></Pressable>{set.tiebreak ? <View style={styles.tiebreakInputs}><View style={styles.tiebreakField}><Text style={styles.tiebreakLabel}>{selected?.home}</Text><TextInput value={set.homeTiebreak} onChangeText={(value) => updateSet(index, "homeTiebreak", value.replace(/[^0-9]/g, ""))} keyboardType="number-pad" placeholder="0" placeholderTextColor={colors.muted} style={styles.tiebreakInput} /></View><View style={styles.tiebreakField}><Text style={styles.tiebreakLabel}>{selected?.away}</Text><TextInput value={set.awayTiebreak} onChangeText={(value) => updateSet(index, "awayTiebreak", value.replace(/[^0-9]/g, ""))} keyboardType="number-pad" placeholder="0" placeholderTextColor={colors.muted} style={styles.tiebreakInput} /></View></View> : null}
         </View>)}</>}</>}
+        </>}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Pressable onPress={() => void saveMatch()} style={styles.save}><Text style={styles.saveText}>Tallenna ottelu</Text></Pressable>
+        <Pressable onPress={() => void saveMatch()} style={styles.save}><Text style={styles.saveText}>{editorSection === "result" ? "Tallenna tulos" : "Tallenna tiedot"}</Text></Pressable>
       </View></ScrollView></View>
     </Modal>
   </View>;
 }
 
 const styles = StyleSheet.create({
-  section: { marginTop: 25, paddingHorizontal: 18 }, heading: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }, title: { color: colors.ink, fontSize: 21, fontWeight: "800" }, counter: { color: colors.muted, fontSize: 11, fontWeight: "700" }, hint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 9, marginBottom: 12 }, empty: { color: colors.muted, fontSize: 13, paddingVertical: 12 }, match: { backgroundColor: colors.surface, borderRadius: 16, padding: 15, marginBottom: 10, ...shadow }, matchTop: { flexDirection: "row", justifyContent: "space-between" }, status: { color: colors.muted, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, own: { color: colors.coral, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, teams: { flexDirection: "row", alignItems: "center", marginTop: 13 }, team: { color: colors.ink, fontSize: 14, fontWeight: "800", flex: 1 }, ownTeam: { color: colors.green }, vs: { color: colors.muted, fontSize: 9, fontWeight: "900", marginHorizontal: 9 }, details: { color: colors.muted, fontSize: 11, marginTop: 10 }, result: { color: colors.greenBright, fontSize: 12, fontWeight: "800", marginTop: 10 }, editButton: { borderTopWidth: 1, borderTopColor: colors.line, marginTop: 13, paddingTop: 12, flexDirection: "row" }, editText: { color: colors.green, fontWeight: "800", fontSize: 12 }, arrow: { color: colors.coral, fontSize: 17, marginLeft: "auto", marginTop: -4 }, modalBackdrop: { flex: 1, backgroundColor: "rgba(16,37,27,0.45)" }, modalScroll: { flexGrow: 1, justifyContent: "flex-end" }, modal: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, paddingBottom: 32 }, modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }, modalTitle: { color: colors.ink, fontSize: 20, fontWeight: "800", flex: 1 }, close: { color: colors.green, fontSize: 28, lineHeight: 28, fontWeight: "700" }, fieldLabel: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 13, marginBottom: 7 }, input: { borderWidth: 1, borderColor: colors.line, borderRadius: 12, color: colors.ink, padding: 13, backgroundColor: colors.surface }, modeRow: { flexDirection: "row", gap: 8 }, mode: { flex: 1, borderWidth: 1, borderColor: colors.line, padding: 12, borderRadius: 10, alignItems: "center" }, modeSelected: { backgroundColor: colors.green, borderColor: colors.green }, modeText: { color: colors.ink, fontWeight: "800", fontSize: 12 }, modeTextSelected: { color: colors.surface }, setCard: { backgroundColor: colors.mint, borderRadius: 12, padding: 12, marginTop: 12 }, setTitle: { color: colors.green, fontSize: 10, letterSpacing: 1, fontWeight: "900" }, scoreLabel: { color: colors.ink, fontSize: 12, fontWeight: "800", marginTop: 11 }, scorePicker: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 }, scoreButton: { width: 32, height: 32, borderRadius: 8, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }, scoreButtonSelected: { backgroundColor: colors.green, borderColor: colors.green }, scoreText: { color: colors.ink, fontWeight: "800" }, scoreTextSelected: { color: colors.surface }, tiebreak: { alignSelf: "flex-start", borderWidth: 1, borderColor: colors.line, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 8, marginTop: 11 }, tiebreakSelected: { backgroundColor: colors.coral, borderColor: colors.coral }, tiebreakText: { color: colors.ink, fontSize: 11, fontWeight: "800" }, tiebreakTextSelected: { color: colors.surface }, tiebreakInputs: { flexDirection: "row", gap: 8, marginTop: 10 }, tiebreakField: { flex: 1 }, tiebreakLabel: { color: colors.ink, fontSize: 11, fontWeight: "800", marginBottom: 5 }, tiebreakInput: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.coral, borderRadius: 9, color: colors.ink, fontSize: 16, fontWeight: "800", padding: 10, textAlign: "center" }, walkover: { backgroundColor: colors.mint, borderRadius: 12, padding: 12, marginTop: 12 }, walkoverHint: { color: colors.muted, fontSize: 12, marginBottom: 8 }, winner: { borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 12, backgroundColor: colors.surface, marginTop: 8 }, winnerSelected: { backgroundColor: colors.green, borderColor: colors.green }, winnerText: { color: colors.ink, fontWeight: "800" }, winnerTextSelected: { color: colors.surface }, error: { color: colors.coral, fontSize: 12, lineHeight: 18, marginTop: 14 }, save: { backgroundColor: colors.green, borderRadius: 13, padding: 15, alignItems: "center", marginTop: 20 }, saveText: { color: colors.surface, fontWeight: "800" },
+  section: { marginTop: 25, paddingHorizontal: 18 }, heading: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }, title: { color: colors.ink, fontSize: 21, fontWeight: "800" }, counter: { color: colors.muted, fontSize: 11, fontWeight: "700" }, hint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 9, marginBottom: 12 }, empty: { color: colors.muted, fontSize: 13, paddingVertical: 12 }, match: { backgroundColor: colors.surface, borderRadius: 16, padding: 15, marginBottom: 10, ...shadow }, matchTop: { flexDirection: "row", justifyContent: "space-between" }, status: { color: colors.muted, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, own: { color: colors.coral, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, teams: { flexDirection: "row", alignItems: "flex-start", marginTop: 13 }, teamColumn: { flex: 1 }, team: { color: colors.ink, fontSize: 14, fontWeight: "800" }, teamPlayers: { color: colors.muted, fontSize: 11, fontWeight: "700", marginTop: 4 }, ownTeam: { color: colors.green }, vs: { color: colors.muted, fontSize: 9, fontWeight: "900", marginHorizontal: 9, marginTop: 2 }, details: { color: colors.muted, fontSize: 11, marginTop: 10 }, result: { color: colors.greenBright, fontSize: 12, fontWeight: "800", marginTop: 10 }, editButton: { borderTopWidth: 1, borderTopColor: colors.line, marginTop: 13, paddingTop: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, editSingle: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, editText: { color: colors.green, fontWeight: "800", fontSize: 12 }, arrow: { color: colors.coral, fontSize: 17, marginLeft: 6 }, modalBackdrop: { flex: 1, backgroundColor: "rgba(16,37,27,0.45)" }, modalScroll: { flexGrow: 1, justifyContent: "flex-end" }, modal: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, paddingBottom: 32 }, modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }, modalTitle: { color: colors.ink, fontSize: 20, fontWeight: "800", flex: 1 }, close: { color: colors.green, fontSize: 28, lineHeight: 28, fontWeight: "700" }, fieldLabel: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 13, marginBottom: 7 }, input: { borderWidth: 1, borderColor: colors.line, borderRadius: 12, color: colors.ink, padding: 13, backgroundColor: colors.surface }, modeRow: { flexDirection: "row", gap: 8 }, mode: { flex: 1, borderWidth: 1, borderColor: colors.line, padding: 12, borderRadius: 10, alignItems: "center" }, modeSelected: { backgroundColor: colors.green, borderColor: colors.green }, modeText: { color: colors.ink, fontWeight: "800", fontSize: 12 }, modeTextSelected: { color: colors.surface }, setCard: { backgroundColor: colors.mint, borderRadius: 12, padding: 12, marginTop: 12 }, setTitle: { color: colors.green, fontSize: 10, letterSpacing: 1, fontWeight: "900" }, scoreLabel: { color: colors.ink, fontSize: 12, fontWeight: "800", marginTop: 11 }, scorePicker: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 }, scoreButton: { width: 32, height: 32, borderRadius: 8, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }, scoreButtonSelected: { backgroundColor: colors.green, borderColor: colors.green }, scoreText: { color: colors.ink, fontWeight: "800" }, scoreTextSelected: { color: colors.surface }, tiebreak: { alignSelf: "flex-start", borderWidth: 1, borderColor: colors.line, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 8, marginTop: 11 }, tiebreakSelected: { backgroundColor: colors.coral, borderColor: colors.coral }, tiebreakText: { color: colors.ink, fontSize: 11, fontWeight: "800" }, tiebreakTextSelected: { color: colors.surface }, tiebreakInputs: { flexDirection: "row", gap: 8, marginTop: 10 }, tiebreakField: { flex: 1 }, tiebreakLabel: { color: colors.ink, fontSize: 11, fontWeight: "800", marginBottom: 5 }, tiebreakInput: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.coral, borderRadius: 9, color: colors.ink, fontSize: 16, fontWeight: "800", padding: 10, textAlign: "center" }, walkover: { backgroundColor: colors.mint, borderRadius: 12, padding: 12, marginTop: 12 }, walkoverHint: { color: colors.muted, fontSize: 12, marginBottom: 8 }, winner: { borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 12, backgroundColor: colors.surface, marginTop: 8 }, winnerSelected: { backgroundColor: colors.green, borderColor: colors.green }, winnerText: { color: colors.ink, fontWeight: "800" }, winnerTextSelected: { color: colors.surface }, error: { color: colors.coral, fontSize: 12, lineHeight: 18, marginTop: 14 }, save: { backgroundColor: colors.green, borderRadius: 13, padding: 15, alignItems: "center", marginTop: 20 }, saveText: { color: colors.surface, fontWeight: "800" },
   walkoverMode: { borderWidth: 1, borderColor: colors.coral, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 9, alignSelf: "center" },
   walkoverModeSelected: { backgroundColor: colors.coral },
   walkoverModeText: { color: colors.coral, fontSize: 11, fontWeight: "800" },
@@ -378,14 +445,10 @@ const styles = StyleSheet.create({
   lineupPlayerTextSelected: { color: colors.surface },
   substituteButton: { alignSelf: "flex-start", borderColor: colors.green, borderRadius: 9, borderWidth: 1, marginTop: 9, paddingHorizontal: 10, paddingVertical: 8 },
   substituteButtonText: { color: colors.green, fontSize: 12, fontWeight: "800" },
-  substituteSearchRow: { flexDirection: "row", gap: 8 },
+  substituteSearchRow: { flexDirection: "row", gap: 8, alignItems: "center" },
   substituteSearchInput: { flex: 1 },
   substituteResult: { alignItems: "center", backgroundColor: colors.mint, borderRadius: 9, flexDirection: "row", justifyContent: "space-between", marginTop: 7, padding: 10 },
   substituteResultText: { color: colors.ink, fontSize: 13, fontWeight: "700" },
-  lineupSummary: { marginTop: 12 },
-  lineupSummaryRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 4, gap: 10 },
-  lineupSummaryLabel: { color: colors.muted, fontSize: 11, fontWeight: "800", flex: 1 },
-  lineupSummaryNames: { color: colors.ink, fontSize: 12, fontWeight: "700", flex: 1.6, textAlign: "right" },
   substituteCard: { backgroundColor: colors.mint, borderRadius: 9, marginTop: 9, padding: 10 },
   substituteCardLabel: { color: colors.green, fontSize: 9, fontWeight: "900", letterSpacing: 0.7 },
   substituteCardName: { color: colors.ink, fontSize: 14, fontWeight: "800", marginTop: 5 },
