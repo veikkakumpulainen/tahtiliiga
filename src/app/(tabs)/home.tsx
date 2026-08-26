@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Link, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import GroupMatches from "../../components/GroupMatches";
 import LeagueRoundSchedule from "../../components/LeagueRoundSchedule";
 import ScreenHeader from "../../components/ScreenHeader";
@@ -21,6 +21,8 @@ type Team = {
   groupName?: string;
 };
 
+type Invitation = { team_id: string; team_name: string; league_id: string; league_name: string; captain_name: string | null };
+
 export default function HomeScreen() {
   const { session } = useAuth();
   const [profile, setProfile] = useState<{ first_name: string; skill_level: string | null } | null>(null);
@@ -28,15 +30,19 @@ export default function HomeScreen() {
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [unreadGroupIds, setUnreadGroupIds] = useState<Set<string>>(new Set());
   const [teamCounts, setTeamCounts] = useState<Record<string, number>>({});
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [respondingTeamId, setRespondingTeamId] = useState<string | null>(null);
 
   const loadHome = useCallback(async () => {
     if (!supabase || !session?.user.id) return;
     const client = supabase;
-    const [{ data: profileData }, { data: membershipData }] = await Promise.all([
+    const [{ data: profileData }, { data: membershipData }, { data: invitationData }] = await Promise.all([
       client.from("profiles").select("first_name, skill_level").eq("id", session.user.id).maybeSingle(),
-      client.from("team_members").select("team_id, teams(id, name, skill_level, league_id)").eq("user_id", session.user.id),
+      client.from("team_members").select("team_id, teams(id, name, skill_level, league_id)").eq("user_id", session.user.id).eq("status", "active"),
+      client.rpc("get_pending_team_invitations"),
     ]);
     if (profileData) setProfile(profileData);
+    setInvitations((invitationData ?? []) as Invitation[]);
 
     const memberships = (membershipData ?? []) as unknown as { teams?: { id: string; name: string; skill_level: string; league_id: string } | { id: string; name: string; skill_level: string; league_id: string }[] | null }[];
     const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : []);
@@ -88,16 +94,34 @@ export default function HomeScreen() {
 
   useFocusEffect(useCallback(() => { void loadHome(); }, [loadHome]));
 
+  const respondToInvitation = async (teamId: string, accept: boolean) => {
+    if (!supabase) return;
+    setRespondingTeamId(teamId);
+    const { error } = await supabase.rpc(accept ? "accept_team_invitation" : "decline_team_invitation", { target_team_id: teamId });
+    setRespondingTeamId(null);
+    if (!error) await loadHome();
+  };
+
   const firstName = profile?.first_name ?? session?.user.user_metadata?.first_name ?? "pelaaja";
   const selectedTeam = teams.find((team) => team.id === selectedTeamId) ?? teams[0];
 
   return <ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
     <ScreenHeader eyebrow="TÄHTILIIGA" title={`Hyvää iltaa, ${firstName}`} subtitle="Pelit sovitaan yhdessä." />
-    {teams.length === 0 ? <View style={styles.emptyState}>
+    {invitations.length > 0 ? <View style={styles.invites}>
+      {invitations.map((invitation) => <View style={styles.inviteCard} key={invitation.team_id}>
+        <Text style={styles.inviteTitle}>Sinut on lisätty joukkueeseen {invitation.team_name}</Text>
+        <Text style={styles.inviteCopy}>{invitation.league_name}{invitation.captain_name ? ` · Kapteeni ${invitation.captain_name}` : ""}</Text>
+        {respondingTeamId === invitation.team_id ? <ActivityIndicator color={colors.green} style={styles.inviteLoading} /> : <View style={styles.inviteActions}>
+          <Pressable style={styles.inviteAccept} onPress={() => void respondToInvitation(invitation.team_id, true)}><Text style={styles.inviteAcceptText}>Hyväksy</Text></Pressable>
+          <Pressable style={styles.inviteDecline} onPress={() => void respondToInvitation(invitation.team_id, false)}><Text style={styles.inviteDeclineText}>Hylkää</Text></Pressable>
+        </View>}
+      </View>)}
+    </View> : null}
+    {teams.length === 0 && invitations.length === 0 ? <View style={styles.emptyState}>
       <Text style={styles.emptyTitle}>Et ole vielä ilmoittautunut sarjaan.</Text>
       <Text style={styles.emptyCopy}>Selaa avoimia sarjoja ja kokoa oma joukkueesi.</Text>
       <Link href={{ pathname: "/(tabs)/leagues", params: { filter: "open" } }} asChild><Pressable style={styles.browseButton}><Text style={styles.browseText}>Selaa sarjoja</Text><Text style={styles.arrow}>→</Text></Pressable></Link>
-    </View> : <>
+    </View> : teams.length === 0 ? null : <>
       <View style={styles.sectionHeading}><Text style={styles.title}>Omat sarjat</Text></View>
       {teams.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selector}>
         {teams.map((team) => <Pressable key={team.id} onPress={() => setSelectedTeamId(team.id)} style={[styles.selectorButton, selectedTeam?.id === team.id && styles.selectorSelected]}>
@@ -137,6 +161,16 @@ const styles = StyleSheet.create({
   content: { paddingBottom: 32 },
   sectionHeading: { paddingHorizontal: 22, paddingTop: 28, paddingBottom: 14 },
   title: { fontSize: 22, fontWeight: "800", color: colors.ink },
+  invites: { paddingHorizontal: 18, paddingTop: 18, gap: 12 },
+  inviteCard: { backgroundColor: colors.surface, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: colors.greenBright, ...shadow },
+  inviteTitle: { color: colors.ink, fontSize: 16, fontWeight: "800" },
+  inviteCopy: { color: colors.muted, fontSize: 13, marginTop: 5 },
+  inviteActions: { flexDirection: "row", gap: 8, marginTop: 14 },
+  inviteAccept: { flex: 1, backgroundColor: colors.green, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
+  inviteAcceptText: { color: colors.surface, fontWeight: "800", fontSize: 13 },
+  inviteDecline: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
+  inviteDeclineText: { color: colors.coral, fontWeight: "800", fontSize: 13 },
+  inviteLoading: { marginTop: 14 },
   emptyState: { backgroundColor: colors.surface, borderRadius: 20, margin: 18, marginTop: 28, padding: 22, ...shadow },
   emptyTitle: { color: colors.ink, fontSize: 20, fontWeight: "800" },
   emptyCopy: { color: colors.muted, fontSize: 14, lineHeight: 21, marginTop: 8 },

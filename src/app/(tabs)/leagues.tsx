@@ -36,10 +36,11 @@ export default function LeaguesScreen() {
     if (!supabase || !session?.user.id) { setLoadingLeagues(false); return; }
     setLoadingLeagues(true);
     setError("");
-    const [{ data: adminData }, { data: leagueRows, error: leagueError }, { data: membershipData, error: membershipError }] = await Promise.all([
+    const [{ data: adminData }, { data: leagueRows, error: leagueError }, { data: membershipData, error: membershipError }, { data: invitationData }] = await Promise.all([
       supabase.rpc("is_admin"),
       supabase.from("leagues").select("id,name,start_date,end_date,registration_deadline,status").order("start_date", { ascending: false }),
       supabase.from("team_members").select("teams(league_id)").eq("user_id", session.user.id),
+      supabase.rpc("get_pending_team_invitations"),
     ]);
     setIsAdmin(adminData === true);
     if (leagueError || membershipError) {
@@ -47,10 +48,11 @@ export default function LeaguesScreen() {
       setLoadingLeagues(false);
       return;
     }
-    const ids = (membershipData ?? []).flatMap((item) => {
+    const invitationLeagueIds = ((invitationData ?? []) as { league_id: string }[]).map((invitation) => invitation.league_id);
+    const ids = [...invitationLeagueIds, ...(membershipData ?? []).flatMap((item) => {
       const relation = item.teams as unknown as { league_id: string } | { league_id: string }[] | null;
       return Array.isArray(relation) ? relation.map((team) => team.league_id) : relation ? [relation.league_id] : [];
-    }).filter((id): id is string => Boolean(id));
+    }).filter((id): id is string => Boolean(id))];
     setRegisteredLeagueIds(new Set(ids));
     setLeagues((leagueRows ?? []) as League[]);
     setLoadingLeagues(false);
