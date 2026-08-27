@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { formatFinnishDateTime, parseFinnishDateTime } from "../lib/dates";
+import { formatFinnishDateTime } from "../lib/dates";
 import { supabase } from "../lib/supabase";
 import { colors, shadow } from "../theme";
 
+const finnishMonthNames = ["Tammikuu", "Helmikuu", "Maaliskuu", "Huhtikuu", "Toukokuu", "Kesäkuu", "Heinäkuu", "Elokuu", "Syyskuu", "Lokakuu", "Marraskuu", "Joulukuu"];
+const finnishWeekdayLabels = ["Ma", "Ti", "Ke", "To", "Pe", "La", "Su"];
+const timeSlots = Array.from({ length: 48 }, (_, index) => `${String(Math.floor(index / 2)).padStart(2, "0")}:${index % 2 === 0 ? "00" : "30"}`);
+const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+const firstWeekdayOfMonth = (year: number, month: number) => (new Date(year, month, 1).getDay() + 6) % 7;
+
 type SetScore = { home: number | null; away: number | null; tiebreak: boolean; homeTiebreak: string; awayTiebreak: string };
-type Match = { id: string; homeId: string; awayId: string; home: string; away: string; homeScore?: number | null; awayScore?: number | null; homePlayerOneId?: string | null; homePlayerTwoId?: string | null; awayPlayerOneId?: string | null; awayPlayerTwoId?: string | null; homePlayerOneName?: string; homePlayerTwoName?: string; awayPlayerOneName?: string; awayPlayerTwoName?: string; homeSubstituteId?: string | null; awaySubstituteId?: string | null; homeSubstituteName?: string; awaySubstituteName?: string; homeSubstituteSkillLevel?: string | null; awaySubstituteSkillLevel?: string | null; homeSubstituteApproved?: boolean; awaySubstituteApproved?: boolean; date?: string; venue?: string; setScores: SetScore[]; walkoverWinnerId?: string | null; completed?: boolean; qualification?: boolean };
+type Match = { id: string; leagueId: string; homeId: string; awayId: string; home: string; away: string; homeScore?: number | null; awayScore?: number | null; homePlayerOneId?: string | null; homePlayerTwoId?: string | null; awayPlayerOneId?: string | null; awayPlayerTwoId?: string | null; homePlayerOneName?: string; homePlayerTwoName?: string; awayPlayerOneName?: string; awayPlayerTwoName?: string; homeSubstituteId?: string | null; awaySubstituteId?: string | null; homeSubstituteName?: string; awaySubstituteName?: string; homeSubstituteSkillLevel?: string | null; awaySubstituteSkillLevel?: string | null; homeSubstituteApproved?: boolean; awaySubstituteApproved?: boolean; date?: string; venue?: string; setScores: SetScore[]; walkoverWinnerId?: string | null; completed?: boolean; qualification?: boolean };
 type LineupPlayer = { team_id: string; player_id: string; first_name: string; last_name: string };
 
 const emptySetScores = (): SetScore[] => [{ home: null, away: null, tiebreak: false, homeTiebreak: "", awayTiebreak: "" }, { home: null, away: null, tiebreak: false, homeTiebreak: "", awayTiebreak: "" }, { home: null, away: null, tiebreak: false, homeTiebreak: "", awayTiebreak: "" }];
@@ -44,8 +50,14 @@ function isValidSet(set: SetScore) {
 export default function GroupMatches({ teamId, teamName, groupId, isAdmin = false }: { teamId?: string; teamName?: string; groupId?: string; isAdmin?: boolean }) {
   const [matches, setMatches] = useState<Match[]>([]);
   const [selected, setSelected] = useState<Match | null>(null);
-  const [date, setDate] = useState("");
+  const [pickedDate, setPickedDate] = useState<{ year: number; month: number; day: number } | null>(null);
+  const [pickedTime, setPickedTime] = useState<string | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState<{ year: number; month: number }>(() => { const now = new Date(); return { year: now.getFullYear(), month: now.getMonth() }; });
+  const [calendarVisible, setCalendarVisible] = useState(false);
+  const [timeVisible, setTimeVisible] = useState(false);
   const [venue, setVenue] = useState("");
+  const [venueOptions, setVenueOptions] = useState<string[]>([]);
+  const [venuePickerVisible, setVenuePickerVisible] = useState(false);
   const [setScores, setSetScores] = useState<SetScore[]>(emptySetScores());
   const [resultMode, setResultMode] = useState<"sets" | "walkover">("sets");
   const [walkoverWinnerId, setWalkoverWinnerId] = useState<string | null>(null);
@@ -68,11 +80,11 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
     if (!supabase) return;
     const client = supabase;
     const loadMatches = async () => {
-      const query = client.from("matches").select("id,home_team_id,away_team_id,home_score,away_score,home_player_one_id,home_player_two_id,away_player_one_id,away_player_two_id,home_substitute_player_id,away_substitute_player_id,home_substitute_approved_by,away_substitute_approved_by,status,scheduled_at,venue,set_scores,walkover_winner_id,league_rounds!inner(status,round_type)");
+      const query = client.from("matches").select("id,league_id,home_team_id,away_team_id,home_score,away_score,home_player_one_id,home_player_two_id,away_player_one_id,away_player_two_id,home_substitute_player_id,away_substitute_player_id,home_substitute_approved_by,away_substitute_approved_by,status,scheduled_at,venue,set_scores,walkover_winner_id,league_rounds!inner(status,round_type)");
       const { data } = isAdmin && groupId
         ? await query.eq("group_id", groupId).eq("league_rounds.status", "active")
         : await client.rpc("get_active_team_matches", { target_team_id: teamId });
-      const rows = (data ?? []) as { id: string; home_team_id: string; away_team_id: string; home_team_name?: string; away_team_name?: string; home_score: number | null; away_score: number | null; home_player_one_id: string | null; home_player_two_id: string | null; away_player_one_id: string | null; away_player_two_id: string | null; home_player_one_name?: string; home_player_two_name?: string; away_player_one_name?: string; away_player_two_name?: string; home_substitute_player_id: string | null; away_substitute_player_id: string | null; home_substitute_approved_by?: string | null; away_substitute_approved_by?: string | null; home_substitute_name?: string; away_substitute_name?: string; home_substitute_skill_level?: string | null; away_substitute_skill_level?: string | null; home_substitute_approved?: boolean; away_substitute_approved?: boolean; status: string; scheduled_at: string | null; venue: string | null; set_scores: unknown; walkover_winner_id: string | null; round_type?: string; league_rounds: { status: string; round_type: string } | { status: string; round_type: string }[] | null }[];
+      const rows = (data ?? []) as { id: string; league_id: string; home_team_id: string; away_team_id: string; home_team_name?: string; away_team_name?: string; home_score: number | null; away_score: number | null; home_player_one_id: string | null; home_player_two_id: string | null; away_player_one_id: string | null; away_player_two_id: string | null; home_player_one_name?: string; home_player_two_name?: string; away_player_one_name?: string; away_player_two_name?: string; home_substitute_player_id: string | null; away_substitute_player_id: string | null; home_substitute_approved_by?: string | null; away_substitute_approved_by?: string | null; home_substitute_name?: string; away_substitute_name?: string; home_substitute_skill_level?: string | null; away_substitute_skill_level?: string | null; home_substitute_approved?: boolean; away_substitute_approved?: boolean; status: string; scheduled_at: string | null; venue: string | null; set_scores: unknown; walkover_winner_id: string | null; round_type?: string; league_rounds: { status: string; round_type: string } | { status: string; round_type: string }[] | null }[];
       const teamIds = [...new Set(rows.flatMap((row) => [row.home_team_id, row.away_team_id]))];
       const { data: teamRows } = isAdmin ? await client.from("teams").select("id,name").in("id", teamIds) : { data: [] };
       const teamNames = new Map((teamRows ?? []).map((team) => [team.id, team.name]));
@@ -94,6 +106,7 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
         const awayAuto = !row.away_player_one_id && awayRoster.length === 2 ? awayRoster : null;
         return {
         id: row.id,
+        leagueId: row.league_id,
         homeId: row.home_team_id,
         awayId: row.away_team_id,
         home: row.home_team_name ?? teamNames.get(row.home_team_id) ?? "Kotijoukkue",
@@ -131,8 +144,21 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
   const openEditor = async (match: Match, section: "details" | "result" = "details") => {
     setSelected(match);
     setEditorSection(section);
-    setDate(formatFinnishDateTime(match.date));
+    const parsedDate = match.date ? /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(match.date) : null;
+    if (parsedDate) {
+      const [, year, month, day, hour, minute] = parsedDate;
+      setPickedDate({ year: Number(year), month: Number(month) - 1, day: Number(day) });
+      setPickedTime(`${hour}:${minute}`);
+      setCalendarMonth({ year: Number(year), month: Number(month) - 1 });
+    } else {
+      setPickedDate(null);
+      setPickedTime(null);
+      const now = new Date();
+      setCalendarMonth({ year: now.getFullYear(), month: now.getMonth() });
+    }
     setVenue(match.venue ?? "");
+    const { data: venueRows } = await supabase?.from("league_venues").select("name").eq("league_id", match.leagueId).order("name") ?? { data: [] };
+    setVenueOptions((venueRows ?? []).map((row) => row.name as string));
     setSetScores(readSetScores(match.setScores));
     setResultMode(match.walkoverWinnerId ? "walkover" : "sets");
     setWalkoverWinnerId(match.walkoverWinnerId ?? null);
@@ -239,11 +265,11 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
 
   const saveMatch = async () => {
     if (!selected || !supabase) return;
-    const scheduledAt = date.trim() ? parseFinnishDateTime(date) : null;
-    if (date.trim() && !scheduledAt) {
-      setError("Anna ajankohta muodossa DD-MM-YYYY HH:MM.");
+    if ((pickedDate && !pickedTime) || (!pickedDate && pickedTime)) {
+      setError("Valitse ottelulle sekä päivämäärä että kellonaika.");
       return;
     }
+    const scheduledAt = pickedDate && pickedTime ? `${pickedDate.year}-${String(pickedDate.month + 1).padStart(2, "0")}-${String(pickedDate.day).padStart(2, "0")}T${pickedTime}:00` : null;
 
     let homeSets = 0;
     let awaySets = 0;
@@ -325,7 +351,7 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
 
     setMatches((current) => current.map((match) => match.id === selected.id ? {
       ...match,
-      date: date.trim() || undefined,
+      date: scheduledAt ?? undefined,
       venue: venue.trim() || undefined,
       homeScore: completed ? homeSets : null,
       awayScore: completed ? awaySets : null,
@@ -408,9 +434,12 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
         </View>
         {editorSection === "details" ? <>
         <Text style={styles.fieldLabel}>OTTELUN AJANKOHTA</Text>
-        <TextInput value={date} onChangeText={setDate} placeholder="DD-MM-YYYY HH:MM" placeholderTextColor={colors.muted} style={styles.input} />
+        <View style={styles.dateTimeRow}>
+          <Pressable style={styles.dateTimeField} onPress={() => setCalendarVisible(true)}><Text style={styles.dateTimeText}>{pickedDate ? `${String(pickedDate.day).padStart(2, "0")}.${String(pickedDate.month + 1).padStart(2, "0")}.${pickedDate.year}` : "Valitse päivä"}</Text></Pressable>
+          <Pressable style={styles.dateTimeField} onPress={() => setTimeVisible(true)}><Text style={styles.dateTimeText}>{pickedTime ?? "Valitse aika"}</Text></Pressable>
+        </View>
         <Text style={styles.fieldLabel}>PELIPAIKKA</Text>
-        <TextInput value={venue} onChangeText={setVenue} placeholder="Esim. Padel Center" placeholderTextColor={colors.muted} style={styles.input} />
+        {venueOptions.length > 0 ? <Pressable style={styles.dateTimeField} onPress={() => setVenuePickerVisible(true)}><Text style={styles.dateTimeText}>{venue || "Valitse pelipaikka"}</Text></Pressable> : <TextInput value={venue} onChangeText={setVenue} placeholder="Esim. Padel Center" placeholderTextColor={colors.muted} style={styles.input} />}
         {(isAdmin || selected?.homeId === teamId) ? <><Text style={styles.fieldLabel}>{selected?.home} - PELAAJAT (2)</Text><View style={styles.lineup}>{lineupWithSubstitute("home").map((player) => <Pressable key={player.player_id} onPress={() => toggleLineupPlayer("home", player.player_id)} style={[styles.lineupPlayer, homeLineup.includes(player.player_id) && styles.lineupPlayerSelected]}><Text style={[styles.lineupPlayerText, homeLineup.includes(player.player_id) && styles.lineupPlayerTextSelected]}>{player.first_name} {player.last_name}{player.isSubstitute ? " (varapelaaja)" : ""}</Text></Pressable>)}</View><Pressable onPress={() => setSubstituteSearchTeam("home")} style={styles.substituteButton}><Text style={styles.substituteButtonText}>Käytä varapelaajaa</Text></Pressable></> : null}
         {(isAdmin || selected?.awayId === teamId) ? <><Text style={styles.fieldLabel}>{selected?.away} - PELAAJAT (2)</Text><View style={styles.lineup}>{lineupWithSubstitute("away").map((player) => <Pressable key={player.player_id} onPress={() => toggleLineupPlayer("away", player.player_id)} style={[styles.lineupPlayer, awayLineup.includes(player.player_id) && styles.lineupPlayerSelected]}><Text style={[styles.lineupPlayerText, awayLineup.includes(player.player_id) && styles.lineupPlayerTextSelected]}>{player.first_name} {player.last_name}{player.isSubstitute ? " (varapelaaja)" : ""}</Text></Pressable>)}</View><Pressable onPress={() => setSubstituteSearchTeam("away")} style={styles.substituteButton}><Text style={styles.substituteButtonText}>Käytä varapelaajaa</Text></Pressable></> : null}
         {substituteSearchTeam ? <><Text style={styles.fieldLabel}>HAE VARAPELAAJAA</Text><View style={styles.substituteSearchRow}><TextInput value={substituteSearchQuery} onChangeText={setSubstituteSearchQuery} placeholder="Hae nimellä" placeholderTextColor={colors.muted} style={[styles.input, styles.substituteSearchInput]} />{searchingSubstitutes ? <ActivityIndicator color={colors.green} /> : null}</View>{substituteResults.map((player) => <Pressable key={player.player_id} onPress={() => selectSubstitute(substituteSearchTeam, player.player_id, player.first_name, player.last_name)} style={styles.substituteResult}><Text style={styles.substituteResultText}>{player.first_name} {player.last_name}</Text><Text style={styles.substituteButtonText}>Valitse</Text></Pressable>)}</> : null}
@@ -428,6 +457,52 @@ export default function GroupMatches({ teamId, teamName, groupId, isAdmin = fals
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Pressable onPress={() => void saveMatch()} style={styles.save}><Text style={styles.saveText}>{editorSection === "result" ? "Tallenna tulos" : "Tallenna tiedot"}</Text></Pressable>
       </View></ScrollView></View>
+    </Modal>
+    <Modal visible={calendarVisible} transparent animationType="fade" onRequestClose={() => setCalendarVisible(false)}>
+      <Pressable style={styles.pickerBackdrop} onPress={() => setCalendarVisible(false)}>
+        <Pressable style={styles.calendarCard} onPress={(event) => event.stopPropagation()}>
+          <View style={styles.calendarHeader}>
+            <Pressable onPress={() => setCalendarMonth((current) => current.month === 0 ? { year: current.year - 1, month: 11 } : { year: current.year, month: current.month - 1 })}><Text style={styles.calendarNav}>‹</Text></Pressable>
+            <Text style={styles.calendarTitle}>{finnishMonthNames[calendarMonth.month]} {calendarMonth.year}</Text>
+            <Pressable onPress={() => setCalendarMonth((current) => current.month === 11 ? { year: current.year + 1, month: 0 } : { year: current.year, month: current.month + 1 })}><Text style={styles.calendarNav}>›</Text></Pressable>
+          </View>
+          <View style={styles.calendarWeekRow}>{finnishWeekdayLabels.map((label) => <Text key={label} style={styles.calendarWeekday}>{label}</Text>)}</View>
+          <View style={styles.calendarGrid}>
+            {Array.from({ length: firstWeekdayOfMonth(calendarMonth.year, calendarMonth.month) }, (_, index) => <View key={`empty-${index}`} style={styles.calendarCell} />)}
+            {Array.from({ length: daysInMonth(calendarMonth.year, calendarMonth.month) }, (_, index) => {
+              const day = index + 1;
+              const isSelected = pickedDate?.year === calendarMonth.year && pickedDate?.month === calendarMonth.month && pickedDate?.day === day;
+              return <Pressable key={day} style={styles.calendarCell} onPress={() => { setPickedDate({ year: calendarMonth.year, month: calendarMonth.month, day }); setCalendarVisible(false); }}>
+                <View style={[styles.calendarDay, isSelected && styles.calendarDaySelected]}><Text style={[styles.calendarDayText, isSelected && styles.calendarDayTextSelected]}>{day}</Text></View>
+              </Pressable>;
+            })}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+    <Modal visible={timeVisible} transparent animationType="fade" onRequestClose={() => setTimeVisible(false)}>
+      <Pressable style={styles.pickerBackdrop} onPress={() => setTimeVisible(false)}>
+        <Pressable style={styles.timeCard} onPress={(event) => event.stopPropagation()}>
+          <Text style={styles.calendarTitle}>Valitse kellonaika</Text>
+          <ScrollView style={styles.timeList}>
+            {timeSlots.map((slot) => <Pressable key={slot} style={[styles.timeSlot, pickedTime === slot && styles.timeSlotSelected]} onPress={() => { setPickedTime(slot); setTimeVisible(false); }}>
+              <Text style={[styles.timeSlotText, pickedTime === slot && styles.timeSlotTextSelected]}>{slot}</Text>
+            </Pressable>)}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+    <Modal visible={venuePickerVisible} transparent animationType="fade" onRequestClose={() => setVenuePickerVisible(false)}>
+      <Pressable style={styles.pickerBackdrop} onPress={() => setVenuePickerVisible(false)}>
+        <Pressable style={styles.timeCard} onPress={(event) => event.stopPropagation()}>
+          <Text style={styles.calendarTitle}>Valitse pelipaikka</Text>
+          <ScrollView style={styles.timeList}>
+            {venueOptions.map((option) => <Pressable key={option} style={[styles.timeSlot, venue === option && styles.timeSlotSelected]} onPress={() => { setVenue(option); setVenuePickerVisible(false); }}>
+              <Text style={[styles.timeSlotText, venue === option && styles.timeSlotTextSelected]}>{option}</Text>
+            </Pressable>)}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
     </Modal>
   </View>;
 }
@@ -457,4 +532,26 @@ const styles = StyleSheet.create({
   substituteWaiting: { color: colors.muted, fontSize: 11, fontWeight: "700", marginTop: 8 },
   approveButton: { backgroundColor: colors.green, borderRadius: 9, alignItems: "center", paddingVertical: 10, marginTop: 9 },
   approveButtonText: { color: colors.surface, fontSize: 12, fontWeight: "800" },
+  dateTimeRow: { flexDirection: "row", gap: 8 },
+  dateTimeField: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 13, backgroundColor: colors.surface },
+  dateTimeText: { color: colors.ink, fontSize: 14, fontWeight: "700" },
+  pickerBackdrop: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(16,37,27,0.45)", padding: 24 },
+  calendarCard: { width: "100%", maxWidth: 340, backgroundColor: colors.surface, borderRadius: 18, padding: 18, ...shadow },
+  calendarHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  calendarNav: { color: colors.green, fontSize: 22, fontWeight: "800", paddingHorizontal: 10 },
+  calendarTitle: { color: colors.ink, fontSize: 15, fontWeight: "800", textAlign: "center" },
+  calendarWeekRow: { flexDirection: "row", marginTop: 14 },
+  calendarWeekday: { width: `${100 / 7}%`, textAlign: "center", color: colors.muted, fontSize: 11, fontWeight: "800" },
+  calendarGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 4 },
+  calendarCell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: "center", justifyContent: "center" },
+  calendarDay: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  calendarDaySelected: { backgroundColor: colors.green },
+  calendarDayText: { color: colors.ink, fontSize: 13, fontWeight: "700" },
+  calendarDayTextSelected: { color: colors.surface },
+  timeCard: { width: "100%", maxWidth: 280, maxHeight: 420, backgroundColor: colors.surface, borderRadius: 18, padding: 18, ...shadow },
+  timeList: { marginTop: 12 },
+  timeSlot: { paddingVertical: 12, borderRadius: 10, alignItems: "center" },
+  timeSlotSelected: { backgroundColor: colors.green },
+  timeSlotText: { color: colors.ink, fontSize: 15, fontWeight: "700" },
+  timeSlotTextSelected: { color: colors.surface },
 });

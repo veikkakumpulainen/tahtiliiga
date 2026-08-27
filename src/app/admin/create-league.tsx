@@ -14,12 +14,26 @@ const router = { ...expoRouter, back: () => expoRouter.replace("/admin" as never
 export default function CreateLeagueScreen() {
   const { session } = useAuth();
   const [name, setName] = useState("");
+  const [city, setCity] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [deadline, setDeadline] = useState("");
   const [rounds, setRounds] = useState<RoundForm[]>([{ name: "", startDate: "", endDate: "", roundType: "regular" }]);
+  const [venues, setVenues] = useState<string[]>([""]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const updateVenue = (index: number, value: string) => {
+    setVenues((current) => current.map((venue, venueIndex) => venueIndex === index ? value : venue));
+  };
+
+  const addVenue = () => {
+    setVenues((current) => [...current, ""]);
+  };
+
+  const removeVenue = (index: number) => {
+    setVenues((current) => current.length > 1 ? current.filter((_, venueIndex) => venueIndex !== index) : current);
+  };
 
   const updateRound = (index: number, key: keyof RoundForm, value: string) => {
     setRounds((current) => current.map((round, roundIndex) => roundIndex === index ? { ...round, [key]: value } : round));
@@ -73,10 +87,13 @@ export default function CreateLeagueScreen() {
       return;
     }
 
+    const venueNames = [...new Set(venues.map((venue) => venue.trim()).filter(Boolean))];
+
     setSaving(true);
     setError("");
     const { data: league, error: leagueError } = await supabase.from("leagues").insert({
       name: name.trim(),
+      city: city.trim() || null,
       start_date: parsedStartDate,
       end_date: parsedEndDate,
       registration_deadline: parsedDeadline,
@@ -96,10 +113,21 @@ export default function CreateLeagueScreen() {
       end_date: round.endDate,
       round_type: round.roundType,
     })));
-    setSaving(false);
     if (roundsError) {
+      setSaving(false);
       setError(`Sarja luotiin, mutta kierrosten tallennus epäonnistui: ${roundsError.message}`);
       return;
+    }
+
+    if (venueNames.length > 0) {
+      const { error: venuesError } = await supabase.from("league_venues").insert(venueNames.map((venueName) => ({ league_id: league.id, name: venueName })));
+      setSaving(false);
+      if (venuesError) {
+        setError(`Sarja luotiin, mutta pelipaikkojen tallennus epäonnistui: ${venuesError.message}`);
+        return;
+      }
+    } else {
+      setSaving(false);
     }
     router.replace(`/admin/league/${league.id}` as never);
   };
@@ -108,6 +136,8 @@ export default function CreateLeagueScreen() {
     <ScreenHeader eyebrow="TÄHTILIIGA" title="Uusi sarja" subtitle="Määritä sarjan ajankohta ja kierrokset" />
     <Text style={styles.label}>SARJAN NIMI</Text>
     <TextInput value={name} onChangeText={setName} placeholder="Esim. Jyväskylä Syksy 2026" placeholderTextColor={colors.muted} style={styles.input} />
+    <Text style={styles.label}>KAUPUNKI</Text>
+    <TextInput value={city} onChangeText={setCity} placeholder="Esim. Jyväskylä" placeholderTextColor={colors.muted} style={styles.input} />
     <Text style={styles.label}>SARJAN ALKAMISPÄIVÄ</Text>
     <TextInput value={startDate} onChangeText={setStartDate} placeholder="DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.input} />
     <Text style={styles.label}>SARJAN LOPPUPÄIVÄ</Text>
@@ -126,6 +156,12 @@ export default function CreateLeagueScreen() {
         <Pressable onPress={() => updateRound(index, "roundType", "regular")} style={[styles.roundType, round.roundType === "regular" && styles.roundTypeSelected]}><Text style={[styles.roundTypeText, round.roundType === "regular" && styles.roundTypeTextSelected]}>Tavallinen</Text></Pressable>
         <Pressable onPress={() => updateRound(index, "roundType", "qualification")} style={[styles.roundType, round.roundType === "qualification" && styles.roundTypeSelected]}><Text style={[styles.roundTypeText, round.roundType === "qualification" && styles.roundTypeTextSelected]}>Karsinta</Text></Pressable>
       </View>
+    </View>)}
+
+    <View style={styles.roundHeading}><Text style={styles.roundTitle}>Pelipaikat</Text><Pressable onPress={addVenue} style={styles.addRound} accessibilityRole="button" accessibilityLabel="Lisää pelipaikka"><Text style={styles.addRoundText}>+</Text></Pressable></View>
+    {venues.map((venue, index) => <View key={index} style={styles.round}>
+      {venues.length > 1 ? <View style={styles.roundTop}><Pressable onPress={() => removeVenue(index)}><Text style={styles.removeRound}>Poista</Text></Pressable></View> : null}
+      <TextInput value={venue} onChangeText={(value) => updateVenue(index, value)} placeholder="Esim. Padel Center" placeholderTextColor={colors.muted} style={styles.roundInput} />
     </View>)}
 
     {error ? <Text style={styles.error}>{error}</Text> : null}

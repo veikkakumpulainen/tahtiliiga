@@ -6,6 +6,7 @@ import GroupMatches from "../../components/GroupMatches";
 import LeagueRoundSchedule from "../../components/LeagueRoundSchedule";
 import ScreenHeader from "../../components/ScreenHeader";
 import { useAuth } from "../../hooks/useAuth";
+import { formatFinnishDate } from "../../lib/dates";
 import { supabase } from "../../lib/supabase";
 import { colors, shadow } from "../../theme";
 
@@ -21,7 +22,7 @@ type Team = {
   groupName?: string;
 };
 
-type Invitation = { team_id: string; team_name: string; league_id: string; league_name: string; captain_name: string | null };
+type Invitation = { team_id: string; team_name: string; league_id: string; league_name: string; captain_name: string | null; league_start_date: string; league_end_date: string | null };
 
 export default function HomeScreen() {
   const { session } = useAuth();
@@ -111,6 +112,8 @@ export default function HomeScreen() {
       {invitations.map((invitation) => <View style={styles.inviteCard} key={invitation.team_id}>
         <Text style={styles.inviteTitle}>Sinut on lisätty joukkueeseen {invitation.team_name}</Text>
         <Text style={styles.inviteCopy}>{invitation.league_name}{invitation.captain_name ? ` · Kapteeni ${invitation.captain_name}` : ""}</Text>
+        <Text style={styles.inviteDates}>{formatFinnishDate(invitation.league_start_date)}{invitation.league_end_date ? ` - ${formatFinnishDate(invitation.league_end_date)}` : ""}</Text>
+        <LeagueRoundSchedule leagueId={invitation.league_id} />
         {respondingTeamId === invitation.team_id ? <ActivityIndicator color={colors.green} style={styles.inviteLoading} /> : <View style={styles.inviteActions}>
           <Pressable style={styles.inviteAccept} onPress={() => void respondToInvitation(invitation.team_id, true)}><Text style={styles.inviteAcceptText}>Hyväksy</Text></Pressable>
           <Pressable style={styles.inviteDecline} onPress={() => void respondToInvitation(invitation.team_id, false)}><Text style={styles.inviteDeclineText}>Hylkää</Text></Pressable>
@@ -165,6 +168,7 @@ const styles = StyleSheet.create({
   inviteCard: { backgroundColor: colors.surface, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: colors.greenBright, ...shadow },
   inviteTitle: { color: colors.ink, fontSize: 16, fontWeight: "800" },
   inviteCopy: { color: colors.muted, fontSize: 13, marginTop: 5 },
+  inviteDates: { color: colors.muted, fontSize: 13, marginTop: 3 },
   inviteActions: { flexDirection: "row", gap: 8, marginTop: 14 },
   inviteAccept: { flex: 1, backgroundColor: colors.green, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
   inviteAcceptText: { color: colors.surface, fontWeight: "800", fontSize: 13 },
