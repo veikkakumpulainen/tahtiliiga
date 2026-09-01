@@ -7,7 +7,7 @@ import { formatFinnishDate, parseFinnishDate } from "../../../lib/dates";
 import { colors } from "../../../theme";
 import GroupMatches from "../../../components/GroupMatches";
 
-type League = { id: string; name: string; status: string; start_date: string; end_date: string | null; registration_deadline: string | null; city: string | null };
+type League = { id: string; name: string; status: string; start_date: string; end_date: string | null; registration_deadline: string | null; registration_opens_at: string | null; city: string | null };
 type Venue = { id: string; name: string };
 type Group = { id: string; name: string; status: string };
 type Team = { id: string; name: string; skill_level: string; skill_description: string | null };
@@ -16,6 +16,7 @@ type Assignment = { id: string; group_id: string; team_id: string };
 type LeagueRound = { id: string; name: string; start_date: string; end_date: string; round_type: "regular" | "qualification"; status: "draft" | "active" | "completed" };
 type RosterPlayer = { id: string; name: string; isCaptain: boolean; isActive: boolean };
 type PlayerSearchResult = { id: string; first_name: string; last_name: string };
+const statusLabels: Record<string, string> = { upcoming: "Tuleva (ei vielä auki)", registration_open: "Ilmoittautuminen auki", registration_closed: "Ilmoittautuminen lukittu", ongoing: "Käynnissä", finished: "Päättynyt" };
 
 const teamInfoStyles = StyleSheet.create({
   actions: { flexDirection: "row", alignItems: "center", gap: 12 },
@@ -106,6 +107,7 @@ export default function LeagueManagementScreen() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [deadline, setDeadline] = useState("");
+  const [opensDate, setOpensDate] = useState("");
   const [city, setCity] = useState("");
   const [venues, setVenues] = useState<Venue[]>([]);
   const [newVenueName, setNewVenueName] = useState("");
@@ -132,7 +134,7 @@ export default function LeagueManagementScreen() {
     if (!supabase || !id) return;
     const client = supabase;
     const [{ data: leagueData }, { data: groupData }, { data: teamData }, { data: roundData }, { data: venueData }] = await Promise.all([
-      client.from("leagues").select("id,name,status,start_date,end_date,registration_deadline,city").eq("id", id).single(),
+      client.from("leagues").select("id,name,status,start_date,end_date,registration_deadline,registration_opens_at,city").eq("id", id).single(),
       client.from("groups").select("id,name,status").eq("league_id", id),
       client.from("teams").select("id,name,skill_level,skill_description").eq("league_id", id).order("name"),
       client.from("league_rounds").select("id,name,start_date,end_date,round_type,status").eq("league_id", id).order("start_date"),
@@ -140,10 +142,10 @@ export default function LeagueManagementScreen() {
     ]);
     const groupIds = (groupData ?? []).map((group) => group.id);
     const { data: assignmentData } = groupIds.length ? await client.from("group_teams").select("id,group_id,team_id").in("group_id", groupIds) : { data: [] };
-    setLeague(leagueData); setStartDate(formatFinnishDate(leagueData?.start_date)); setEndDate(leagueData?.end_date ? formatFinnishDate(leagueData.end_date) : ""); setDeadline(leagueData?.registration_deadline ? formatFinnishDate(leagueData.registration_deadline) : ""); setCity(leagueData?.city ?? ""); setVenues(venueData ?? []); setRounds(roundData ?? []); setGroups((groupData ?? []).slice().sort((a, b) => a.name.localeCompare(b.name, "fi", { numeric: true }))); setTeams((teamData ?? []).slice().sort((a, b) => teamSkillLevelOrder.indexOf(a.skill_level as typeof teamSkillLevelOrder[number]) - teamSkillLevelOrder.indexOf(b.skill_level as typeof teamSkillLevelOrder[number]) || a.name.localeCompare(b.name))); setAssignments(assignmentData ?? []); setLoading(false);
+    setLeague(leagueData); setStartDate(formatFinnishDate(leagueData?.start_date)); setEndDate(leagueData?.end_date ? formatFinnishDate(leagueData.end_date) : ""); setDeadline(leagueData?.registration_deadline ? formatFinnishDate(leagueData.registration_deadline) : ""); setOpensDate(leagueData?.registration_opens_at ? formatFinnishDate(leagueData.registration_opens_at) : ""); setCity(leagueData?.city ?? ""); setVenues(venueData ?? []); setRounds(roundData ?? []); setGroups((groupData ?? []).slice().sort((a, b) => a.name.localeCompare(b.name, "fi", { numeric: true }))); setTeams((teamData ?? []).slice().sort((a, b) => teamSkillLevelOrder.indexOf(a.skill_level as typeof teamSkillLevelOrder[number]) - teamSkillLevelOrder.indexOf(b.skill_level as typeof teamSkillLevelOrder[number]) || a.name.localeCompare(b.name))); setAssignments(assignmentData ?? []); setLoading(false);
   };
   useFocusEffect(useCallback(() => { void load(); }, [id]));
-  const saveChanges = async () => { if (!supabase || !league) return; const start = parseFinnishDate(startDate); const end = parseFinnishDate(endDate); const registrationDeadline = deadline.trim() ? parseFinnishDate(deadline) : null; if (!start || !end) { setMessage("Anna sarjan alku- ja loppupäivä muodossa DD-MM-YYYY."); return; } if (end < start) { setMessage("Sarjan loppupäivä ei voi olla ennen aloituspäivää."); return; } if (deadline.trim() && !registrationDeadline) { setMessage("Anna deadline muodossa DD-MM-YYYY."); return; } if (registrationDeadline && registrationDeadline > start) { setMessage("Deadline ei voi olla sarjan alkamispäivän jälkeen."); return; } const outOfRangeRound = rounds.find((round) => round.start_date < start || round.end_date > end); if (outOfRangeRound) { setMessage(`Sarjan päivämäärien tulee sisältää kaikki kierrokset. Kierros "${outOfRangeRound.name}" on ${formatFinnishDate(outOfRangeRound.start_date)} - ${formatFinnishDate(outOfRangeRound.end_date)}. Muokkaa tai poista kierros ensin.`); return; } const { error } = await supabase.from("leagues").update({ name: league.name.trim(), city: city.trim() || null, start_date: start, end_date: end, registration_deadline: registrationDeadline }).eq("id", league.id); if (error) setMessage(error.message.includes("round dates") ? "Sarjan päivämäärien tulee sisältää kaikki kierrokset. Muokkaa tai poista kierrokset, jotka jäävät uusien päivämäärien ulkopuolelle." : `Tallennus epäonnistui: ${error.message}`); else { setLeague({ ...league, city: city.trim() || null, start_date: start, end_date: end, registration_deadline: registrationDeadline }); setMessage("Sarjan muutokset tallennettu."); } };
+  const saveChanges = async () => { if (!supabase || !league) return; const start = parseFinnishDate(startDate); const end = parseFinnishDate(endDate); const registrationDeadline = deadline.trim() ? parseFinnishDate(deadline) : null; const registrationOpensAt = opensDate.trim() ? parseFinnishDate(opensDate) : null; if (!start || !end) { setMessage("Anna sarjan alku- ja loppupäivä muodossa DD-MM-YYYY."); return; } if (end < start) { setMessage("Sarjan loppupäivä ei voi olla ennen aloituspäivää."); return; } if (deadline.trim() && !registrationDeadline) { setMessage("Anna deadline muodossa DD-MM-YYYY."); return; } if (registrationDeadline && registrationDeadline > start) { setMessage("Deadline ei voi olla sarjan alkamispäivän jälkeen."); return; } if (opensDate.trim() && !registrationOpensAt) { setMessage("Anna ilmoittautumisen avautumispäivä muodossa DD-MM-YYYY."); return; } if (registrationOpensAt && registrationOpensAt > start) { setMessage("Ilmoittautumisen avautuminen ei voi olla sarjan alkamispäivän jälkeen."); return; } const outOfRangeRound = rounds.find((round) => round.start_date < start || round.end_date > end); if (outOfRangeRound) { setMessage(`Sarjan päivämäärien tulee sisältää kaikki kierrokset. Kierros "${outOfRangeRound.name}" on ${formatFinnishDate(outOfRangeRound.start_date)} - ${formatFinnishDate(outOfRangeRound.end_date)}. Muokkaa tai poista kierros ensin.`); return; } const { error } = await supabase.from("leagues").update({ name: league.name.trim(), city: city.trim() || null, start_date: start, end_date: end, registration_deadline: registrationDeadline, registration_opens_at: registrationOpensAt }).eq("id", league.id); if (error) setMessage(error.message.includes("round dates") ? "Sarjan päivämäärien tulee sisältää kaikki kierrokset. Muokkaa tai poista kierrokset, jotka jäävät uusien päivämäärien ulkopuolelle." : `Tallennus epäonnistui: ${error.message}`); else { setLeague({ ...league, city: city.trim() || null, start_date: start, end_date: end, registration_deadline: registrationDeadline, registration_opens_at: registrationOpensAt }); setMessage("Sarjan muutokset tallennettu."); } };
   const addVenue = async () => { if (!supabase || !league || !newVenueName.trim()) return; const { error } = await supabase.from("league_venues").insert({ league_id: league.id, name: newVenueName.trim() }); if (error) { setMessage(`Pelipaikan lisäys epäonnistui: ${error.message}`); return; } setNewVenueName(""); await load(); };
   const removeVenue = async (venueId: string) => { if (!supabase) return; const { error } = await supabase.from("league_venues").delete().eq("id", venueId); if (error) { setMessage(`Pelipaikan poisto epäonnistui: ${error.message}`); return; } await load(); };
   const createRound = async () => { if (!supabase || !league) return; const start = parseFinnishDate(newRound.startDate); const end = parseFinnishDate(newRound.endDate); const leagueStart = parseFinnishDate(startDate); const leagueEnd = parseFinnishDate(endDate); if (!newRound.name.trim() || !start || !end) { setMessage("Anna kierrokselle nimi sekä alku- ja loppupäivä."); return; } if (!leagueStart || !leagueEnd || start < leagueStart || end > leagueEnd || end < start) { setMessage("Kierroksen päivämäärien tulee olla sarjan päivämäärien sisällä."); return; } const { error } = await supabase.from("league_rounds").insert({ league_id: league.id, name: newRound.name.trim(), start_date: start, end_date: end, round_type: newRound.roundType }); if (error) { setMessage(`Kierroksen lisäys epäonnistui: ${error.message}`); return; } setNewRound({ name: "", startDate: "", endDate: "", roundType: "regular" }); setAddingRound(false); await load(); };
@@ -198,6 +200,7 @@ export default function LeagueManagementScreen() {
 <TextInput value={startDate} onChangeText={setStartDate} placeholder="DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.input} />
 <TextInput value={endDate} onChangeText={setEndDate} placeholder="Sarjan loppupäivä DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.input} />
 <TextInput value={deadline} onChangeText={setDeadline} placeholder="Deadline DD-MM-YYYY (valinnainen)" placeholderTextColor={colors.muted} style={styles.input} />
+<TextInput value={opensDate} onChangeText={setOpensDate} placeholder="Ilmoittautuminen aukeaa DD-MM-YYYY (valinnainen)" placeholderTextColor={colors.muted} style={styles.input} />
 <Pressable onPress={() => void saveChanges()} style={styles.save}>
 <Text style={styles.saveText}>Tallenna muutokset</Text>
 </Pressable>
@@ -210,7 +213,14 @@ export default function LeagueManagementScreen() {
   <TextInput value={newVenueName} onChangeText={setNewVenueName} placeholder="Uusi pelipaikka" placeholderTextColor={colors.muted} style={[styles.input, venueStyles.addInput]} />
   <Pressable onPress={() => void addVenue()} style={venueStyles.addButton}><Text style={venueStyles.addButtonText}>Lisää</Text></Pressable>
 </View>
-<Text style={styles.status}>Tila: {league.status}</Text>{league.status === "registration_open" ? <Pressable onPress={() => void updateStatus("registration_closed")} style={styles.secondary}>
+<Text style={styles.status}>Tila: {statusLabels[league.status] ?? league.status}</Text>
+{league.status === "upcoming" ? <>
+<Text style={styles.message}>{league.registration_opens_at ? `Käyttäjät näkevät sarjan ja ilmoittautumisen avautumispäivän (${formatFinnishDate(league.registration_opens_at)}), mutta eivät voi vielä ilmoittautua.` : "Käyttäjät näkevät sarjan tulevana, mutta eivät voi vielä ilmoittautua. Aseta yllä ilmoittautumisen avautumispäivä, jotta se näkyy heille."}</Text>
+<Pressable onPress={() => void updateStatus("registration_open")} style={styles.start}>
+<Text style={styles.startText}>Avaa ilmoittautuminen nyt</Text>
+</Pressable>
+</> : null}
+{league.status === "registration_open" ? <Pressable onPress={() => void updateStatus("registration_closed")} style={styles.secondary}>
 <Text style={styles.secondaryText}>Lukitse ilmoittautuminen</Text>
 </Pressable> : null}{message ? <Text style={styles.message}>{message}</Text> : null}<View style={roundStyles.heading}>
 <Text style={roundStyles.title}>Kierrokset</Text>

@@ -3,10 +3,11 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import ScreenHeader from "../../components/ScreenHeader";
 import { useAuth } from "../../hooks/useAuth";
+import { formatFinnishDate } from "../../lib/dates";
 import { supabase } from "../../lib/supabase";
 import { colors, shadow } from "../../theme";
 
-type League = { id: string; name: string; start_date: string; end_date: string | null; registration_deadline: string | null; status: string };
+type League = { id: string; name: string; start_date: string; end_date: string | null; registration_deadline: string | null; registration_opens_at: string | null; status: string };
 type Standing = { group_id: string; group_name: string; team_id: string; team_name: string; played: number; wins: number; losses: number; points: number; rank_position?: number };
 type Filter = "registered" | "open";
 
@@ -33,14 +34,16 @@ export default function LeaguesScreen() {
   const [error, setError] = useState("");
 
   const loadLeagues = useCallback(async () => {
-    if (!supabase || !session?.user.id) { setLoadingLeagues(false); return; }
+    if (!supabase) { setLoadingLeagues(false); return; }
     setLoadingLeagues(true);
     setError("");
-    const [{ data: adminData }, { data: leagueRows, error: leagueError }, { data: membershipData, error: membershipError }, { data: invitationData }] = await Promise.all([
-      supabase.rpc("is_admin"),
-      supabase.from("leagues").select("id,name,start_date,end_date,registration_deadline,status").order("start_date", { ascending: false }),
-      supabase.from("team_members").select("teams(league_id)").eq("user_id", session.user.id),
-      supabase.rpc("get_pending_team_invitations"),
+    const client = supabase;
+    const userId = session?.user.id;
+    const [{ data: leagueRows, error: leagueError }, { data: adminData }, { data: membershipData, error: membershipError }, { data: invitationData }] = await Promise.all([
+      client.from("leagues").select("id,name,start_date,end_date,registration_deadline,registration_opens_at,status").order("start_date", { ascending: false }),
+      userId ? client.rpc("is_admin") : Promise.resolve({ data: false }),
+      userId ? client.from("team_members").select("teams(league_id)").eq("user_id", userId) : Promise.resolve({ data: [], error: null }),
+      userId ? client.rpc("get_pending_team_invitations") : Promise.resolve({ data: [] }),
     ]);
     setIsAdmin(adminData === true);
     if (leagueError || membershipError) {
@@ -72,13 +75,14 @@ export default function LeaguesScreen() {
   const today = new Date().toISOString().slice(0, 10);
   const registeredLeagues = leagues.filter((league) => registeredLeagueIds.has(league.id));
   const openLeagues = leagues.filter((league) => league.status === "registration_open" && !registeredLeagueIds.has(league.id) && (!league.registration_deadline || league.registration_deadline >= today));
-  const activeList = filter === "registered" ? registeredLeagues : openLeagues;
+  const upcomingLeagues = leagues.filter((league) => league.status === "upcoming" && !registeredLeagueIds.has(league.id));
+  const activeList = filter === "registered" ? registeredLeagues : [...openLeagues, ...upcomingLeagues];
 
   useEffect(() => {
     if (filterInitialized || loadingLeagues) return;
-    if (registeredLeagues.length === 0 && openLeagues.length > 0) setFilter("open");
+    if (registeredLeagues.length === 0 && (openLeagues.length > 0 || upcomingLeagues.length > 0)) setFilter("open");
     setFilterInitialized(true);
-  }, [filterInitialized, loadingLeagues, registeredLeagues.length, openLeagues.length]);
+  }, [filterInitialized, loadingLeagues, registeredLeagues.length, openLeagues.length, upcomingLeagues.length]);
 
   useEffect(() => {
     if (filter === "open") { setSelectedLeagueId(null); return; }
@@ -137,7 +141,11 @@ export default function LeaguesScreen() {
           <Text style={styles.emptyTitle}>{emptyCopy[0]}</Text>
           <Text style={styles.emptyText}>{emptyCopy[1]}</Text>
         </View> : filter === "open" ? <>
-          {activeList.map((league) => <View style={styles.card} key={league.id}>
+          {activeList.map((league) => league.status === "upcoming" ? <View style={styles.card} key={league.id}>
+            <View style={styles.upcoming}><View style={styles.upcomingDot} /><Text style={styles.upcomingText}>TULOSSA</Text></View>
+            <Text style={styles.cardName}>{league.name}</Text>
+            <Text style={styles.emptyText}>{league.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(league.registration_opens_at)}.` : "Ilmoittautumisen avautumispäivä ilmoitetaan pian."}</Text>
+          </View> : <View style={styles.card} key={league.id}>
             <View style={styles.open}><View style={styles.dot} /><Text style={styles.openText}>ILMOITTAUTUMINEN AUKI</Text></View>
             <Text style={styles.cardName}>{league.name}</Text>
             <View style={styles.details}>
@@ -252,6 +260,9 @@ const styles = StyleSheet.create({
   open: { flexDirection: "row", alignItems: "center", gap: 7 },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.greenBright },
   openText: { color: colors.greenBright, fontSize: 10, letterSpacing: 1, fontWeight: "900" },
+  upcoming: { flexDirection: "row", alignItems: "center", gap: 7 },
+  upcomingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.coral },
+  upcomingText: { color: colors.coral, fontSize: 10, letterSpacing: 1, fontWeight: "900" },
   cardName: { color: colors.ink, fontSize: 21, fontWeight: "800", marginTop: 18 },
   details: { flexDirection: "row", justifyContent: "space-between", marginTop: 23, paddingTop: 18, borderTopWidth: 1, borderTopColor: colors.line },
   label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900" },

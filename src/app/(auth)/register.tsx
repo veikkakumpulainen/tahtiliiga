@@ -1,4 +1,4 @@
-import { Link, router } from "expo-router";
+import { Link, router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import ScreenHeader from "../../components/ScreenHeader";
@@ -9,6 +9,7 @@ const skillCategories = [["Miesten", "Miesten tasot"], ["Naisten", "Naisten taso
 const skillLevelLetters = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
 
 export default function RegisterScreen() {
+  const { redirect } = useLocalSearchParams<{ redirect?: string }>();
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", password: "", confirmation: "", skillCategory: "", skillLevel: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -53,7 +54,7 @@ export default function RegisterScreen() {
       setError(authError.message.includes("already") ? "Sähköpostiosoite on jo käytössä." : `Tilin luominen epäonnistui: ${authError.message}`);
       return;
     }
-    if (data.session) router.replace("/(tabs)/home");
+    if (data.session) router.replace((redirect || "/(tabs)/home") as never);
     else setError("Tili luotiin. Tarkista sähköpostisi ja vahvista tili ennen kirjautumista.");
   };
 
@@ -100,7 +101,7 @@ export default function RegisterScreen() {
       <Pressable style={styles.button} onPress={() => void register()} disabled={loading}>
         {loading ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.buttonText}>Luo tili</Text>}
       </Pressable>
-      <Text style={styles.footer}>Onko sinulla jo tili? <Link href="/(auth)/login" style={styles.link}>Kirjaudu sisään</Link></Text>
+      <Text style={styles.footer}>Onko sinulla jo tili? <Link href={{ pathname: "/(auth)/login", params: redirect ? { redirect } : undefined }} style={styles.link}>Kirjaudu sisään</Link></Text>
     </ScrollView>
   </KeyboardAvoidingView>;
 }

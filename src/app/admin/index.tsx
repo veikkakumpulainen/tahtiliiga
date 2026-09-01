@@ -50,7 +50,9 @@ export default function AdminScreen() {
   };
   useEffect(() => { if (!supabase || !session?.user.id) return; void supabase.rpc("is_admin").then(({ data }) => setIsAdmin(data === true)); void loadLeagues(); }, [session?.user.id]);
   useEffect(() => { if (selectedLeague) void loadLeagueData(selectedLeague); }, [selectedLeague?.id]);
-  if (authLoading || isAdmin === null) return <View style={styles.loading}><ActivityIndicator color={colors.lime} /></View>;
+  if (authLoading) return <View style={styles.loading}><ActivityIndicator color={colors.lime} /></View>;
+  if (!session) return <Redirect href="/(auth)/login" />;
+  if (isAdmin === null) return <View style={styles.loading}><ActivityIndicator color={colors.lime} /></View>;
   if (!isAdmin) return <Redirect href="/(tabs)/info" />;
 
   const resetForm = () => { setName(""); setStartDate(""); setDeadline(""); setEditing(false); setMessage(""); };

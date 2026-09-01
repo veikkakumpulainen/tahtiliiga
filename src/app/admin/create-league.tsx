@@ -18,6 +18,8 @@ export default function CreateLeagueScreen() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [deadline, setDeadline] = useState("");
+  const [publishMode, setPublishMode] = useState<"now" | "later">("now");
+  const [opensDate, setOpensDate] = useState("");
   const [rounds, setRounds] = useState<RoundForm[]>([{ name: "", startDate: "", endDate: "", roundType: "regular" }]);
   const [venues, setVenues] = useState<string[]>([""]);
   const [error, setError] = useState("");
@@ -51,6 +53,7 @@ export default function CreateLeagueScreen() {
     const parsedStartDate = parseFinnishDate(startDate);
     const parsedEndDate = parseFinnishDate(endDate);
     const parsedDeadline = deadline.trim() ? parseFinnishDate(deadline) : null;
+    const parsedOpensDate = publishMode === "later" ? parseFinnishDate(opensDate) : null;
     const parsedRounds = rounds.map((round) => ({
       name: round.name.trim(),
       startDate: parseFinnishDate(round.startDate),
@@ -72,6 +75,14 @@ export default function CreateLeagueScreen() {
     }
     if (parsedDeadline && parsedDeadline > parsedStartDate) {
       setError("Ilmoittautumisen deadline ei voi olla sarjan alkamispäivän jälkeen.");
+      return;
+    }
+    if (publishMode === "later" && !parsedOpensDate) {
+      setError("Anna päivä, jolloin ilmoittautuminen aukeaa, muodossa DD-MM-YYYY.");
+      return;
+    }
+    if (parsedOpensDate && parsedOpensDate > parsedStartDate) {
+      setError("Ilmoittautumisen avautuminen ei voi olla sarjan alkamispäivän jälkeen.");
       return;
     }
     if (parsedRounds.some((round) => !round.name || !round.startDate || !round.endDate)) {
@@ -97,7 +108,8 @@ export default function CreateLeagueScreen() {
       start_date: parsedStartDate,
       end_date: parsedEndDate,
       registration_deadline: parsedDeadline,
-      status: "registration_open",
+      status: publishMode === "later" ? "upcoming" : "registration_open",
+      registration_opens_at: parsedOpensDate,
       created_by: session.user.id,
     }).select("id").single();
     if (leagueError || !league) {
@@ -145,6 +157,17 @@ export default function CreateLeagueScreen() {
     <Text style={styles.label}>ILMOITTAUTUMISEN DEADLINE</Text>
     <TextInput value={deadline} onChangeText={setDeadline} placeholder="DD-MM-YYYY (valinnainen)" placeholderTextColor={colors.muted} style={styles.input} />
 
+    <Text style={styles.label}>ILMOITTAUTUMISEN JULKAISU</Text>
+    <View style={styles.publishRow}>
+      <Pressable onPress={() => setPublishMode("now")} style={[styles.roundType, publishMode === "now" && styles.roundTypeSelected]}><Text style={[styles.roundTypeText, publishMode === "now" && styles.roundTypeTextSelected]}>Avaa heti</Text></Pressable>
+      <Pressable onPress={() => setPublishMode("later")} style={[styles.roundType, publishMode === "later" && styles.roundTypeSelected]}><Text style={[styles.roundTypeText, publishMode === "later" && styles.roundTypeTextSelected]}>Ilmoita etukäteen</Text></Pressable>
+    </View>
+    {publishMode === "later" ? <>
+      <Text style={styles.hint}>Sarja näkyy käyttäjille &ldquo;Ilmoittautuminen aukeaa&rdquo; -tietona valittuna päivänä. Ilmoittautuminen ei aukea automaattisesti — avaat sen itse sarjan hallinnasta, kun olet valmis.</Text>
+      <Text style={styles.label}>ILMOITTAUTUMINEN AUKEAA</Text>
+      <TextInput value={opensDate} onChangeText={setOpensDate} placeholder="DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.input} />
+    </> : null}
+
     <View style={styles.roundHeading}><Text style={styles.roundTitle}>Kierrokset</Text><Pressable onPress={addRound} style={styles.addRound} accessibilityRole="button" accessibilityLabel="Lisää kierros"><Text style={styles.addRoundText}>+</Text></Pressable></View>
     {rounds.map((round, index) => <View key={index} style={styles.round}>
       {rounds.length > 1 ? <View style={styles.roundTop}><Pressable onPress={() => removeRound(index)}><Text style={styles.removeRound}>Poista</Text></Pressable></View> : null}
@@ -175,6 +198,8 @@ const styles = StyleSheet.create({
   content: { paddingBottom: 40 },
   label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 20, marginHorizontal: 22, marginBottom: 7 },
   input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, color: colors.ink, padding: 14, marginHorizontal: 22 },
+  hint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginHorizontal: 22, marginTop: 10 },
+  publishRow: { flexDirection: "row", gap: 8, marginHorizontal: 22, marginTop: 8 },
   roundHeading: { marginTop: 28, marginHorizontal: 22, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   roundTitle: { color: colors.ink, fontSize: 21, fontWeight: "800" },
   addRound: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
