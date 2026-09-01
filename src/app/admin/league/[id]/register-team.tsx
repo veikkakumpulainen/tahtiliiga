@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import ScreenHeader from "../../../../components/ScreenHeader";
 import { useAuth } from "../../../../hooks/useAuth";
+import { useAppScreenRestriction } from "../../../../hooks/useAppScreenRestriction";
 import { supabase } from "../../../../lib/supabase";
 import { colors } from "../../../../theme";
 
@@ -10,6 +11,7 @@ const skillLevels = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
 type Player = { id: string; first_name: string; last_name: string };
 
 export default function AdminTeamRegistrationScreen() {
+  useAppScreenRestriction();
   const { id: leagueId } = useLocalSearchParams<{ id: string }>();
   const { session } = useAuth();
   const [name, setName] = useState("");

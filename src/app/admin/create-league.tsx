@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import ScreenHeader from "../../components/ScreenHeader";
 import { useAuth } from "../../hooks/useAuth";
+import { useAppScreenRestriction } from "../../hooks/useAppScreenRestriction";
 import { parseFinnishDate } from "../../lib/dates";
 import { supabase } from "../../lib/supabase";
 import { colors } from "../../theme";
@@ -12,6 +13,7 @@ type RoundForm = { name: string; startDate: string; endDate: string; roundType: 
 const router = { ...expoRouter, back: () => expoRouter.replace("/admin" as never) };
 
 export default function CreateLeagueScreen() {
+  useAppScreenRestriction();
   const { session } = useAuth();
   const [name, setName] = useState("");
   const [city, setCity] = useState("");

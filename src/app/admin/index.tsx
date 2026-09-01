@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import ScreenHeader from "../../components/ScreenHeader";
 import { useAuth } from "../../hooks/useAuth";
+import { useAppScreenRestriction } from "../../hooks/useAppScreenRestriction";
 import { supabase } from "../../lib/supabase";
 import { colors, shadow } from "../../theme";
 
@@ -13,6 +14,7 @@ type GroupTeam = { id: string; group_id: string; team_id: string };
 type Match = { id: string; home: string; away: string; status: string; home_score: number | null; away_score: number | null };
 
 export default function AdminScreen() {
+  useAppScreenRestriction();
   const { session, loading: authLoading } = useAuth();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [leagues, setLeagues] = useState<League[]>([]);

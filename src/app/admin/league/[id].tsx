@@ -2,6 +2,7 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import ScreenHeader from "../../../components/ScreenHeader";
+import { useAppScreenRestriction } from "../../../hooks/useAppScreenRestriction";
 import { supabase } from "../../../lib/supabase";
 import { formatFinnishDate, parseFinnishDate } from "../../../lib/dates";
 import { colors } from "../../../theme";
@@ -99,6 +100,7 @@ const rosterStyles = StyleSheet.create({
 });
 
 export default function LeagueManagementScreen() {
+  useAppScreenRestriction();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [league, setLeague] = useState<League | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);

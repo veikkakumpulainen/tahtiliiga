@@ -5,7 +5,7 @@ import ScreenHeader from "../../components/ScreenHeader";
 import { supabase } from "../../lib/supabase";
 import { colors } from "../../theme";
 
-const skillCategories = [["Miesten", "Miesten tasot"], ["Naisten", "Naisten tasot"]] as const;
+const skillCategories = [["Miesten", "Miehet"], ["Naisten", "Naiset"]] as const;
 const skillLevelLetters = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
 
 export default function RegisterScreen() {

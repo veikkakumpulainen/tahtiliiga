@@ -13,7 +13,7 @@ type Profile = {
   email_verified_at: string | null;
 };
 
-const skillCategories = [["Miesten", "Miesten tasot"], ["Naisten", "Naisten tasot"]] as const;
+const skillCategories = [["Miesten", "Miehet"], ["Naisten", "Naiset"]] as const;
 const skillLevelLetters = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
 
 export default function ProfileForm() {
@@ -91,7 +91,8 @@ export default function ProfileForm() {
     const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/verify-email` : undefined;
     const { error } = await supabase.auth.signInWithOtp({ email: session.user.email, options: { emailRedirectTo: redirectTo, shouldCreateUser: false } });
     setSendingVerification(false);
-    setVerificationMessage(error ? `Lähetys epäonnistui: ${error.message}` : "Vahvistuslinkki lähetetty sähköpostiisi.");
+    const waitSeconds = error?.message.match(/after (\d+) seconds/)?.[1];
+    setVerificationMessage(error ? (waitSeconds ? `Odota ${waitSeconds} sekuntia ennen kuin voit pyytää uuden linkin.` : `Lähetys epäonnistui: ${error.message}`) : "Vahvistuslinkki lähetetty sähköpostiisi.");
   };
 
   if (loading) return <View style={styles.loadingBox}><ActivityIndicator color={colors.green} /></View>;
@@ -124,7 +125,7 @@ export default function ProfileForm() {
       </Pressable>)}
     </View>
 
-    {skillCategory ? <View style={styles.options}>
+    {skillCategory ? <View style={[styles.options, styles.skillLevelsRow]}>
       {skillLevelLetters.map((letter) => {
         const value = `${skillCategory} ${letter}`;
         return <Pressable key={letter} onPress={() => setSkillLevel(skillLevel === value ? null : value)} style={[styles.option, skillLevel === value && styles.optionSelected]}>
@@ -151,6 +152,7 @@ const styles = StyleSheet.create({
   verificationMessage: { color: colors.coral, fontSize: 12, marginTop: 8 },
   input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, color: colors.ink, fontSize: 15, padding: 14 },
   options: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  skillLevelsRow: { marginTop: 12 },
   option: { borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.surface },
   optionSelected: { backgroundColor: colors.green, borderColor: colors.green },
   optionText: { color: colors.ink, fontSize: 12, fontWeight: "700" },
