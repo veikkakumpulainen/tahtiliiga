@@ -21,6 +21,18 @@ type InfoModal = "about" | "league" | "vision";
 
 const infoModalTitles: Record<InfoModal, string> = { about: "Kaikki tähtiliigasta", league: "Nykyinen liiga", vision: "Visio" };
 
+const PRETTY_HOSTNAMES: Record<string, string> = { "xn--thtiliiga-v2a.fi": "tähtiliiga.fi", "www.xn--thtiliiga-v2a.fi": "www.tähtiliiga.fi" };
+
+const toPrettyUrl = (origin: string) => {
+  try {
+    const url = new URL(origin);
+    const prettyHost = PRETTY_HOSTNAMES[url.hostname];
+    return prettyHost ? `${url.protocol}//${prettyHost}` : origin;
+  } catch {
+    return origin;
+  }
+};
+
 const groupRosterByTeam = (rows: RosterRow[]): Team[] => {
   const order: string[] = [];
   const teamsById = new Map<string, Team>();
@@ -46,7 +58,7 @@ export default function WebHomeScreen() {
   const [showProfile, setShowProfile] = useState(false);
   const [infoModal, setInfoModal] = useState<InfoModal | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
-  const siteUrl = typeof window !== "undefined" ? window.location.origin : "";
+  const siteUrl = typeof window !== "undefined" ? toPrettyUrl(window.location.origin) : "";
 
   useEffect(() => {
     const load = async () => {
