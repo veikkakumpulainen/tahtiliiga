@@ -2,12 +2,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Link, router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 import GroupMatches from "../../components/GroupMatches";
 import LeagueRoundSchedule from "../../components/LeagueRoundSchedule";
 import ScreenHeader from "../../components/ScreenHeader";
 import { useAuth } from "../../hooks/useAuth";
 import { formatFinnishDate } from "../../lib/dates";
 import { supabase } from "../../lib/supabase";
+import { buildPaymentUrl, getOrCreatePaymentId, PARTICIPATION_FEE } from "../../lib/stripe";
 import { colors, shadow } from "../../theme";
 
 type Team = {
@@ -22,6 +24,7 @@ type Team = {
   endDate: string | null;
   groupId?: string;
   groupName?: string;
+  paymentStatus: string | null;
 };
 
 const categoryLabels: Record<string, string> = { avoin: "Avoin", mixty: "Mixty" };
@@ -41,6 +44,8 @@ export default function HomeScreen() {
   const [inviteSuccess, setInviteSuccess] = useState("");
   const [openLeague, setOpenLeague] = useState<OpenLeague | null>(null);
   const [openLeagueTeamCount, setOpenLeagueTeamCount] = useState(0);
+  const [payingTeamId, setPayingTeamId] = useState<string | null>(null);
+  const [payError, setPayError] = useState("");
 
   const loadOpenLeague = useCallback(async () => {
     if (!supabase) return;
@@ -69,12 +74,14 @@ export default function HomeScreen() {
     const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : []);
     const leagueIds = [...new Set(teamRows.map((team) => team.league_id))];
     const teamIds = teamRows.map((team) => team.id);
-    const [{ data: leagueRows }, { data: groupRows }, { data: teamCountRows }] = await Promise.all([
+    const [{ data: leagueRows }, { data: groupRows }, { data: teamCountRows }, { data: paymentRows }] = await Promise.all([
       leagueIds.length ? client.from("leagues").select("id, name, start_date, end_date, status").in("id", leagueIds) : Promise.resolve({ data: [] }),
       teamIds.length ? client.from("group_teams").select("team_id, group_id, groups(id, name)").in("team_id", teamIds) : Promise.resolve({ data: [] }),
       leagueIds.length ? client.rpc("get_league_team_counts", { target_league_ids: leagueIds }) : Promise.resolve({ data: [] }),
+      teamIds.length ? client.from("payments").select("team_id, payment_status").eq("user_id", session.user.id).in("team_id", teamIds) : Promise.resolve({ data: [] }),
     ]);
     setTeamCounts(Object.fromEntries((teamCountRows ?? []).map((row: { league_id: string; team_count: number }) => [row.league_id, Number(row.team_count)])));
+    const paymentMap = new Map((paymentRows ?? []).map((row: { team_id: string; payment_status: string }) => [row.team_id, row.payment_status]));
 
     const groupIds = (groupRows ?? []).map((group) => group.group_id);
     if (groupIds.length) {
@@ -108,6 +115,7 @@ export default function HomeScreen() {
         endDate: league?.end_date ?? null,
         groupId: group?.group_id,
         groupName: selectedGroup?.name,
+        paymentStatus: paymentMap.get(team.id) ?? null,
       };
     }).sort((left, right) => Number(right.leagueStatus === "ongoing") - Number(left.leagueStatus === "ongoing"));
 
@@ -129,6 +137,18 @@ export default function HomeScreen() {
     await loadHome();
   };
 
+  const payOwnFee = async (team: Team) => {
+    if (!supabase || !session?.user.id) return;
+    setPayingTeamId(team.id);
+    setPayError("");
+    const paymentId = await getOrCreatePaymentId(supabase, team.id, session.user.id);
+    setPayingTeamId(null);
+    if (!paymentId) { setPayError("Maksun aloitus epäonnistui. Yritä uudelleen."); return; }
+    const url = buildPaymentUrl(paymentId);
+    if (!url) { setPayError("Maksulinkkiä ei ole vielä määritetty."); return; }
+    await WebBrowser.openBrowserAsync(url);
+  };
+
   useEffect(() => {
     if (!inviteSuccess) return;
     const timeout = setTimeout(() => setInviteSuccess(""), 8000);
@@ -136,6 +156,8 @@ export default function HomeScreen() {
   }, [inviteSuccess]);
 
   const selectedTeam = teams.find((team) => team.id === selectedTeamId) ?? teams[0];
+  const myCategoriesInOpenLeague = new Set(teams.filter((team) => team.leagueId === openLeague?.id).map((team) => team.category));
+  const canRegisterOtherCategory = openLeague?.status === "registration_open" && myCategoriesInOpenLeague.size < 2;
 
   return <ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
     <ScreenHeader />
@@ -190,6 +212,12 @@ export default function HomeScreen() {
         <Text style={styles.season}>{categoryLabels[selectedTeam.category] ?? selectedTeam.category}</Text>
         <Text style={styles.cardLabel}>JOUKKUE</Text>
         <Text style={styles.teamName}>{selectedTeam.name}</Text>
+        {selectedTeam.paymentStatus === "paid" ? <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>✓ Osallistumismaksu maksettu</Text></View> : <>
+          <Pressable style={styles.payButton} onPress={() => void payOwnFee(selectedTeam)} disabled={payingTeamId === selectedTeam.id}>
+            {payingTeamId === selectedTeam.id ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.payButtonText}>Maksa osallistuminen ({PARTICIPATION_FEE} €)</Text>}
+          </Pressable>
+          {payError ? <Text style={styles.payErrorText}>{payError}</Text> : null}
+        </>}
         <LeagueRoundSchedule leagueId={selectedTeam.leagueId} />
         {selectedTeam.leagueStatus !== "ongoing" ? <>
           <View style={styles.dateRow}>
@@ -210,6 +238,10 @@ export default function HomeScreen() {
           </Pressable></Link>
           <GroupMatches teamId={selectedTeam.id} teamName={selectedTeam.name} />
         </> : <Text style={styles.cardNote}>Lohkochat ja otteluparit aukeavat liigan alkaessa.</Text>}
+      </View> : null}
+      {canRegisterOtherCategory && openLeague ? <View style={styles.secondCategoryPrompt}>
+        <Text style={styles.secondCategoryText}>Voit ilmoittautua myös liigan {openLeague.name} toiseen sarjaan.</Text>
+        <Pressable style={styles.browseButton} onPress={() => router.push({ pathname: `/league/${openLeague.id}/register`, params: { category: myCategoriesInOpenLeague.has("avoin") ? "mixty" : "avoin" } } as never)}><Text style={styles.browseText}>Ilmoittaudu toiseen sarjaan</Text><Text style={styles.arrow}>→</Text></Pressable>
       </View> : null}
     </>}
   </ScrollView>;
@@ -264,4 +296,11 @@ const styles = StyleSheet.create({
   chatButtonText: { color: colors.surface, fontSize: 14, fontWeight: "800" },
   buttonUnreadDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.coral, marginLeft: 8 },
   arrow: { color: colors.lime, fontSize: 20, marginLeft: "auto" },
+  secondCategoryPrompt: { backgroundColor: colors.surface, borderRadius: 22, marginHorizontal: 18, marginTop: 4, marginBottom: 12, padding: 20, ...shadow },
+  secondCategoryText: { color: colors.muted, fontSize: 14, lineHeight: 20 },
+  paidBadge: { backgroundColor: colors.mint, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, marginTop: 12, alignItems: "center" },
+  paidBadgeText: { color: colors.greenBright, fontWeight: "800", fontSize: 13 },
+  payButton: { backgroundColor: colors.green, borderRadius: 13, padding: 15, marginTop: 12, alignItems: "center" },
+  payButtonText: { color: colors.surface, fontWeight: "800", fontSize: 14 },
+  payErrorText: { color: colors.coral, fontSize: 12, marginTop: 8 },
 });

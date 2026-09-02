@@ -6,12 +6,12 @@ import { colors } from "../theme";
 
 const levels = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
 const categories = [["avoin", "Avoin"], ["mixty", "Mixty"]] as const;
-type Player = { id: string; first_name: string; last_name: string };
+type Player = { id: string; first_name: string; last_name: string; player_code: number };
 
-export default function TeamRegisterForm({ leagueId, onRegistered }: { leagueId: string; onRegistered?: () => void }) {
+export default function TeamRegisterForm({ leagueId, defaultCategory, onRegistered }: { leagueId: string; defaultCategory?: string; onRegistered?: () => void }) {
   const { session } = useAuth();
   const [teamName, setTeamName] = useState("");
-  const [category, setCategory] = useState<string>("");
+  const [category, setCategory] = useState<string>(defaultCategory ?? "");
   const [skillLevel, setSkillLevel] = useState<string>("");
   const [skillDescription, setSkillDescription] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -83,11 +83,6 @@ export default function TeamRegisterForm({ leagueId, onRegistered }: { leagueId:
       setError("Valitse joukkueelle kapteeni.");
       return;
     }
-    if (!skillDescription.trim()) {
-      setError("Kerro lyhyesti joukkueen taitotasosta.");
-      return;
-    }
-
     setSaving(true);
     setError("");
     const memberIds = [session.user.id, ...selectedPlayers.map((player) => player.id)];
@@ -118,13 +113,13 @@ export default function TeamRegisterForm({ leagueId, onRegistered }: { leagueId:
     <View style={styles.categories}>{categories.map(([value, label]) => <Pressable key={value} onPress={() => setCategory(value)} style={[styles.category, category === value && styles.categorySelected]}><Text style={[styles.categoryText, category === value && styles.categoryTextSelected]}>{label}</Text></Pressable>)}</View>
 
     <Text style={styles.label}>PELAAJIEN HAKU</Text>
-    <Text style={styles.hint}>Lisätyt pelaajat saavat kutsun, jonka he hyväksyvät kotisivullaan.</Text>
+    <Text style={styles.hint}>Lisätyt pelaajat ovat heti mukana joukkueessa.</Text>
     <View style={styles.searchRow}><TextInput value={searchQuery} onChangeText={setSearchQuery} placeholder="Hae nimellä" placeholderTextColor={colors.muted} style={[styles.input, styles.searchInput]} />{searching ? <ActivityIndicator color={colors.green} /> : null}</View>
-    {searchResults.map((player) => <Pressable key={player.id} onPress={() => selectPlayer(player)} disabled={selectedPlayers.length >= 2} style={styles.result}><Text style={styles.resultText}>{player.first_name} {player.last_name}</Text><Text style={styles.resultAdd}>Lisää</Text></Pressable>)}
+    {searchResults.map((player) => <Pressable key={player.id} onPress={() => selectPlayer(player)} disabled={selectedPlayers.length >= 2} style={styles.result}><Text style={styles.resultText}>{player.first_name} {player.last_name} · #{player.player_code}</Text><Text style={styles.resultAdd}>Lisää</Text></Pressable>)}
 
     <Text style={styles.label}>JOUKKUEEN PELAAJAT</Text>
     <Text style={styles.member}>Minä</Text>
-    {selectedPlayers.map((player) => <View key={player.id} style={styles.memberRow}><Text style={styles.member}>{player.first_name} {player.last_name}</Text><Pressable onPress={() => removePlayer(player.id)}><Text style={styles.remove}>Poista</Text></Pressable></View>)}
+    {selectedPlayers.map((player) => <View key={player.id} style={styles.memberRow}><Text style={styles.member}>{player.first_name} {player.last_name} · #{player.player_code}</Text><Pressable onPress={() => removePlayer(player.id)}><Text style={styles.remove}>Poista</Text></Pressable></View>)}
 
     <Text style={styles.label}>KAPTEENI</Text>
     <View style={styles.captains}>{captainChoices.map((choice) => <Pressable key={choice.id} onPress={() => setCaptainId(choice.id)} style={[styles.captain, captainId === choice.id && styles.captainSelected]}><Text style={[styles.captainText, captainId === choice.id && styles.captainTextSelected]}>{choice.name}</Text></Pressable>)}</View>
@@ -132,8 +127,8 @@ export default function TeamRegisterForm({ leagueId, onRegistered }: { leagueId:
     <Text style={styles.label}>JOUKKUEEN TAITOTASO</Text>
     <View style={styles.levels}>{levels.map((level) => <Pressable key={level} onPress={() => setSkillLevel(level)} style={[styles.level, level === "Aloittelija" && styles.levelWide, skillLevel === level && styles.levelSelected]}><Text style={[styles.levelText, skillLevel === level && styles.levelTextSelected]}>{level}</Text></Pressable>)}</View>
 
-    <Text style={styles.label}>LISÄTIETOA TAITOTASOSTA</Text>
-    <TextInput value={skillDescription} onChangeText={setSkillDescription} multiline placeholder="Kerro lyhyesti joukkueen taitotasosta..." placeholderTextColor={colors.muted} style={[styles.input, styles.textarea]} />
+    <Text style={styles.label}>LISÄTIETOA TAITOTASOSTA (valinnainen)</Text>
+    <TextInput value={skillDescription} onChangeText={setSkillDescription} multiline placeholder="Kerro lyhyesti lisää joukkueenne taitotasosta. Esim. millä tasolla kilpailette kansallisissa tai montako peliä teillä on takana?" placeholderTextColor={colors.muted} style={[styles.input, styles.textarea]} />
     {error ? <Text style={styles.error}>{error}</Text> : null}
     <Pressable style={styles.button} onPress={() => void registerTeam()} disabled={saving}>{saving ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.buttonText}>Lähetä ilmoittautuminen</Text>}</Pressable>
   </View>;
@@ -143,7 +138,7 @@ const styles = StyleSheet.create({
   label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 13, marginBottom: 7 },
   hint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginBottom: 8 },
   input: { backgroundColor: colors.canvas, borderWidth: 1, borderColor: colors.line, borderRadius: 10, color: colors.ink, fontSize: 15, padding: 14 },
-  textarea: { minHeight: 88, textAlignVertical: "top" },
+  textarea: { minHeight: 140, textAlignVertical: "top" },
   searchRow: { flexDirection: "row", gap: 8, alignItems: "center" }, searchInput: { flex: 1 },
   result: { alignItems: "center", backgroundColor: colors.canvas, borderColor: colors.line, borderRadius: 10, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 7, padding: 12 },
   resultText: { color: colors.ink, fontWeight: "700" }, resultAdd: { color: colors.green, fontSize: 12, fontWeight: "800" },

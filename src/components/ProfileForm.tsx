@@ -11,6 +11,7 @@ type Profile = {
   phone: string | null;
   skill_level: string | null;
   email_verified_at: string | null;
+  player_code: number;
 };
 
 const skillCategories = [["Miesten", "Miehet"], ["Naisten", "Naiset"]] as const;
@@ -37,7 +38,7 @@ export default function ProfileForm() {
     const client = supabase;
     const loadProfile = async () => {
       setLoading(true);
-      const { data, error } = await client.from("profiles").select("first_name,last_name,email,phone,skill_level,email_verified_at").eq("id", session.user.id).maybeSingle();
+      const { data, error } = await client.from("profiles").select("first_name,last_name,email,phone,skill_level,email_verified_at,player_code").eq("id", session.user.id).maybeSingle();
       if (error || !data) {
         setMessage(error?.message ?? "Profiilia ei löytynyt.");
       } else {
@@ -106,6 +107,10 @@ export default function ProfileForm() {
       {verificationMessage ? <Text style={styles.verificationMessage}>{verificationMessage}</Text> : null}
     </View> : null}
 
+    <Text style={styles.label}>PELAAJATUNNUS</Text>
+    <Text style={styles.readOnly}>#{profile?.player_code}</Text>
+    <Text style={styles.hint}>Kerro tämä kaverille, jos hän ei löydä sinua hakutuloksista samannimisten joukosta.</Text>
+
     <Text style={styles.label}>SÄHKÖPOSTI</Text>
     <Text style={styles.readOnly}>{profile?.email ?? session?.user.email ?? ""}</Text>
 
@@ -145,6 +150,7 @@ const styles = StyleSheet.create({
   loadingBox: { paddingVertical: 40, alignItems: "center" },
   label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 17, marginBottom: 7 },
   readOnly: { color: colors.muted, backgroundColor: colors.mint, borderRadius: 12, padding: 14, fontSize: 15 },
+  hint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 6 },
   warningBanner: { backgroundColor: "rgba(224,114,75,0.15)", borderWidth: 1, borderColor: colors.coral, borderRadius: 10, padding: 14, marginBottom: 6 },
   warningBannerText: { color: colors.coral, fontSize: 13, lineHeight: 19, fontWeight: "700" },
   verifyButton: { backgroundColor: colors.coral, borderRadius: 8, paddingVertical: 11, alignItems: "center", marginTop: 12 },

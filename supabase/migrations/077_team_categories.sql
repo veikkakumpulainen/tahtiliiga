@@ -14,6 +14,9 @@ alter table public.groups
   drop constraint if exists groups_league_id_name_key;
 
 alter table public.groups
+  drop constraint if exists groups_league_id_category_name_key;
+
+alter table public.groups
   add constraint groups_league_id_category_name_key unique (league_id, category, name);
 
 -- Automatic group allocation now buckets teams into groups of four per
@@ -154,7 +157,7 @@ begin
   returning id into new_team_id;
 
   insert into public.team_members (team_id, user_id, is_captain, status)
-  select new_team_id, member_id, member_id = target_captain_id, case when member_id = auth.uid() or public.is_admin() then 'active' else 'pending' end
+  select new_team_id, member_id, member_id = target_captain_id, 'active'
   from unnest(member_ids) as member_id;
 
   return new_team_id;

@@ -9,7 +9,7 @@ import { colors } from "../../../../theme";
 
 const skillLevels = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
 const categories = [["avoin", "Avoin"], ["mixty", "Mixty"]] as const;
-type Player = { id: string; first_name: string; last_name: string };
+type Player = { id: string; first_name: string; last_name: string; player_code: number };
 
 export default function AdminTeamRegistrationScreen() {
   useAppScreenRestriction();
@@ -108,11 +108,11 @@ export default function AdminTeamRegistrationScreen() {
       <Text style={styles.label}>TAITOTASO</Text>
       <View style={styles.levels}>{skillLevels.map((level) => <Pressable key={level} onPress={() => setSkillLevel(level)} style={[styles.level, level === "Aloittelija" && styles.levelWide, skillLevel === level && styles.levelSelected]}><Text style={[styles.levelText, level === "Aloittelija" && styles.levelTextSmall, skillLevel === level && styles.levelTextSelected]}>{level}</Text></Pressable>)}</View>
       <Text style={styles.label}>PELAAJIEN HAKU</Text>
-      <Text style={styles.hint}>Lisätyt pelaajat saavat kutsun, jonka he hyväksyvät kotisivullaan.</Text>
+      <Text style={styles.hint}>Lisätyt pelaajat ovat heti mukana joukkueessa.</Text>
       <View style={styles.searchRow}><TextInput value={searchQuery} onChangeText={setSearchQuery} placeholder="Hae nimellä" placeholderTextColor={colors.muted} style={[styles.input, styles.searchInput]} />{searching ? <ActivityIndicator color={colors.green} /> : null}</View>
-      {searchResults.map((player) => <Pressable key={player.id} onPress={() => selectPlayer(player)} disabled={selectedPlayers.length >= 3} style={styles.result}><Text style={styles.resultText}>{player.first_name} {player.last_name}</Text><Text style={styles.resultAdd}>Lisää</Text></Pressable>)}
+      {searchResults.map((player) => <Pressable key={player.id} onPress={() => selectPlayer(player)} disabled={selectedPlayers.length >= 3} style={styles.result}><Text style={styles.resultText}>{player.first_name} {player.last_name} · #{player.player_code}</Text><Text style={styles.resultAdd}>Lisää</Text></Pressable>)}
       <Text style={styles.label}>JOUKKUEEN PELAAJAT</Text>
-      {selectedPlayers.map((player) => <View key={player.id} style={styles.memberRow}><Text style={styles.member}>{player.first_name} {player.last_name}</Text><Pressable onPress={() => removePlayer(player.id)}><Text style={styles.remove}>Poista</Text></Pressable></View>)}
+      {selectedPlayers.map((player) => <View key={player.id} style={styles.memberRow}><Text style={styles.member}>{player.first_name} {player.last_name} · #{player.player_code}</Text><Pressable onPress={() => removePlayer(player.id)}><Text style={styles.remove}>Poista</Text></Pressable></View>)}
       <Text style={styles.label}>KAPTEENI</Text>
       <View style={styles.captains}>{selectedPlayers.map((player) => <Pressable key={player.id} onPress={() => setCaptainId(player.id)} style={[styles.captain, captainId === player.id && styles.captainSelected]}><Text style={[styles.captainText, captainId === player.id && styles.captainTextSelected]}>{player.first_name} {player.last_name}</Text></Pressable>)}</View>
       {message ? <Text style={styles.error}>{message}</Text> : null}
