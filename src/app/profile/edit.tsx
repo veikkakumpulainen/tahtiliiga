@@ -12,7 +12,7 @@ export default function EditProfileScreen() {
   if (!session) return <Redirect href="/(auth)/login" />;
 
   return <ScrollView style={styles.page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-    <ScreenHeader eyebrow="TÄHTILIIGA" title="Omat tiedot" subtitle="Pidä pelaajaprofiilisi ajan tasalla" />
+    <ScreenHeader />
     <View style={styles.body}>
       <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹ Takaisin</Text></Pressable>
       <ProfileForm />

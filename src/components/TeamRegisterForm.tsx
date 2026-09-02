@@ -5,11 +5,13 @@ import { supabase } from "../lib/supabase";
 import { colors } from "../theme";
 
 const levels = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
+const categories = [["avoin", "Avoin"], ["mixty", "Mixty"]] as const;
 type Player = { id: string; first_name: string; last_name: string };
 
 export default function TeamRegisterForm({ leagueId, onRegistered }: { leagueId: string; onRegistered?: () => void }) {
   const { session } = useAuth();
   const [teamName, setTeamName] = useState("");
+  const [category, setCategory] = useState<string>("");
   const [skillLevel, setSkillLevel] = useState<string>("");
   const [skillDescription, setSkillDescription] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -65,6 +67,10 @@ export default function TeamRegisterForm({ leagueId, onRegistered }: { leagueId:
       setError("Anna joukkueelle nimi.");
       return;
     }
+    if (!category) {
+      setError("Valitse sarja: Avoin vai Mixty.");
+      return;
+    }
     if (!skillLevel) {
       setError("Valitse joukkueen taitotaso.");
       return;
@@ -92,10 +98,11 @@ export default function TeamRegisterForm({ leagueId, onRegistered }: { leagueId:
       team_skill_description: skillDescription.trim(),
       target_captain_id: captainId,
       member_ids: memberIds,
+      target_category: category,
     });
     setSaving(false);
     if (membersError) {
-      setError(membersError.message.includes("Email not confirmed") ? "Vahvista sähköpostiosoitteesi ennen ilmoittautumista. Tarkista sähköpostisi." : `Joukkueen luonti epäonnistui: ${membersError.message}`);
+      setError(membersError.message.includes("Email not confirmed") ? "Vahvista sähköpostiosoitteesi ennen ilmoittautumista. Tarkista sähköpostisi." : membersError.message.includes("mies- että naispelaaja") ? membersError.message : `Joukkueen luonti epäonnistui: ${membersError.message}`);
       return;
     }
     if (onRegistered) onRegistered();
@@ -106,6 +113,9 @@ export default function TeamRegisterForm({ leagueId, onRegistered }: { leagueId:
   return <View>
     <Text style={styles.label}>JOUKKUEEN NIMI</Text>
     <TextInput value={teamName} onChangeText={setTeamName} placeholder="Esim. Padel Tähdet" placeholderTextColor={colors.muted} style={styles.input} />
+
+    <Text style={styles.label}>SARJA</Text>
+    <View style={styles.categories}>{categories.map(([value, label]) => <Pressable key={value} onPress={() => setCategory(value)} style={[styles.category, category === value && styles.categorySelected]}><Text style={[styles.categoryText, category === value && styles.categoryTextSelected]}>{label}</Text></Pressable>)}</View>
 
     <Text style={styles.label}>PELAAJIEN HAKU</Text>
     <Text style={styles.hint}>Lisätyt pelaajat saavat kutsun, jonka he hyväksyvät kotisivullaan.</Text>
@@ -143,6 +153,10 @@ const styles = StyleSheet.create({
   captain: { backgroundColor: colors.canvas, borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12 },
   captainSelected: { backgroundColor: colors.green, borderColor: colors.green },
   captainText: { color: colors.ink, fontSize: 13, fontWeight: "700" }, captainTextSelected: { color: colors.surface },
+  categories: { flexDirection: "row", gap: 8 },
+  category: { flex: 1, height: 42, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.canvas, alignItems: "center", justifyContent: "center" },
+  categorySelected: { backgroundColor: colors.green, borderColor: colors.green },
+  categoryText: { color: colors.ink, fontWeight: "800", fontSize: 13 }, categoryTextSelected: { color: colors.surface },
   levels: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   level: { minWidth: 48, height: 42, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.canvas, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
   levelWide: { width: "auto" },

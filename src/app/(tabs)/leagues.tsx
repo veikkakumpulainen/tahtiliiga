@@ -1,104 +1,67 @@
 import { useCallback, useEffect, useState } from "react";
-import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { Link, useFocusEffect } from "expo-router";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import ScreenHeader from "../../components/ScreenHeader";
+import TeamRosterList, { groupRosterByTeam, type TeamRosterRow } from "../../components/TeamRosterList";
 import { useAuth } from "../../hooks/useAuth";
-import { formatFinnishDate } from "../../lib/dates";
 import { supabase } from "../../lib/supabase";
 import { colors, shadow } from "../../theme";
 
-type League = { id: string; name: string; start_date: string; end_date: string | null; registration_deadline: string | null; registration_opens_at: string | null; status: string };
+type League = { id: string; name: string; status: string };
 type Standing = { group_id: string; group_name: string; team_id: string; team_name: string; played: number; wins: number; losses: number; points: number; rank_position?: number };
-type Filter = "registered" | "open";
-
-const filters = [["registered", "ILMOITTAUDUTTU"], ["open", "AVOINNA"]] as const;
+const categories = [["avoin", "Avoin"], ["mixty", "Mixty"]] as const;
 
 export default function LeaguesScreen() {
   const { session } = useAuth();
-  const { filter: filterParam } = useLocalSearchParams<{ filter?: string }>();
-  const [leagues, setLeagues] = useState<League[]>([]);
-  const [registeredLeagueIds, setRegisteredLeagueIds] = useState<Set<string>>(new Set());
-  const [teamCounts, setTeamCounts] = useState<Record<string, number>>({});
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [filter, setFilter] = useState<Filter>(filterParam === "open" ? "open" : "registered");
-  const [filterInitialized, setFilterInitialized] = useState(filterParam === "open");
-
-  useFocusEffect(useCallback(() => {
-    if (filterParam === "open") { setFilter("open"); setFilterInitialized(true); router.setParams({ filter: undefined }); }
-  }, [filterParam]));
-  const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
+  const [league, setLeague] = useState<League | null>(null);
+  const [category, setCategory] = useState<string>("avoin");
+  const [loadingLeague, setLoadingLeague] = useState(true);
+  const [rosterRows, setRosterRows] = useState<(TeamRosterRow & { category: string })[]>([]);
+  const [loadingRoster, setLoadingRoster] = useState(false);
   const [standings, setStandings] = useState<Standing[]>([]);
   const [standingsView, setStandingsView] = useState<"groups" | "total">("groups");
-  const [loadingLeagues, setLoadingLeagues] = useState(true);
   const [loadingStandings, setLoadingStandings] = useState(false);
   const [error, setError] = useState("");
 
-  const loadLeagues = useCallback(async () => {
-    if (!supabase) { setLoadingLeagues(false); return; }
-    setLoadingLeagues(true);
-    setError("");
+  const loadLeague = useCallback(async () => {
+    if (!supabase || !session?.user.id) { setLoadingLeague(false); return; }
+    setLoadingLeague(true);
     const client = supabase;
-    const userId = session?.user.id;
-    const [{ data: leagueRows, error: leagueError }, { data: adminData }, { data: membershipData, error: membershipError }, { data: invitationData }] = await Promise.all([
-      client.from("leagues").select("id,name,start_date,end_date,registration_deadline,registration_opens_at,status").order("start_date", { ascending: false }),
-      userId ? client.rpc("is_admin") : Promise.resolve({ data: false }),
-      userId ? client.from("team_members").select("teams(league_id)").eq("user_id", userId) : Promise.resolve({ data: [], error: null }),
-      userId ? client.rpc("get_pending_team_invitations") : Promise.resolve({ data: [] }),
-    ]);
-    setIsAdmin(adminData === true);
-    if (leagueError || membershipError) {
-      setError(`Sarjojen lataus epäonnistui: ${(leagueError ?? membershipError)?.message}`);
-      setLoadingLeagues(false);
-      return;
-    }
-    const invitationLeagueIds = ((invitationData ?? []) as { league_id: string }[]).map((invitation) => invitation.league_id);
-    const ids = [...invitationLeagueIds, ...(membershipData ?? []).flatMap((item) => {
-      const relation = item.teams as unknown as { league_id: string } | { league_id: string }[] | null;
-      return Array.isArray(relation) ? relation.map((team) => team.league_id) : relation ? [relation.league_id] : [];
-    }).filter((id): id is string => Boolean(id))];
-    setRegisteredLeagueIds(new Set(ids));
-    setLeagues((leagueRows ?? []) as League[]);
-    setLoadingLeagues(false);
+    const { data: membershipData } = await client.from("team_members").select("teams(league_id, category)").eq("user_id", session.user.id).eq("status", "active");
+    const memberships = (membershipData ?? []) as unknown as { teams: { league_id: string; category: string } | { league_id: string; category: string }[] | null }[];
+    const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : []);
+    if (teamRows.length === 0) { setLeague(null); setLoadingLeague(false); return; }
+    const leagueIds = [...new Set(teamRows.map((team) => team.league_id))];
+    const { data: leagueRows } = await client.from("leagues").select("id, name, status").in("id", leagueIds);
+    const leagueMap = new Map((leagueRows ?? []).map((row) => [row.id, row]));
+    const withLeague = teamRows.map((team) => ({ category: team.category, league: leagueMap.get(team.league_id) })).filter((item): item is { category: string; league: League } => Boolean(item.league));
+    const chosen = withLeague.find((item) => item.league.status === "ongoing") ?? withLeague[0] ?? null;
+    setLeague(chosen ? chosen.league : null);
+    const categoriesForChosen = chosen ? [...new Set(withLeague.filter((item) => item.league.id === chosen.league.id).map((item) => item.category))] : [];
+    setCategory(categoriesForChosen.length === 1 ? categoriesForChosen[0] : "avoin");
+    setLoadingLeague(false);
   }, [session?.user.id]);
 
-  useFocusEffect(useCallback(() => { void loadLeagues(); }, [loadLeagues]));
+  useFocusEffect(useCallback(() => { void loadLeague(); }, [loadLeague]));
 
-  useEffect(() => {
-    if (!supabase || leagues.length === 0) { setTeamCounts({}); return; }
-    void supabase.rpc("get_league_team_counts", { target_league_ids: leagues.map((league) => league.id) }).then(({ data }) => {
-      const counts: Record<string, number> = {};
-      for (const row of (data ?? []) as { league_id: string; team_count: number }[]) counts[row.league_id] = Number(row.team_count);
-      setTeamCounts(counts);
-    });
-  }, [leagues]);
+  const loadRoster = useCallback(async () => {
+    if (!supabase || !league || league.status === "ongoing") { setRosterRows([]); return; }
+    setLoadingRoster(true);
+    setError("");
+    const { data, error: rosterError } = await supabase.rpc("get_league_team_rosters", { target_league_id: league.id });
+    setLoadingRoster(false);
+    if (rosterError) { setError(`Joukkueiden lataus epäonnistui: ${rosterError.message}`); setRosterRows([]); return; }
+    setRosterRows((data ?? []) as (TeamRosterRow & { category: string })[]);
+  }, [league]);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const registeredLeagues = leagues.filter((league) => registeredLeagueIds.has(league.id));
-  const openLeagues = leagues.filter((league) => league.status === "registration_open" && !registeredLeagueIds.has(league.id) && (!league.registration_deadline || league.registration_deadline >= today));
-  const upcomingLeagues = leagues.filter((league) => league.status === "upcoming" && !registeredLeagueIds.has(league.id));
-  const activeList = filter === "registered" ? registeredLeagues : [...openLeagues, ...upcomingLeagues];
-
-  useEffect(() => {
-    if (filterInitialized || loadingLeagues) return;
-    if (registeredLeagues.length === 0 && (openLeagues.length > 0 || upcomingLeagues.length > 0)) setFilter("open");
-    setFilterInitialized(true);
-  }, [filterInitialized, loadingLeagues, registeredLeagues.length, openLeagues.length, upcomingLeagues.length]);
-
-  useEffect(() => {
-    if (filter === "open") { setSelectedLeagueId(null); return; }
-    setSelectedLeagueId((current) => current && activeList.some((league) => league.id === current) ? current : activeList[0]?.id ?? null);
-  }, [filter, leagues, registeredLeagueIds]);
+  useEffect(() => { void loadRoster(); }, [loadRoster]);
 
   const loadStandings = useCallback(async () => {
-    const selectedLeague = leagues.find((league) => league.id === selectedLeagueId);
-    if (!supabase || filter === "open" || !selectedLeagueId || (selectedLeague?.status !== "ongoing" && !isAdmin)) {
-      setStandings([]);
-      return;
-    }
+    if (!supabase || !league || league.status !== "ongoing") { setStandings([]); return; }
     setLoadingStandings(true);
     setError("");
     const functionName = standingsView === "total" ? "get_league_total_standings" : "get_league_standings_with_tiebreakers";
-    const { data, error: standingsError } = await supabase.rpc(functionName, { target_league_id: selectedLeagueId });
+    const { data, error: standingsError } = await supabase.rpc(functionName, { target_league_id: league.id, target_category: category });
     if (standingsError) {
       setError(`Tulostaulukon lataus epäonnistui: ${standingsError.message}`);
       setStandings([]);
@@ -116,71 +79,38 @@ export default function LeaguesScreen() {
       })));
     }
     setLoadingStandings(false);
-  }, [filter, isAdmin, leagues, selectedLeagueId, standingsView]);
+  }, [league, category, standingsView]);
 
   useEffect(() => { void loadStandings(); }, [loadStandings]);
 
   const groupIds = [...new Set(standings.map((standing) => standing.group_id))].sort((a, b) => (standings.find((standing) => standing.group_id === a)?.group_name ?? "").localeCompare(standings.find((standing) => standing.group_id === b)?.group_name ?? "", "fi", { numeric: true }));
-  const selectedLeague = leagues.find((league) => league.id === selectedLeagueId);
-
-  const emptyCopy = filter === "registered"
-    ? ["Et ole vielä ilmoittautunut sarjaan.", "Ilmoittaudu sarjaan Avoinna-välilehdeltä."]
-    : ["Ei avoimia sarjoja tällä hetkellä.", "Järjestäjä julkaisee uudet sarjat tähän näkymään."];
+  const categoryTeams = groupRosterByTeam(rosterRows.filter((row) => row.category === category));
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <ScreenHeader eyebrow="TÄHTILIIGA" title="Sarjat" subtitle="Omat ja avoimet sarjat" />
+      <ScreenHeader />
       <View style={styles.body}>
-        <View style={styles.filterRow}>
-          {filters.map(([value, label]) => <Pressable key={value} onPress={() => setFilter(value)} style={[styles.filterButton, filter === value && styles.filterButtonSelected]}>
-            <Text style={[styles.filterText, filter === value && styles.filterTextSelected]}>{label}</Text>
-          </Pressable>)}
-        </View>
-
-        {loadingLeagues ? <ActivityIndicator color={colors.green} style={styles.loading} /> : activeList.length === 0 ? <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>{emptyCopy[0]}</Text>
-          <Text style={styles.emptyText}>{emptyCopy[1]}</Text>
-        </View> : filter === "open" ? <>
-          {activeList.map((league) => league.status === "upcoming" ? <View style={styles.card} key={league.id}>
-            <View style={styles.upcoming}><View style={styles.upcomingDot} /><Text style={styles.upcomingText}>TULOSSA</Text></View>
-            <Text style={styles.cardName}>{league.name}</Text>
-            <Text style={styles.emptyText}>{league.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(league.registration_opens_at)}.` : "Ilmoittautumisen avautumispäivä ilmoitetaan pian."}</Text>
-          </View> : <View style={styles.card} key={league.id}>
-            <View style={styles.open}><View style={styles.dot} /><Text style={styles.openText}>ILMOITTAUTUMINEN AUKI</Text></View>
-            <Text style={styles.cardName}>{league.name}</Text>
-            <View style={styles.details}>
-              <View><Text style={styles.label}>ALKAA</Text><Text style={styles.value}>{league.start_date}</Text></View>
-              <View><Text style={styles.label}>DEADLINE</Text><Text style={styles.value}>{league.registration_deadline ?? "Ei määritetty"}</Text></View>
-              <View><Text style={styles.label}>JOUKKUEITA</Text><Text style={styles.value}>{teamCounts[league.id] ?? 0}</Text></View>
-            </View>
-            <Pressable style={styles.rosterToggle} onPress={() => router.push(`/league/${league.id}/teams` as never)}>
-              <Text style={styles.rosterToggleText}>Näytä ilmoittautuneet joukkueet</Text>
-              <Text style={styles.rosterToggleChevron}>→</Text>
-            </Pressable>
-            <Pressable style={styles.registerButton} onPress={() => router.push(`/league/${league.id}/register` as never)}>
-              <Text style={styles.registerButtonText}>Ilmoittaudu joukkueella</Text><Text style={styles.arrow}>→</Text>
-            </Pressable>
-          </View>)}
-        </> : <>
-          {activeList.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selector} style={styles.selectorScroll}>
-            {activeList.map((league, index) => <Pressable key={`league-${league.id}-${index}`} onPress={() => setSelectedLeagueId(league.id)} style={[styles.selectorButton, selectedLeagueId === league.id && styles.selectorSelected]}>
-              <Text numberOfLines={1} style={[styles.selectorText, selectedLeagueId === league.id && styles.selectorTextSelected]}>{league.name}</Text>
+        {loadingLeague ? <ActivityIndicator color={colors.green} style={styles.loading} /> : !league ? <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>Et ole vielä ilmoittautunut liigaan.</Text>
+          <Text style={styles.emptyText}>Avoinna olevat liigat löytyvät Koti-välilehdeltä.</Text>
+          <Link href="/(tabs)/home" asChild><Pressable style={styles.homeButton}><Text style={styles.homeButtonText}>Koti-välilehdelle</Text></Pressable></Link>
+        </View> : <>
+          <Text style={styles.leagueName}>{league.name}</Text>
+          <View style={styles.categoryRow}>
+            {categories.map(([value, label]) => <Pressable key={value} onPress={() => setCategory(value)} style={[styles.categoryButton, category === value && styles.categoryButtonSelected]}>
+              <Text style={[styles.categoryText, category === value && styles.categoryTextSelected]}>{label}</Text>
             </Pressable>)}
-          </ScrollView> : null}
+          </View>
 
-          <Text style={styles.leagueName}>{selectedLeague?.name}</Text>
-          {selectedLeague?.status !== "ongoing" && !isAdmin ? <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>Tulostaulukot avautuvat sarjan käynnistyessä.</Text>
-            <Text style={styles.emptyText}>Lohkojako ja tulostaulukko julkaistaan kaikille osallistujille, kun järjestäjä käynnistää sarjan.</Text>
-            <View style={styles.comingSoonMeta}>
-              <Text style={styles.label}>JOUKKUEITA ILMOITTAUTUNUT</Text>
-              <Text style={styles.value}>{teamCounts[selectedLeague?.id ?? ""] ?? 0}</Text>
-            </View>
-            <Pressable style={styles.rosterToggle} onPress={() => selectedLeague && router.push(`/league/${selectedLeague.id}/teams` as never)}>
-              <Text style={styles.rosterToggleText}>Näytä ilmoittautuneet joukkueet</Text>
-              <Text style={styles.rosterToggleChevron}>→</Text>
-            </Pressable>
-          </View> : loadingStandings ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <View style={styles.empty}>
+          {league.status !== "ongoing" ? (
+            loadingRoster ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>Joukkueita ei voitu ladata.</Text>
+              <Text style={styles.emptyText}>{error}</Text>
+            </View> : categoryTeams.length === 0 ? <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>Ei vielä ilmoittautuneita joukkueita.</Text>
+              <Text style={styles.emptyText}>Lohkojako ja tulostaulukko julkaistaan, kun järjestäjä käynnistää liigan.</Text>
+            </View> : <TeamRosterList teams={categoryTeams} />
+          ) : loadingStandings ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Tuloksia ei voitu ladata.</Text>
             <Text style={styles.emptyText}>{error}</Text>
           </View> : (standingsView === "groups" ? groupIds.length === 0 : standings.length === 0) ? <View style={styles.empty}>
@@ -188,9 +118,9 @@ export default function LeaguesScreen() {
             <Text style={styles.emptyText}>Lohkojen joukkueet ja ottelut näkyvät tässä, kun järjestäjä on julkaissut ne.</Text>
           </View> : <View><View style={styles.viewSelector}>
             <Pressable onPress={() => setStandingsView("groups")} style={[styles.viewButton, standingsView === "groups" && styles.viewButtonSelected]}><Text style={[styles.viewButtonText, standingsView === "groups" && styles.viewButtonTextSelected]}>Lohkotilanne</Text></Pressable>
-            <Pressable onPress={() => setStandingsView("total")} style={[styles.viewButton, standingsView === "total" && styles.viewButtonSelected]}><Text style={[styles.viewButtonText, standingsView === "total" && styles.viewButtonTextSelected]}>Koko sarja</Text></Pressable>
+            <Pressable onPress={() => setStandingsView("total")} style={[styles.viewButton, standingsView === "total" && styles.viewButtonSelected]}><Text style={[styles.viewButtonText, standingsView === "total" && styles.viewButtonTextSelected]}>Koko liiga</Text></Pressable>
           </View>{standingsView === "total" ? <View style={styles.groupSection}>
-            <Text style={styles.groupName}>Koko sarjan pisteet</Text>
+            <Text style={styles.groupName}>Koko liigan pisteet</Text>
             <View style={styles.table}>
               <View style={styles.header}>
                 <Text style={[styles.headCell, styles.rank]}>SIJA</Text><Text style={[styles.headCell, styles.team]}>JOUKKUE</Text><Text style={styles.headCell}>O</Text><Text style={styles.headCell}>V</Text><Text style={styles.headCell}>H</Text><Text style={styles.headCell}>P</Text>
@@ -223,20 +153,12 @@ const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
   content: { paddingBottom: 32 },
   body: { padding: 22, paddingTop: 27 },
-  title: { color: colors.ink, fontSize: 29, fontWeight: "800" },
-  subtitle: { color: colors.muted, marginTop: 6, fontSize: 14, lineHeight: 20 },
-  filterRow: { flexDirection: "row", gap: 8 },
-  filterButton: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingVertical: 11, alignItems: "center", backgroundColor: colors.surface },
-  filterButtonSelected: { backgroundColor: colors.green, borderColor: colors.green },
-  filterText: { color: colors.ink, fontSize: 10, letterSpacing: 0.5, fontWeight: "900", textAlign: "center" },
-  filterTextSelected: { color: colors.surface },
-  leagueName: { color: colors.ink, fontSize: 20, fontWeight: "800", marginTop: 18 },
-  selectorScroll: { marginTop: 20, marginHorizontal: -22 },
-  selector: { paddingHorizontal: 22, gap: 8 },
-  selectorButton: { width: 142, minHeight: 42, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, justifyContent: "center" },
-  selectorSelected: { backgroundColor: colors.green, borderColor: colors.green },
-  selectorText: { color: colors.ink, fontSize: 12, fontWeight: "800", textAlign: "center" },
-  selectorTextSelected: { color: colors.surface },
+  leagueName: { color: colors.ink, fontSize: 26, fontWeight: "800" },
+  categoryRow: { flexDirection: "row", gap: 8, marginTop: 18 },
+  categoryButton: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingVertical: 11, alignItems: "center", backgroundColor: colors.surface },
+  categoryButtonSelected: { backgroundColor: colors.green, borderColor: colors.green },
+  categoryText: { color: colors.ink, fontSize: 12, fontWeight: "900", textAlign: "center" },
+  categoryTextSelected: { color: colors.surface },
   viewSelector: { flexDirection: "row", gap: 8, marginTop: 18 },
   viewButton: { borderWidth: 1, borderColor: colors.line, borderRadius: 10, flex: 1, paddingVertical: 11, alignItems: "center", backgroundColor: colors.surface },
   viewButtonSelected: { backgroundColor: colors.green, borderColor: colors.green },
@@ -256,22 +178,6 @@ const styles = StyleSheet.create({
   empty: { backgroundColor: colors.surface, borderRadius: 18, padding: 20, marginTop: 20, ...shadow },
   emptyTitle: { color: colors.ink, fontWeight: "800", fontSize: 16 },
   emptyText: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 7 },
-  card: { backgroundColor: colors.surface, borderRadius: 20, padding: 20, marginTop: 20, ...shadow },
-  open: { flexDirection: "row", alignItems: "center", gap: 7 },
-  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.greenBright },
-  openText: { color: colors.greenBright, fontSize: 10, letterSpacing: 1, fontWeight: "900" },
-  upcoming: { flexDirection: "row", alignItems: "center", gap: 7 },
-  upcomingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.coral },
-  upcomingText: { color: colors.coral, fontSize: 10, letterSpacing: 1, fontWeight: "900" },
-  cardName: { color: colors.ink, fontSize: 21, fontWeight: "800", marginTop: 18 },
-  details: { flexDirection: "row", justifyContent: "space-between", marginTop: 23, paddingTop: 18, borderTopWidth: 1, borderTopColor: colors.line },
-  label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900" },
-  value: { color: colors.ink, fontWeight: "800", marginTop: 6, fontSize: 13 },
-  registerButton: { backgroundColor: colors.green, borderRadius: 13, padding: 15, marginTop: 24, flexDirection: "row", alignItems: "center" },
-  registerButtonText: { color: colors.surface, fontWeight: "800", fontSize: 14 },
-  arrow: { color: colors.lime, fontSize: 20, marginLeft: "auto" },
-  comingSoonMeta: { marginTop: 14 },
-  rosterToggle: { flexDirection: "row", alignItems: "center", marginTop: 18 },
-  rosterToggleText: { color: colors.green, fontSize: 12, fontWeight: "800" },
-  rosterToggleChevron: { color: colors.green, fontSize: 12, fontWeight: "800", marginLeft: 6 },
+  homeButton: { backgroundColor: colors.green, borderRadius: 13, padding: 15, marginTop: 16, alignItems: "center" },
+  homeButtonText: { color: colors.surface, fontWeight: "800" },
 });

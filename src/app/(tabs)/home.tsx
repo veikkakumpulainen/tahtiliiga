@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Link, useFocusEffect } from "expo-router";
+import { Link, router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import GroupMatches from "../../components/GroupMatches";
@@ -15,18 +15,22 @@ type Team = {
   leagueId: string;
   name: string;
   skill_level: string;
+  category: string;
   leagueName: string;
   leagueStatus: string;
   startDate: string;
+  endDate: string | null;
   groupId?: string;
   groupName?: string;
 };
 
+const categoryLabels: Record<string, string> = { avoin: "Avoin", mixty: "Mixty" };
+
 type Invitation = { team_id: string; team_name: string; league_id: string; league_name: string; captain_name: string | null; league_start_date: string; league_end_date: string | null };
+type OpenLeague = { id: string; name: string; start_date: string; end_date: string | null; registration_deadline: string | null; registration_opens_at: string | null; status: string };
 
 export default function HomeScreen() {
   const { session } = useAuth();
-  const [profile, setProfile] = useState<{ first_name: string; skill_level: string | null } | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [unreadGroupIds, setUnreadGroupIds] = useState<Set<string>>(new Set());
@@ -35,24 +39,38 @@ export default function HomeScreen() {
   const [respondingTeamId, setRespondingTeamId] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState("");
+  const [openLeague, setOpenLeague] = useState<OpenLeague | null>(null);
+  const [openLeagueTeamCount, setOpenLeagueTeamCount] = useState(0);
+
+  const loadOpenLeague = useCallback(async () => {
+    if (!supabase) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const { data } = await supabase.from("leagues").select("id, name, start_date, end_date, registration_deadline, registration_opens_at, status").in("status", ["registration_open", "upcoming"]).order("start_date", { ascending: true });
+    const rows = (data ?? []) as OpenLeague[];
+    const openRow = rows.filter((row) => row.status === "registration_open").find((row) => !row.registration_deadline || row.registration_deadline >= today) ?? rows.find((row) => row.status === "upcoming") ?? null;
+    setOpenLeague(openRow);
+    if (!openRow) { setOpenLeagueTeamCount(0); return; }
+    const { data: countRows } = await supabase.rpc("get_league_team_counts", { target_league_ids: [openRow.id] });
+    setOpenLeagueTeamCount(Number((countRows?.[0] as { team_count?: number } | undefined)?.team_count ?? 0));
+  }, []);
+
+  useFocusEffect(useCallback(() => { void loadOpenLeague(); }, [loadOpenLeague]));
 
   const loadHome = useCallback(async () => {
     if (!supabase || !session?.user.id) return;
     const client = supabase;
-    const [{ data: profileData }, { data: membershipData }, { data: invitationData }] = await Promise.all([
-      client.from("profiles").select("first_name, skill_level").eq("id", session.user.id).maybeSingle(),
-      client.from("team_members").select("team_id, teams(id, name, skill_level, league_id)").eq("user_id", session.user.id).eq("status", "active"),
+    const [{ data: membershipData }, { data: invitationData }] = await Promise.all([
+      client.from("team_members").select("team_id, teams(id, name, skill_level, category, league_id)").eq("user_id", session.user.id).eq("status", "active"),
       client.rpc("get_pending_team_invitations"),
     ]);
-    if (profileData) setProfile(profileData);
     setInvitations((invitationData ?? []) as Invitation[]);
 
-    const memberships = (membershipData ?? []) as unknown as { teams?: { id: string; name: string; skill_level: string; league_id: string } | { id: string; name: string; skill_level: string; league_id: string }[] | null }[];
+    const memberships = (membershipData ?? []) as unknown as { teams?: { id: string; name: string; skill_level: string; category: string; league_id: string } | { id: string; name: string; skill_level: string; category: string; league_id: string }[] | null }[];
     const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : []);
     const leagueIds = [...new Set(teamRows.map((team) => team.league_id))];
     const teamIds = teamRows.map((team) => team.id);
     const [{ data: leagueRows }, { data: groupRows }, { data: teamCountRows }] = await Promise.all([
-      leagueIds.length ? client.from("leagues").select("id, name, start_date, status").in("id", leagueIds) : Promise.resolve({ data: [] }),
+      leagueIds.length ? client.from("leagues").select("id, name, start_date, end_date, status").in("id", leagueIds) : Promise.resolve({ data: [] }),
       teamIds.length ? client.from("group_teams").select("team_id, group_id, groups(id, name)").in("team_id", teamIds) : Promise.resolve({ data: [] }),
       leagueIds.length ? client.rpc("get_league_team_counts", { target_league_ids: leagueIds }) : Promise.resolve({ data: [] }),
     ]);
@@ -83,9 +101,11 @@ export default function HomeScreen() {
         leagueId: team.league_id,
         name: team.name,
         skill_level: team.skill_level,
+        category: team.category,
         leagueName: league?.name ?? "",
         leagueStatus: league?.status ?? "",
         startDate: league?.start_date ?? "",
+        endDate: league?.end_date ?? null,
         groupId: group?.group_id,
         groupName: selectedGroup?.name,
       };
@@ -115,11 +135,10 @@ export default function HomeScreen() {
     return () => clearTimeout(timeout);
   }, [inviteSuccess]);
 
-  const firstName = profile?.first_name ?? session?.user.user_metadata?.first_name ?? "pelaaja";
   const selectedTeam = teams.find((team) => team.id === selectedTeamId) ?? teams[0];
 
   return <ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-    <ScreenHeader eyebrow="TÄHTILIIGA" title={`Hyvää iltaa, ${firstName}`} subtitle="Pelit sovitaan yhdessä." />
+    <ScreenHeader />
     {inviteSuccess ? <View style={styles.inviteSuccessBanner}>
       <Text style={styles.inviteSuccessText}>{inviteSuccess}</Text>
       <Pressable onPress={() => setInviteSuccess("")} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.inviteSuccessClose}>×</Text></Pressable>
@@ -138,25 +157,45 @@ export default function HomeScreen() {
       </View>)}
     </View> : null}
     {teams.length === 0 && invitations.length === 0 ? <View style={styles.emptyState}>
-      <Text style={styles.emptyTitle}>Et ole vielä ilmoittautunut sarjaan.</Text>
-      <Text style={styles.emptyCopy}>Selaa avoimia sarjoja ja kokoa oma joukkueesi.</Text>
-      <Link href={{ pathname: "/(tabs)/leagues", params: { filter: "open" } }} asChild><Pressable style={styles.browseButton}><Text style={styles.browseText}>Selaa sarjoja</Text><Text style={styles.arrow}>→</Text></Pressable></Link>
+      <Text style={styles.emptyTitle}>Et ole vielä ilmoittautunut liigaan.</Text>
+      {openLeague ? <View style={styles.openLeagueCard}>
+        <View style={styles.openBadgeRow}>
+          <View style={[styles.dot, openLeague.status === "upcoming" && styles.dotUpcoming]} />
+          <Text style={[styles.openBadgeText, openLeague.status === "upcoming" && styles.openBadgeTextUpcoming]}>{openLeague.status === "upcoming" ? "TULOSSA" : "ILMOITTAUTUMINEN AUKI"}</Text>
+        </View>
+        <Text style={styles.openLeagueName}>{openLeague.name}</Text>
+        <View style={styles.dateRow}>
+          <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(openLeague.start_date)}</Text></View>
+          <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(openLeague.end_date)}</Text></View>
+        </View>
+        {openLeague.status === "registration_open" ? <>
+          <View style={styles.dateRow}>
+            <View><Text style={styles.cardLabel}>DEADLINE</Text><Text style={styles.season}>{formatFinnishDate(openLeague.registration_deadline)}</Text></View>
+            <View><Text style={styles.cardLabel}>JOUKKUEITA</Text><Text style={styles.season}>{openLeagueTeamCount}</Text></View>
+          </View>
+          <Pressable style={styles.browseButton} onPress={() => router.push(`/league/${openLeague.id}/register` as never)}><Text style={styles.browseText}>Ilmoittaudu joukkueella</Text><Text style={styles.arrow}>→</Text></Pressable>
+        </> : <Text style={styles.cardNote}>{openLeague.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(openLeague.registration_opens_at)}.` : "Ilmoittautumisen avautumispäivä ilmoitetaan pian."}</Text>}
+      </View> : <Text style={styles.emptyCopy}>Uudet liigat ilmestyvät tähän, kun ilmoittautuminen avataan.</Text>}
     </View> : teams.length === 0 ? null : <>
-      <View style={styles.sectionHeading}><Text style={styles.title}>Omat sarjat</Text></View>
+      <View style={styles.sectionHeading}><Text style={styles.title}>Omat liigat</Text></View>
       {teams.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selector}>
         {teams.map((team) => <Pressable key={team.id} onPress={() => setSelectedTeamId(team.id)} style={[styles.selectorButton, selectedTeam?.id === team.id && styles.selectorSelected]}>
-          <Text numberOfLines={1} style={[styles.selectorText, selectedTeam?.id === team.id && styles.selectorTextSelected]}>{team.leagueName}</Text>
+          <Text numberOfLines={1} style={[styles.selectorText, selectedTeam?.id === team.id && styles.selectorTextSelected]}>{team.leagueName} · {categoryLabels[team.category] ?? team.category}</Text>
           {team.groupId && unreadGroupIds.has(team.groupId) ? <View style={styles.unreadDot} /> : null}
         </Pressable>)}
       </ScrollView> : null}
       {selectedTeam ? <View style={styles.leagueCard}>
+        <Text style={styles.leagueName}>{selectedTeam.leagueName || "Liigan nimi puuttuu"}</Text>
         <Text style={styles.cardLabel}>SARJA</Text>
-        <Text style={styles.leagueName}>{selectedTeam.leagueName || "Sarjan nimi puuttuu"}</Text>
+        <Text style={styles.season}>{categoryLabels[selectedTeam.category] ?? selectedTeam.category}</Text>
         <Text style={styles.cardLabel}>JOUKKUE</Text>
         <Text style={styles.teamName}>{selectedTeam.name}</Text>
         <LeagueRoundSchedule leagueId={selectedTeam.leagueId} />
         {selectedTeam.leagueStatus !== "ongoing" ? <>
-          <Text style={styles.cardLabel}>ALKAMISPÄIVÄ</Text><Text style={styles.season}>{selectedTeam.startDate || "Ei ilmoitettu"}</Text>
+          <View style={styles.dateRow}>
+            <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(selectedTeam.startDate)}</Text></View>
+            <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(selectedTeam.endDate)}</Text></View>
+          </View>
           <Text style={styles.cardLabel}>JOUKKUEITA ILMOITTAUTUNUT</Text><Text style={styles.season}>{teamCounts[selectedTeam.leagueId] ?? 0}</Text>
           <Link href={`/league/${selectedTeam.leagueId}/teams` as never} asChild><Pressable style={styles.chatButton}>
             <Text style={styles.chatButtonText}>Näytä ilmoittautuneet joukkueet</Text>
@@ -170,7 +209,7 @@ export default function HomeScreen() {
             <Text style={styles.arrow}>→</Text>
           </Pressable></Link>
           <GroupMatches teamId={selectedTeam.id} teamName={selectedTeam.name} />
-        </> : <Text style={styles.cardNote}>Lohkochat ja otteluparit aukeavat sarjan alkaessa.</Text>}
+        </> : <Text style={styles.cardNote}>Lohkochat ja otteluparit aukeavat liigan alkaessa.</Text>}
       </View> : null}
     </>}
   </ScrollView>;
@@ -201,11 +240,19 @@ const styles = StyleSheet.create({
   emptyCopy: { color: colors.muted, fontSize: 14, lineHeight: 21, marginTop: 8 },
   browseButton: { backgroundColor: colors.green, borderRadius: 13, padding: 15, marginTop: 19, flexDirection: "row", alignItems: "center" },
   browseText: { color: colors.surface, fontWeight: "800" },
+  openLeagueCard: { backgroundColor: colors.mint, borderRadius: 16, padding: 16, marginTop: 16 },
+  openBadgeRow: { flexDirection: "row", alignItems: "center", gap: 7 },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.greenBright },
+  dotUpcoming: { backgroundColor: colors.coral },
+  openBadgeText: { color: colors.greenBright, fontSize: 10, letterSpacing: 1, fontWeight: "900" },
+  openBadgeTextUpcoming: { color: colors.coral },
+  openLeagueName: { color: colors.ink, fontSize: 19, fontWeight: "800", marginTop: 10 },
   leagueCard: { backgroundColor: colors.surface, borderRadius: 22, marginHorizontal: 18, marginBottom: 12, padding: 20, ...shadow },
   cardLabel: { color: colors.muted, fontSize: 9, letterSpacing: 1.1, fontWeight: "900", marginTop: 15 },
-  leagueName: { color: colors.ink, fontSize: 21, fontWeight: "800", marginTop: 5 },
+  leagueName: { color: colors.ink, fontSize: 21, fontWeight: "800" },
   teamName: { color: colors.ink, fontSize: 16, fontWeight: "800", marginTop: 5 },
   season: { color: colors.muted, fontSize: 13, marginTop: 5 },
+  dateRow: { flexDirection: "row", gap: 24 },
   selector: { paddingHorizontal: 18, gap: 8, paddingBottom: 12 },
   selectorButton: { width: 142, minHeight: 42, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, justifyContent: "center", flexDirection: "row", alignItems: "center" },
   selectorSelected: { backgroundColor: colors.green, borderColor: colors.green },

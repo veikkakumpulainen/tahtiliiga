@@ -60,7 +60,7 @@ export default function RegisterScreen() {
 
   return <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <ScreenHeader eyebrow="TÄHTILIIGA" title="Luo käyttäjätili" subtitle="Liity sarjaan ja löydä seuraava pelisi." />
+      <ScreenHeader />
 
       {([[
         "firstName", "ETUNIMI", "Matti",

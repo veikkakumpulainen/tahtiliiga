@@ -99,7 +99,7 @@ export default function ProfileForm() {
 
   return <View>
     {!emailVerified ? <View style={styles.warningBanner}>
-      <Text style={styles.warningBannerText}>Sähköposti vahvistamatta. Et voi ilmoittautua sarjoihin ennen kuin se on vahvistettu.</Text>
+      <Text style={styles.warningBannerText}>Sähköposti vahvistamatta. Et voi ilmoittautua liigoihin ennen kuin se on vahvistettu.</Text>
       <Pressable onPress={() => void sendVerification()} disabled={sendingVerification} style={styles.verifyButton}>
         {sendingVerification ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.verifyButtonText}>Lähetä vahvistuslinkki</Text>}
       </Pressable>

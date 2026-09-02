@@ -7,12 +7,14 @@ import { supabase } from "../../../lib/supabase";
 import { colors } from "../../../theme";
 
 const levels = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
+const categories = [["avoin", "Avoin"], ["mixty", "Mixty"]] as const;
 type Player = { id: string; first_name: string; last_name: string };
 
 export default function TeamRegistrationScreen() {
   const { id: leagueId } = useLocalSearchParams<{ id: string }>();
   const { session, loading: authLoading } = useAuth();
   const [teamName, setTeamName] = useState("");
+  const [category, setCategory] = useState<string>("");
   const [skillLevel, setSkillLevel] = useState<string>("");
   const [skillDescription, setSkillDescription] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -68,6 +70,10 @@ export default function TeamRegistrationScreen() {
       setError("Anna joukkueelle nimi.");
       return;
     }
+    if (!category) {
+      setError("Valitse sarja: Avoin vai Mixty.");
+      return;
+    }
     if (!skillLevel) {
       setError("Valitse joukkueen taitotaso.");
       return;
@@ -95,10 +101,11 @@ export default function TeamRegistrationScreen() {
       team_skill_description: skillDescription.trim(),
       target_captain_id: captainId,
       member_ids: memberIds,
+      target_category: category,
     });
     setSaving(false);
     if (membersError) {
-      setError(membersError.message.includes("Email not confirmed") ? "Vahvista sähköpostiosoitteesi ennen ilmoittautumista. Tarkista sähköpostisi." : `Joukkueen luonti epäonnistui: ${membersError.message}`);
+      setError(membersError.message.includes("Email not confirmed") ? "Vahvista sähköpostiosoitteesi ennen ilmoittautumista. Tarkista sähköpostisi." : membersError.message.includes("mies- että naispelaaja") ? membersError.message : `Joukkueen luonti epäonnistui: ${membersError.message}`);
       return;
     }
     router.replace("/(tabs)/home");
@@ -111,11 +118,11 @@ export default function TeamRegistrationScreen() {
   if (!session) {
     const redirect = `/league/${leagueId}/register`;
     return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-      <ScreenHeader eyebrow="TÄHTILIIGA" title="Ilmoittaudu joukkueella" subtitle="Kirjaudu sisään ilmoittautuaksesi" />
+      <ScreenHeader />
       <View style={styles.body}>
         <View style={styles.authPrompt}>
           <Text style={styles.authTitle}>Kirjaudu sisään ilmoittautuaksesi</Text>
-          <Text style={styles.authCopy}>Joukkueen ilmoittautuminen vaatii käyttäjätilin. Kirjaudu sisään tai luo tili jatkaaksesi tämän sarjan ilmoittautumista.</Text>
+          <Text style={styles.authCopy}>Joukkueen ilmoittautuminen vaatii käyttäjätilin. Kirjaudu sisään tai luo tili jatkaaksesi tämän liigan ilmoittautumista.</Text>
           <Link href={{ pathname: "/(auth)/login", params: { redirect } }} asChild><Pressable style={styles.button}><Text style={styles.buttonText}>Kirjaudu sisään</Text></Pressable></Link>
           <Link href={{ pathname: "/(auth)/register", params: { redirect } }} asChild><Pressable style={styles.authSecondary}><Text style={styles.authSecondaryText}>Luo tili</Text></Pressable></Link>
         </View>
@@ -125,10 +132,13 @@ export default function TeamRegistrationScreen() {
   }
 
   return <ScrollView style={styles.page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-    <ScreenHeader eyebrow="TÄHTILIIGA" title="Ilmoittaudu joukkueella" subtitle="Kokoa 2-3 pelaajan joukkue" />
+    <ScreenHeader />
     <View style={styles.body}>
       <Text style={styles.label}>JOUKKUEEN NIMI</Text>
       <TextInput value={teamName} onChangeText={setTeamName} placeholder="Esim. Padel Tähdet" placeholderTextColor={colors.muted} style={styles.input} />
+
+      <Text style={styles.label}>SARJA</Text>
+      <View style={styles.categories}>{categories.map(([value, label]) => <Pressable key={value} onPress={() => setCategory(value)} style={[styles.category, category === value && styles.categorySelected]}><Text style={[styles.categoryText, category === value && styles.categoryTextSelected]}>{label}</Text></Pressable>)}</View>
 
       <Text style={styles.label}>PELAAJIEN HAKU</Text>
       <Text style={styles.hint}>Lisätyt pelaajat saavat kutsun, jonka he hyväksyvät kotisivullaan.</Text>
@@ -155,5 +165,5 @@ export default function TeamRegistrationScreen() {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: colors.canvas }, content: { paddingBottom: 40 }, body: { padding: 22, paddingTop: 22 }, loading: { flex: 1, backgroundColor: colors.canvas, alignItems: "center", justifyContent: "center" }, authPrompt: { backgroundColor: colors.surface, borderRadius: 18, padding: 20, marginTop: 12 }, authTitle: { color: colors.ink, fontSize: 18, fontWeight: "800" }, authCopy: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 8 }, authSecondary: { alignItems: "center", padding: 15, marginTop: 10 }, authSecondaryText: { color: colors.green, fontWeight: "800" }, label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 17, marginBottom: 7 }, hint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginBottom: 8 }, input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, color: colors.ink, padding: 14 }, textarea: { minHeight: 88, textAlignVertical: "top" }, searchRow: { flexDirection: "row", gap: 8, alignItems: "center" }, searchInput: { flex: 1 }, result: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 10, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 7, padding: 12 }, resultText: { color: colors.ink, fontWeight: "700" }, resultAdd: { color: colors.green, fontSize: 12, fontWeight: "800" }, member: { color: colors.ink, backgroundColor: colors.surface, borderRadius: 10, fontSize: 13, fontWeight: "700", marginTop: 7, padding: 12 }, memberRow: { alignItems: "center", flexDirection: "row", gap: 8 }, remove: { color: colors.coral, fontSize: 12, fontWeight: "800" }, captains: { gap: 8 }, captain: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 12 }, captainSelected: { backgroundColor: colors.lime, borderColor: colors.greenBright }, captainText: { color: colors.ink, fontSize: 13, fontWeight: "700" }, captainTextSelected: { color: colors.green }, levels: { flexDirection: "row", flexWrap: "wrap", gap: 9 }, level: { width: 48, height: 42, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }, levelWide: { width: "auto" }, levelSelected: { backgroundColor: colors.lime, borderColor: colors.greenBright }, levelText: { color: colors.ink, fontWeight: "900" }, levelTextSmall: { fontSize: 12 }, levelTextSelected: { color: colors.green }, error: { color: colors.coral, fontSize: 12, lineHeight: 18, marginTop: 12 }, button: { backgroundColor: colors.green, borderRadius: 13, alignItems: "center", padding: 16, marginTop: 22 }, buttonText: { color: colors.surface, fontSize: 14, fontWeight: "800" }, cancel: { alignItems: "center", padding: 16 }, cancelText: { color: colors.muted, fontWeight: "800" },
+  page: { flex: 1, backgroundColor: colors.canvas }, content: { paddingBottom: 40 }, body: { padding: 22, paddingTop: 22 }, loading: { flex: 1, backgroundColor: colors.canvas, alignItems: "center", justifyContent: "center" }, authPrompt: { backgroundColor: colors.surface, borderRadius: 18, padding: 20, marginTop: 12 }, authTitle: { color: colors.ink, fontSize: 18, fontWeight: "800" }, authCopy: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 8 }, authSecondary: { alignItems: "center", padding: 15, marginTop: 10 }, authSecondaryText: { color: colors.green, fontWeight: "800" }, label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 17, marginBottom: 7 }, hint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginBottom: 8 }, input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, color: colors.ink, padding: 14 }, textarea: { minHeight: 88, textAlignVertical: "top" }, searchRow: { flexDirection: "row", gap: 8, alignItems: "center" }, searchInput: { flex: 1 }, result: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 10, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 7, padding: 12 }, resultText: { color: colors.ink, fontWeight: "700" }, resultAdd: { color: colors.green, fontSize: 12, fontWeight: "800" }, member: { color: colors.ink, backgroundColor: colors.surface, borderRadius: 10, fontSize: 13, fontWeight: "700", marginTop: 7, padding: 12 }, memberRow: { alignItems: "center", flexDirection: "row", gap: 8 }, remove: { color: colors.coral, fontSize: 12, fontWeight: "800" }, captains: { gap: 8 }, captain: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 12 }, captainSelected: { backgroundColor: colors.lime, borderColor: colors.greenBright }, captainText: { color: colors.ink, fontSize: 13, fontWeight: "700" }, captainTextSelected: { color: colors.green }, categories: { flexDirection: "row", gap: 9 }, category: { flex: 1, height: 42, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }, categorySelected: { backgroundColor: colors.lime, borderColor: colors.greenBright }, categoryText: { color: colors.ink, fontWeight: "900", fontSize: 13 }, categoryTextSelected: { color: colors.green }, levels: { flexDirection: "row", flexWrap: "wrap", gap: 9 }, level: { width: 48, height: 42, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }, levelWide: { width: "auto" }, levelSelected: { backgroundColor: colors.lime, borderColor: colors.greenBright }, levelText: { color: colors.ink, fontWeight: "900" }, levelTextSmall: { fontSize: 12 }, levelTextSelected: { color: colors.green }, error: { color: colors.coral, fontSize: 12, lineHeight: 18, marginTop: 12 }, button: { backgroundColor: colors.green, borderRadius: 13, alignItems: "center", padding: 16, marginTop: 22 }, buttonText: { color: colors.surface, fontSize: 14, fontWeight: "800" }, cancel: { alignItems: "center", padding: 16 }, cancelText: { color: colors.muted, fontWeight: "800" },
 });

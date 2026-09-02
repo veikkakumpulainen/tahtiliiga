@@ -39,7 +39,7 @@ export default function VerifyEmailScreen() {
       }
 
       setStatus("success");
-      setMessage("Sähköposti vahvistettu! Voit nyt ilmoittautua sarjoihin.");
+      setMessage("Sähköposti vahvistettu! Voit nyt ilmoittautua liigoihin.");
     };
     void run();
   }, []);

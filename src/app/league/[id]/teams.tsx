@@ -2,16 +2,16 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import ScreenHeader from "../../../components/ScreenHeader";
+import TeamRosterList, { groupRosterByTeam, type TeamRosterRow } from "../../../components/TeamRosterList";
 import { supabase } from "../../../lib/supabase";
 import { colors, shadow } from "../../../theme";
 
-type TeamRosterRow = { team_id: string; team_name: string; player_id: string; first_name: string; last_name: string; is_captain: boolean; status: "pending" | "active" };
-type Team = { id: string; name: string; players: TeamRosterRow[] };
+const categoryOrder = ["avoin", "mixty"] as const;
+const categoryLabels: Record<string, string> = { avoin: "Avoin", mixty: "Mixty" };
 
 export default function LeagueTeamsScreen() {
   const { id: leagueId } = useLocalSearchParams<{ id: string }>();
-  const [leagueName, setLeagueName] = useState("");
-  const [teams, setTeams] = useState<Team[]>([]);
+  const [rows, setRows] = useState<(TeamRosterRow & { category: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -21,41 +21,37 @@ export default function LeagueTeamsScreen() {
     const load = async () => {
       setLoading(true);
       setError("");
-      const [{ data: leagueData }, { data: rosterData, error: rosterError }] = await Promise.all([
-        client.from("leagues").select("name").eq("id", leagueId).maybeSingle(),
-        client.rpc("get_league_team_rosters", { target_league_id: leagueId }),
-      ]);
-      setLeagueName(leagueData?.name ?? "");
+      const { data: rosterData, error: rosterError } = await client.rpc("get_league_team_rosters", { target_league_id: leagueId });
       if (rosterError) {
         setError(`Joukkueiden lataus epäonnistui: ${rosterError.message}`);
         setLoading(false);
         return;
       }
-      const rows = (rosterData ?? []) as TeamRosterRow[];
-      const teamIds = [...new Set(rows.map((row) => row.team_id))];
-      setTeams(teamIds.map((teamId) => ({ id: teamId, name: rows.find((row) => row.team_id === teamId)?.team_name ?? "", players: rows.filter((row) => row.team_id === teamId) })));
+      setRows((rosterData ?? []) as (TeamRosterRow & { category: string })[]);
       setLoading(false);
     };
     void load();
   }, [leagueId]);
 
   return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-    <ScreenHeader eyebrow="TÄHTILIIGA" title="Ilmoittautuneet joukkueet" subtitle={leagueName} />
+    <ScreenHeader />
     <View style={styles.body}>
       <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹ Takaisin</Text></Pressable>
 
       {loading ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <View style={styles.empty}>
         <Text style={styles.emptyTitle}>Joukkueita ei voitu ladata.</Text>
         <Text style={styles.emptyText}>{error}</Text>
-      </View> : teams.length === 0 ? <View style={styles.empty}>
+      </View> : rows.length === 0 ? <View style={styles.empty}>
         <Text style={styles.emptyTitle}>Ei vielä ilmoittautuneita joukkueita.</Text>
         <Text style={styles.emptyText}>Ensimmäinen ilmoittautunut joukkue näkyy tässä.</Text>
-      </View> : teams.map((team) => <View key={team.id} style={styles.card}>
-        <Text style={styles.teamName}>{team.name}</Text>
-        <Text style={styles.players}>{team.players.map((player, index) => <Text key={player.player_id} style={player.status === "pending" ? styles.pendingPlayer : undefined}>
-          {index > 0 ? ", " : ""}{player.first_name} {player.last_name}{player.is_captain ? " (kapteeni)" : ""}{player.status === "pending" ? " (kutsu lähetetty)" : ""}
-        </Text>)}</Text>
-      </View>)}
+      </View> : categoryOrder.map((category) => {
+        const categoryTeams = groupRosterByTeam(rows.filter((row) => row.category === category));
+        if (categoryTeams.length === 0) return null;
+        return <View key={category} style={styles.categorySection}>
+          <Text style={styles.categoryTitle}>{categoryLabels[category] ?? category}</Text>
+          <TeamRosterList teams={categoryTeams} />
+        </View>;
+      })}
     </View>
   </ScrollView>;
 }
@@ -70,8 +66,6 @@ const styles = StyleSheet.create({
   empty: { backgroundColor: colors.surface, borderRadius: 18, padding: 20, marginTop: 12, ...shadow },
   emptyTitle: { color: colors.ink, fontWeight: "800", fontSize: 16 },
   emptyText: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 7 },
-  card: { backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginTop: 12, ...shadow },
-  teamName: { color: colors.ink, fontSize: 16, fontWeight: "800" },
-  players: { color: colors.muted, fontSize: 13, marginTop: 6, lineHeight: 19 },
-  pendingPlayer: { color: colors.muted, fontStyle: "italic", opacity: 0.6 },
+  categorySection: { marginTop: 20 },
+  categoryTitle: { color: colors.green, fontSize: 15, fontWeight: "900" },
 });

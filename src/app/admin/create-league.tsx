@@ -64,11 +64,11 @@ export default function CreateLeagueScreen() {
     }));
 
     if (!supabase || !session?.user.id || !name.trim() || !parsedStartDate || !parsedEndDate) {
-      setError("Anna sarjan nimi sekä alku- ja loppupäivä muodossa DD-MM-YYYY.");
+      setError("Anna liigan nimi sekä alku- ja loppupäivä muodossa DD-MM-YYYY.");
       return;
     }
     if (parsedEndDate < parsedStartDate) {
-      setError("Sarjan loppupäivä ei voi olla ennen aloituspäivää.");
+      setError("Liigan loppupäivä ei voi olla ennen aloituspäivää.");
       return;
     }
     if (deadline.trim() && !parsedDeadline) {
@@ -76,7 +76,7 @@ export default function CreateLeagueScreen() {
       return;
     }
     if (parsedDeadline && parsedDeadline > parsedStartDate) {
-      setError("Ilmoittautumisen deadline ei voi olla sarjan alkamispäivän jälkeen.");
+      setError("Ilmoittautumisen deadline ei voi olla liigan alkamispäivän jälkeen.");
       return;
     }
     if (publishMode === "later" && !parsedOpensDate) {
@@ -84,7 +84,7 @@ export default function CreateLeagueScreen() {
       return;
     }
     if (parsedOpensDate && parsedOpensDate > parsedStartDate) {
-      setError("Ilmoittautumisen avautuminen ei voi olla sarjan alkamispäivän jälkeen.");
+      setError("Ilmoittautumisen avautuminen ei voi olla liigan alkamispäivän jälkeen.");
       return;
     }
     if (parsedRounds.some((round) => !round.name || !round.startDate || !round.endDate)) {
@@ -92,7 +92,7 @@ export default function CreateLeagueScreen() {
       return;
     }
     if (parsedRounds.some((round) => round.endDate! < round.startDate! || round.startDate! < parsedStartDate || round.endDate! > parsedEndDate)) {
-      setError("Kierrosten päivämäärien tulee olla sarjan päivämäärien sisällä.");
+      setError("Kierrosten päivämäärien tulee olla liigan päivämäärien sisällä.");
       return;
     }
     if (new Set(parsedRounds.map((round) => round.name.toLocaleLowerCase())).size !== parsedRounds.length) {
@@ -116,7 +116,7 @@ export default function CreateLeagueScreen() {
     }).select("id").single();
     if (leagueError || !league) {
       setSaving(false);
-      setError(`Sarjan luonti epäonnistui: ${leagueError?.message ?? "Tuntematon virhe."}`);
+      setError(`Liigan luonti epäonnistui: ${leagueError?.message ?? "Tuntematon virhe."}`);
       return;
     }
 
@@ -129,7 +129,7 @@ export default function CreateLeagueScreen() {
     })));
     if (roundsError) {
       setSaving(false);
-      setError(`Sarja luotiin, mutta kierrosten tallennus epäonnistui: ${roundsError.message}`);
+      setError(`Liiga luotiin, mutta kierrosten tallennus epäonnistui: ${roundsError.message}`);
       return;
     }
 
@@ -137,7 +137,7 @@ export default function CreateLeagueScreen() {
       const { error: venuesError } = await supabase.from("league_venues").insert(venueNames.map((venueName) => ({ league_id: league.id, name: venueName })));
       setSaving(false);
       if (venuesError) {
-        setError(`Sarja luotiin, mutta pelipaikkojen tallennus epäonnistui: ${venuesError.message}`);
+        setError(`Liiga luotiin, mutta pelipaikkojen tallennus epäonnistui: ${venuesError.message}`);
         return;
       }
     } else {
@@ -147,14 +147,14 @@ export default function CreateLeagueScreen() {
   };
 
   return <ScrollView style={styles.page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-    <ScreenHeader eyebrow="TÄHTILIIGA" title="Uusi sarja" subtitle="Määritä sarjan ajankohta ja kierrokset" />
-    <Text style={styles.label}>SARJAN NIMI</Text>
+    <ScreenHeader />
+    <Text style={styles.label}>LIIGAN NIMI</Text>
     <TextInput value={name} onChangeText={setName} placeholder="Esim. Jyväskylä Syksy 2026" placeholderTextColor={colors.muted} style={styles.input} />
     <Text style={styles.label}>KAUPUNKI</Text>
     <TextInput value={city} onChangeText={setCity} placeholder="Esim. Jyväskylä" placeholderTextColor={colors.muted} style={styles.input} />
-    <Text style={styles.label}>SARJAN ALKAMISPÄIVÄ</Text>
+    <Text style={styles.label}>LIIGAN ALKAMISPÄIVÄ</Text>
     <TextInput value={startDate} onChangeText={setStartDate} placeholder="DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.input} />
-    <Text style={styles.label}>SARJAN LOPPUPÄIVÄ</Text>
+    <Text style={styles.label}>LIIGAN LOPPUPÄIVÄ</Text>
     <TextInput value={endDate} onChangeText={setEndDate} placeholder="DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.input} />
     <Text style={styles.label}>ILMOITTAUTUMISEN DEADLINE</Text>
     <TextInput value={deadline} onChangeText={setDeadline} placeholder="DD-MM-YYYY (valinnainen)" placeholderTextColor={colors.muted} style={styles.input} />
@@ -165,7 +165,7 @@ export default function CreateLeagueScreen() {
       <Pressable onPress={() => setPublishMode("later")} style={[styles.roundType, publishMode === "later" && styles.roundTypeSelected]}><Text style={[styles.roundTypeText, publishMode === "later" && styles.roundTypeTextSelected]}>Ilmoita etukäteen</Text></Pressable>
     </View>
     {publishMode === "later" ? <>
-      <Text style={styles.hint}>Sarja näkyy käyttäjille &ldquo;Ilmoittautuminen aukeaa&rdquo; -tietona valittuna päivänä. Ilmoittautuminen ei aukea automaattisesti — avaat sen itse sarjan hallinnasta, kun olet valmis.</Text>
+      <Text style={styles.hint}>Liiga näkyy käyttäjille &ldquo;Ilmoittautuminen aukeaa&rdquo; -tietona valittuna päivänä. Ilmoittautuminen ei aukea automaattisesti — avaat sen itse liigan hallinnasta, kun olet valmis.</Text>
       <Text style={styles.label}>ILMOITTAUTUMINEN AUKEAA</Text>
       <TextInput value={opensDate} onChangeText={setOpensDate} placeholder="DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.input} />
     </> : null}
@@ -190,7 +190,7 @@ export default function CreateLeagueScreen() {
     </View>)}
 
     {error ? <Text style={styles.error}>{error}</Text> : null}
-    <Pressable style={styles.button} onPress={() => void save()} disabled={saving}>{saving ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.buttonText}>Luo sarja</Text>}</Pressable>
+    <Pressable style={styles.button} onPress={() => void save()} disabled={saving}>{saving ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.buttonText}>Luo liiga</Text>}</Pressable>
     <Pressable onPress={() => router.back()} style={styles.cancel}><Text style={styles.cancelText}>Peruuta</Text></Pressable>
   </ScrollView>;
 }

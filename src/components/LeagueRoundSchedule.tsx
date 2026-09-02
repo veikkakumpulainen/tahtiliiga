@@ -37,7 +37,7 @@ export default function LeagueRoundSchedule({ leagueId }: { leagueId: string }) 
       <Pressable style={styles.backdrop} onPress={() => setVisible(false)}>
         <Pressable style={styles.modal} onPress={(event) => event.stopPropagation()}>
           <View style={styles.header}>
-            <View><Text style={styles.eyebrow}>SARJAN AIKATAULU</Text><Text style={styles.title}>Kierrokset</Text></View>
+            <View><Text style={styles.eyebrow}>LIIGAN AIKATAULU</Text><Text style={styles.title}>Kierrokset</Text></View>
             <Pressable onPress={() => setVisible(false)} accessibilityRole="button" accessibilityLabel="Sulje aikataulu"><Text style={styles.close}>×</Text></Pressable>
           </View>
           {loading ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <Text style={styles.error}>Aikataulua ei voitu ladata: {error}</Text> : rounds.length === 0 ? <Text style={styles.empty}>Kierrosten aikataulua ei ole vielä julkaistu.</Text> : rounds.map((round, index) => <View key={round.id} style={styles.round}>
