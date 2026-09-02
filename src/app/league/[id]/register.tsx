@@ -80,6 +80,10 @@ export default function TeamRegistrationScreen() {
       setError("Valitse joukkueelle kapteeni.");
       return;
     }
+    if (!skillDescription.trim()) {
+      setError("Kerro lyhyesti joukkueen taitotasosta.");
+      return;
+    }
 
     setSaving(true);
     setError("");
@@ -138,11 +142,11 @@ export default function TeamRegistrationScreen() {
       <Text style={styles.label}>KAPTEENI</Text>
       <View style={styles.captains}>{captainChoices.map((choice) => <Pressable key={choice.id} onPress={() => setCaptainId(choice.id)} style={[styles.captain, captainId === choice.id && styles.captainSelected]}><Text style={[styles.captainText, captainId === choice.id && styles.captainTextSelected]}>{choice.name}</Text></Pressable>)}</View>
 
-      <Text style={styles.label}>TAITOTASO</Text>
+      <Text style={styles.label}>JOUKKUEEN TAITOTASO</Text>
       <View style={styles.levels}>{levels.map((level) => <Pressable key={level} onPress={() => setSkillLevel(level)} style={[styles.level, level === "Aloittelija" && styles.levelWide, skillLevel === level && styles.levelSelected]}><Text style={[styles.levelText, level === "Aloittelija" && styles.levelTextSmall, skillLevel === level && styles.levelTextSelected]}>{level}</Text></Pressable>)}</View>
 
-      <Text style={styles.label}>LISÄTIETO TAITOTASOSTA (VALINNAINEN)</Text>
-      <TextInput value={skillDescription} onChangeText={setSkillDescription} multiline placeholder="Kertokaa lyhyesti joukkueen kokemuksesta..." placeholderTextColor={colors.muted} style={[styles.input, styles.textarea]} />
+      <Text style={styles.label}>LISÄTIETOA TAITOTASOSTA</Text>
+      <TextInput value={skillDescription} onChangeText={setSkillDescription} multiline placeholder="Kerro lyhyesti joukkueen taitotasosta..." placeholderTextColor={colors.muted} style={[styles.input, styles.textarea]} />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Pressable style={styles.button} onPress={() => void registerTeam()} disabled={saving}>{saving ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.buttonText}>Lähetä ilmoittautuminen</Text>}</Pressable>
       <Pressable onPress={() => router.back()} style={styles.cancel} disabled={saving}><Text style={styles.cancelText}>Peruuta</Text></Pressable>

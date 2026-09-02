@@ -17,7 +17,7 @@ export default function RegisterScreen() {
   const update = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
 
   const register = async () => {
-    if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.password) {
+    if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.phone.trim() || !form.skillLevel || !form.password) {
       setError("Täytä kaikki pakolliset kentät.");
       return;
     }
@@ -69,13 +69,13 @@ export default function RegisterScreen() {
       ], [
         "email", "SÄHKÖPOSTI", "sinä@esimerkki.fi",
       ], [
-        "phone", "PUHELIN (VALINNAINEN)", "+358 40 123 4567",
+        "phone", "PUHELIN", "+358 40 123 4567",
       ]] as const).map(([key, label, placeholder]) => <View key={key}>
         <Text style={styles.label}>{label}</Text>
         <TextInput value={form[key]} onChangeText={(value) => update(key, value)} placeholder={placeholder} placeholderTextColor={colors.muted} autoCapitalize={key === "email" ? "none" : "words"} keyboardType={key === "email" ? "email-address" : key === "phone" ? "phone-pad" : "default"} style={styles.input} />
       </View>)}
 
-      <Text style={styles.label}>TAITOTASO (VALINNAINEN)</Text>
+      <Text style={styles.label}>TAITOTASO</Text>
       <View style={styles.options}>
         {skillCategories.map(([value, label]) => <Pressable key={value} onPress={() => setForm((current) => ({ ...current, skillCategory: current.skillCategory === value ? "" : value, skillLevel: "" }))} style={[styles.option, form.skillCategory === value && styles.optionSelected]}>
           <Text style={[styles.optionText, form.skillCategory === value && styles.optionTextSelected]}>{label}</Text>

@@ -10,7 +10,7 @@ const skillLevelLetters = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
 
 type ModalType = "terms" | "privacy" | null;
 
-export default function RegisterForm({ redirect, onRegistered }: { redirect?: string; onRegistered?: () => void }) {
+export default function RegisterForm({ redirect, onRegistered, onResultChange }: { redirect?: string; onRegistered?: () => void; onResultChange?: (result: "session" | "pending" | null) => void }) {
   const { width } = useWindowDimensions();
   const isMobile = width < MOBILE_BREAKPOINT;
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", password: "", confirmation: "", skillCategory: "", skillLevel: "", termsPrivacyAccepted: false, marketingAccepted: false });
@@ -22,7 +22,7 @@ export default function RegisterForm({ redirect, onRegistered }: { redirect?: st
   const update = <K extends keyof typeof form>(key: K, value: typeof form[K]) => setForm((current) => ({ ...current, [key]: value }));
 
   const register = async () => {
-    if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.password) {
+    if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.phone.trim() || !form.skillLevel || !form.password) {
       setError("Täytä kaikki pakolliset kentät.");
       return;
     }
@@ -68,8 +68,10 @@ export default function RegisterForm({ redirect, onRegistered }: { redirect?: st
       const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/verify-email` : undefined;
       void supabase.auth.signInWithOtp({ email: form.email.trim(), options: { emailRedirectTo: redirectTo, shouldCreateUser: false } });
       setResult("session");
+      if (onResultChange) onResultChange("session");
     } else {
       setResult("pending");
+      if (onResultChange) onResultChange("pending");
     }
   };
 
@@ -100,10 +102,10 @@ export default function RegisterForm({ redirect, onRegistered }: { redirect?: st
     <Text style={styles.label}>SÄHKÖPOSTI</Text>
     <TextInput value={form.email} onChangeText={(value) => update("email", value)} autoCapitalize="none" keyboardType="email-address" placeholder="sinä@esimerkki.fi" placeholderTextColor={colors.muted} style={styles.input} />
 
-    <Text style={styles.label}>PUHELIN (VALINNAINEN)</Text>
+    <Text style={styles.label}>PUHELIN</Text>
     <TextInput value={form.phone} onChangeText={(value) => update("phone", value)} keyboardType="phone-pad" placeholder="+358 40 123 4567" placeholderTextColor={colors.muted} style={styles.input} />
 
-    <Text style={styles.label}>TAITOTASO (VALINNAINEN)</Text>
+    <Text style={styles.label}>TAITOTASO</Text>
     <View style={styles.options}>
       {skillCategories.map(([value, label]) => <Pressable key={value} onPress={() => setForm((current) => ({ ...current, skillCategory: current.skillCategory === value ? "" : value, skillLevel: "" }))} style={[styles.option, form.skillCategory === value && styles.optionSelected]}>
         <Text style={[styles.optionText, form.skillCategory === value && styles.optionTextSelected]}>{label}</Text>
