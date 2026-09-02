@@ -6,6 +6,7 @@
     "@expo/ui": "~57.0.15",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.112.4",
+    "@vercel/analytics": "^2.0.1",
     "dotenv": "^17.4.2",
     "expo": "~57.0.19",
     "expo-constants": "~57.0.14",
