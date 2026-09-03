@@ -54,6 +54,7 @@ export default function RegisterForm({ redirect, onRegistered, onResultChange }:
           last_name: form.lastName.trim(),
           phone: form.phone.trim(),
           skill_level: form.skillLevel || null,
+          gender: form.skillCategory === "Miesten" ? "male" : form.skillCategory === "Naisten" ? "female" : null,
           marketing_accepted: form.marketingAccepted,
         },
       },

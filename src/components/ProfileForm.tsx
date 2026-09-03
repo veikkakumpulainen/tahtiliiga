@@ -10,6 +10,7 @@ type Profile = {
   email: string;
   phone: string | null;
   skill_level: string | null;
+  gender: string | null;
   email_verified_at: string | null;
   player_code: number;
 };
@@ -38,7 +39,7 @@ export default function ProfileForm() {
     const client = supabase;
     const loadProfile = async () => {
       setLoading(true);
-      const { data, error } = await client.from("profiles").select("first_name,last_name,email,phone,skill_level,email_verified_at,player_code").eq("id", session.user.id).maybeSingle();
+      const { data, error } = await client.from("profiles").select("first_name,last_name,email,phone,skill_level,gender,email_verified_at,player_code").eq("id", session.user.id).maybeSingle();
       if (error || !data) {
         setMessage(error?.message ?? "Profiilia ei löytynyt.");
       } else {
@@ -64,11 +65,13 @@ export default function ProfileForm() {
     }
     setSaving(true);
     setMessage("");
+    const inferredGender = skillCategory === "Miesten" ? "male" : skillCategory === "Naisten" ? "female" : null;
     const values = {
       first_name: firstName.trim(),
       last_name: lastName.trim(),
       phone: phone.trim() || null,
       skill_level: skillLevel,
+      gender: profile?.gender ?? inferredGender,
     };
     const { error } = await supabase.from("profiles").update(values).eq("id", session.user.id);
     setSaving(false);
