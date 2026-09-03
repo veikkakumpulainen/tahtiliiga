@@ -123,7 +123,7 @@ export default function ProfileForm() {
     <Text style={styles.label}>PUHELIN</Text>
     <TextInput value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+358 40 123 4567" placeholderTextColor={colors.muted} style={styles.input} />
 
-    <Text style={styles.label}>TAITOTASO</Text>
+    <Text style={styles.label}>TAITOTASO (suuntaa antava)</Text>
     <View style={styles.options}>
       {skillCategories.map(([value, label]) => <Pressable key={value} onPress={() => { const next = skillCategory === value ? "" : value; setSkillCategory(next); setSkillLevel(null); }} style={[styles.option, skillCategory === value && styles.optionSelected]}>
         <Text style={[styles.optionText, skillCategory === value && styles.optionTextSelected]}>{label}</Text>

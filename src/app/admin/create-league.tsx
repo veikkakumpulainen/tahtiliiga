@@ -21,6 +21,7 @@ export default function CreateLeagueScreen() {
   const [endDate, setEndDate] = useState("");
   const [deadline, setDeadline] = useState("");
   const [publishMode, setPublishMode] = useState<"now" | "later">("now");
+  const [opensKnown, setOpensKnown] = useState(true);
   const [opensDate, setOpensDate] = useState("");
   const [rounds, setRounds] = useState<RoundForm[]>([{ name: "", startDate: "", endDate: "", roundType: "regular" }]);
   const [venues, setVenues] = useState<string[]>([""]);
@@ -55,7 +56,7 @@ export default function CreateLeagueScreen() {
     const parsedStartDate = parseFinnishDate(startDate);
     const parsedEndDate = parseFinnishDate(endDate);
     const parsedDeadline = deadline.trim() ? parseFinnishDate(deadline) : null;
-    const parsedOpensDate = publishMode === "later" ? parseFinnishDate(opensDate) : null;
+    const parsedOpensDate = publishMode === "later" && opensKnown ? parseFinnishDate(opensDate) : null;
     const parsedRounds = rounds.map((round) => ({
       name: round.name.trim(),
       startDate: parseFinnishDate(round.startDate),
@@ -79,8 +80,8 @@ export default function CreateLeagueScreen() {
       setError("Ilmoittautumisen deadline ei voi olla liigan alkamispäivän jälkeen.");
       return;
     }
-    if (publishMode === "later" && !parsedOpensDate) {
-      setError("Anna päivä, jolloin ilmoittautuminen aukeaa, muodossa DD-MM-YYYY.");
+    if (publishMode === "later" && opensKnown && !parsedOpensDate) {
+      setError("Anna päivä, jolloin ilmoittautuminen aukeaa, tai valitse \"Ei vielä tiedossa\".");
       return;
     }
     if (parsedOpensDate && parsedOpensDate > parsedStartDate) {
@@ -165,9 +166,16 @@ export default function CreateLeagueScreen() {
       <Pressable onPress={() => setPublishMode("later")} style={[styles.roundType, publishMode === "later" && styles.roundTypeSelected]}><Text style={[styles.roundTypeText, publishMode === "later" && styles.roundTypeTextSelected]}>Ilmoita etukäteen</Text></Pressable>
     </View>
     {publishMode === "later" ? <>
-      <Text style={styles.hint}>Liiga näkyy käyttäjille &ldquo;Ilmoittautuminen aukeaa&rdquo; -tietona valittuna päivänä. Ilmoittautuminen ei aukea automaattisesti — avaat sen itse liigan hallinnasta, kun olet valmis.</Text>
-      <Text style={styles.label}>ILMOITTAUTUMINEN AUKEAA</Text>
-      <TextInput value={opensDate} onChangeText={setOpensDate} placeholder="DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.input} />
+      <Text style={styles.hint}>Ilmoittautuminen ei aukea automaattisesti — avaat sen itse liigan hallinnasta, kun olet valmis.</Text>
+      <View style={styles.publishRow}>
+        <Pressable onPress={() => setOpensKnown(true)} style={[styles.roundType, opensKnown && styles.roundTypeSelected]}><Text style={[styles.roundTypeText, opensKnown && styles.roundTypeTextSelected]}>Päivämäärä tiedossa</Text></Pressable>
+        <Pressable onPress={() => setOpensKnown(false)} style={[styles.roundType, !opensKnown && styles.roundTypeSelected]}><Text style={[styles.roundTypeText, !opensKnown && styles.roundTypeTextSelected]}>Ei vielä tiedossa</Text></Pressable>
+      </View>
+      {opensKnown ? <>
+        <Text style={styles.hint}>Liiga näkyy käyttäjille &ldquo;Ilmoittautuminen aukeaa&rdquo; -tietona valittuna päivänä.</Text>
+        <Text style={styles.label}>ILMOITTAUTUMINEN AUKEAA</Text>
+        <TextInput value={opensDate} onChangeText={setOpensDate} placeholder="DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.input} />
+      </> : <Text style={styles.hint}>Liiga näkyy käyttäjille tulevana, ja ilmoittautumisen avautumispäivä ilmoitetaan pian -tekstillä ilman tarkkaa päivää.</Text>}
     </> : null}
 
     <View style={styles.roundHeading}><Text style={styles.roundTitle}>Kierrokset</Text><Pressable onPress={addRound} style={styles.addRound} accessibilityRole="button" accessibilityLabel="Lisää kierros"><Text style={styles.addRoundText}>+</Text></Pressable></View>

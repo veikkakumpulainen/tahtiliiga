@@ -105,7 +105,7 @@ export default function RegisterForm({ redirect, onRegistered, onResultChange }:
     <Text style={styles.label}>PUHELIN</Text>
     <TextInput value={form.phone} onChangeText={(value) => update("phone", value)} keyboardType="phone-pad" placeholder="+358 40 123 4567" placeholderTextColor={colors.muted} style={styles.input} />
 
-    <Text style={styles.label}>TAITOTASO</Text>
+    <Text style={styles.label}>TAITOTASO (suuntaa antava)</Text>
     <View style={styles.options}>
       {skillCategories.map(([value, label]) => <Pressable key={value} onPress={() => setForm((current) => ({ ...current, skillCategory: current.skillCategory === value ? "" : value, skillLevel: "" }))} style={[styles.option, form.skillCategory === value && styles.optionSelected]}>
         <Text style={[styles.optionText, form.skillCategory === value && styles.optionTextSelected]}>{label}</Text>

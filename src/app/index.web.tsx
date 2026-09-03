@@ -262,7 +262,7 @@ export default function WebHomeScreen() {
           <Text style={styles.categoryTextUpcoming}>Padel - Avoin ja Mixty</Text>
           <View style={[styles.detailsRow, styles.detailsRowUpcoming, isMobile && styles.detailsRowMobile]}><View><Text style={[styles.detailLabel, styles.detailLabelUpcoming]}>LIIGA ALKAA</Text><Text style={[styles.detailValue, styles.detailValueUpcoming]}>{formatFinnishDate(upcomingLeague.start_date)}</Text></View><View><Text style={[styles.detailLabel, styles.detailLabelUpcoming]}>LIIGA LOPPUU</Text><Text style={[styles.detailValue, styles.detailValueUpcoming]}>{upcomingLeague.end_date ? formatFinnishDate(upcomingLeague.end_date) : "Ei määritetty"}</Text></View></View>
           <Pressable disabled style={[styles.joinButton, styles.joinButtonUpcoming, isMobile && styles.joinButtonMobile]}><Text style={[styles.joinText, styles.joinTextUpcoming]}>{upcomingLeague.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(upcomingLeague.registration_opens_at)}` : "Ilmoittautumisen avautumispäivä ilmoitetaan pian"}</Text></Pressable>
-        </View></> : <View style={styles.empty}><Text style={styles.emptyTitle}>Avoimia sarjoja ei ole juuri nyt.</Text><Text style={styles.emptyCopy}>Uudet sarjat näkyvät tässä, kun ilmoittautuminen avataan.</Text></View>}
+        </View></> : <><View style={styles.leagueHeading} /><View style={styles.empty}><Text style={styles.emptyTitle}>Avoimia sarjoja ei ole juuri nyt.</Text><Text style={styles.emptyCopy}>Uudet sarjat näkyvät tässä, kun ilmoittautuminen avataan.</Text></View></>}
       </View>
       <View style={[styles.teamsColumn, isMobile && styles.teamsColumnMobile]}>
         {league ? <>
