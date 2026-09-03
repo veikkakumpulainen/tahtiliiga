@@ -175,7 +175,7 @@ export default function CreateLeagueScreen() {
         <Text style={styles.hint}>Liiga näkyy käyttäjille &ldquo;Ilmoittautuminen aukeaa&rdquo; -tietona valittuna päivänä.</Text>
         <Text style={styles.label}>ILMOITTAUTUMINEN AUKEAA</Text>
         <TextInput value={opensDate} onChangeText={setOpensDate} placeholder="DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.input} />
-      </> : <Text style={styles.hint}>Liiga näkyy käyttäjille tulevana, ja ilmoittautumisen avautumispäivä ilmoitetaan pian -tekstillä ilman tarkkaa päivää.</Text>}
+      </> : <Text style={styles.hint}>Liiga näkyy käyttäjille tulevana, ja "Ilmoittautuminen avautuu pian" -tekstillä ilman tarkkaa päivää.</Text>}
     </> : null}
 
     <View style={styles.roundHeading}><Text style={styles.roundTitle}>Kierrokset</Text><Pressable onPress={addRound} style={styles.addRound} accessibilityRole="button" accessibilityLabel="Lisää kierros"><Text style={styles.addRoundText}>+</Text></Pressable></View>

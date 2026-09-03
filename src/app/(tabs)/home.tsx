@@ -196,7 +196,7 @@ export default function HomeScreen() {
             <View><Text style={styles.cardLabel}>JOUKKUEITA</Text><Text style={styles.season}>{openLeagueTeamCount}</Text></View>
           </View>
           <Pressable style={styles.browseButton} onPress={() => router.push(`/league/${openLeague.id}/register` as never)}><Text style={styles.browseText}>Ilmoittaudu joukkueella</Text><Text style={styles.arrow}>→</Text></Pressable>
-        </> : <Text style={styles.cardNote}>{openLeague.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(openLeague.registration_opens_at)}.` : "Ilmoittautumisen avautumispäivä ilmoitetaan pian."}</Text>}
+        </> : <Text style={styles.cardNote}>{openLeague.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(openLeague.registration_opens_at)}.` : "Ilmoittautuminen avautuu pian."}</Text>}
       </View> : <Text style={styles.emptyCopy}>Uudet liigat ilmestyvät tähän, kun ilmoittautuminen avataan.</Text>}
     </View> : teams.length === 0 ? null : <>
       <View style={styles.sectionHeading}><Text style={styles.title}>Omat liigat</Text></View>
