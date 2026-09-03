@@ -29,7 +29,7 @@ export default function TeamRegistrationScreen() {
     if (!supabase) return;
     setSearching(true);
     setError("");
-    const { data, error: searchError } = await supabase.rpc("search_profiles_by_name", { search_query: query, target_league_id: leagueId });
+    const { data, error: searchError } = await supabase.rpc("search_profiles_by_name", { search_query: query, target_league_id: leagueId, target_category: category });
     setSearching(false);
     if (searchError) {
       setError(`Pelaajahaku epäonnistui: ${searchError.message}`);
