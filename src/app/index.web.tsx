@@ -24,7 +24,7 @@ const categories = [["avoin", "Avoin"], ["mixty", "Mixty"]] as const;
 type InfoModal = "about" | "league" | "vision";
 type Invitation = { team_id: string; team_name: string; league_id: string; league_name: string; captain_name: string | null; league_start_date: string; league_end_date: string | null };
 
-const infoModalTitles: Record<InfoModal, string> = { about: "Kaikki tähtiliigasta", league: "Nykyinen liiga", vision: "Visio" };
+const infoModalTitles: Record<InfoModal, string> = { about: "Kaikki tähtiliigasta", league: "Liigakonsepti + säännöt", vision: "Yhteyttä" };
 
 const PRETTY_HOSTNAMES: Record<string, string> = { "xn--thtiliiga-v2a.fi": "tähtiliiga.fi", "www.xn--thtiliiga-v2a.fi": "www.tähtiliiga.fi" };
 
@@ -312,7 +312,7 @@ export default function WebHomeScreen() {
         </Pressable>
         <Pressable onPress={() => setInfoModal("vision")} style={styles.footerButton}>
           <View style={styles.footerButtonIcon}><View style={styles.messageIcon}><View style={styles.messageIconTail} /></View></View>
-          <Text style={styles.footerButtonLabel}>Kysyttävää?</Text>
+          <Text style={styles.footerButtonLabel}>Yhteyttä</Text>
         </Pressable>
       </View>
     </View>
@@ -378,12 +378,200 @@ export default function WebHomeScreen() {
           <Text style={styles.modalTitle}>{infoModal ? infoModalTitles[infoModal] : ""}</Text>
           <Pressable onPress={() => setInfoModal(null)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.modalClose}>×</Text></Pressable>
         </View>
-        <Text style={styles.placeholderCopy}>Sisältö tulossa pian.</Text>
+        {infoModal === "about" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><AllAboutContent onContactPress={() => setInfoModal("vision")} /></ScrollView> : infoModal === "league" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><LeagueRulesContent /></ScrollView> : infoModal === "vision" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><ContactContent /></ScrollView> : <Text style={styles.placeholderCopy}>Sisältö tulossa pian.</Text>}
       </Pressable>
     </Pressable>
   </Modal>
   <style>{`#teamScrollList{scrollbar-width:thin;scrollbar-color:${colors.green} ${colors.surface};}#teamScrollList::-webkit-scrollbar{width:10px;}#teamScrollList::-webkit-scrollbar-track{background:${colors.surface};}#teamScrollList::-webkit-scrollbar-thumb{background:${colors.green};border-radius:5px;border:2px solid ${colors.surface};}#teamScrollList::-webkit-scrollbar-thumb:hover{background:${colors.greenBright};}`}</style>
   </>;
+}
+
+function AllAboutContent({ onContactPress }: { onContactPress: () => void }) {
+  return <View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalText}>Tähtiliiga on uudenlainen liigakonsepti. Se on rakennettu kaikille padelisteille, taitotasosta riippumatta.</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalHeading}>Perimmäinen ajatus</Text>
+      <Text style={styles.modalText}>Tähtiliigan perimmäinen ajatus on yksinkertainen: haluamme mahdollistaa mahdollisimman monelle kaupungin pelaajalle tasaisia, mielekkäitä ja sopivan kilpailullisen vivahteen omaavia matseja arkeen. Meidän tavoite on tehdä mukaan ilmoittautumiseen mahdollisimman pieni kynnys, jos siis epäröit suuresti, olemme epäonnistuneet!</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Sinun ei todellakaan tarvitse olla kilpapelaaja osallistuaksesi tähtiliigaan. Riittää, että haluat pelata, kehittyä ja saada tavallisiin padelpeleihin hieman enemmän panosta.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Tähtiliigan konsepti on hiottu niin, että joukkueet sijoitetaan heti ensimmäiselle kierrokselle mahdollisimman tasaväkisiin lohkoihin eli jokainen pelaa täällä omalla tasollaan oman tasoisia vastaan.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Ensimmäisellä kierroksella joukkueet jaetaan teidän joukkueen pelitasoa vastaavaan lohkoon. Tämän jälkeen joukkueet liikkuvat lohkoissa menestyksensä mukaan. Lohkot elävät suuresti jokaisella kierroksella, joten vaihtelevaisuus ja uusien pelituttavuuksien haastaminen on taattua.</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalHeading}>Jokaisella on mahdollisuus voittaa</Text>
+      <Text style={styles.modalText}>Tähtiliigan yksi tärkeimmistä tavoitteista on tehdä kilpailusta aidosti tasaväkistä.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Koska joukkueet kilpailevat kierroksittain oman tasoisissa lohkoissaan, jokainen kerää pisteitä oman tasoisia vastustajia vastaan. Liigan pistejärjestelmä ja lohkojen eläminen on rakennettu juuri tätä varten.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Tähtiliigassa sinun ei tarvitse olla paras maailmassa. Sinun tarvitsee olla paras omalla tasollasi.</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalHeading}>Tähtiliigan suurempi tavoite</Text>
+      <Text style={styles.modalText}>Tähtiliiga ei ole meille yksittäinen padel-liiga. Haluamme kehittää suomalaista padelkulttuuria ja niin tulemme myös tekemään!</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Haluamme antaa mahdollisimman monelle padelistille mahdollisuuden kokea kilpailullisen pelaamisen parhaat puolet ilman korkeaa kynnystä osallistua. Omat padelkaverit mukaan ja eikun menoksi!</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Samalla haluamme rakentaa mallin, jossa liigatoiminta on pelaajille helppoa, joustavaa ja mielekästä, mutta samalla palkitsee kaikkia kaupungin padeltoimijoita. Jokainen voi nopeasti laskea mitä esimerkiksi 150 peliä/ kierros mylläävä tähtiliiga tuo lisätuloja kaupungin padeltoimijoille joka kuukausi!</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Haluamme nähdä Suomessa enemmän pelaajia, enemmän pelejä, enemmän yhteisöä ja enemmän kilpailullista padelia. Haluamme viedä hommaa omalta osaltamme eteenpäin ja teemmekin kaikki valintamme se edellä.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Jos luet tätä viestiä niin tähtiliiga on mitä suuremmin todennäköisyyksin tehty juuri sinun kaltaisia padelisteja varten ja teitä ajatellen. Osallistumalla kaupunkisi liigaan tuet ja kannat oman kortesi kekoon myös yllä mainittujen yhteisten isojen tavoitteiden eteen.</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalHeading}>Eetun oma visio liigan takaa</Text>
+      <Text style={styles.modalText}>Tavoitteena ei ole tehdä padelista liian vakavaa. Jäin padelkoukkuun heti ensikosketuksesta 3v sitten ja nautin sen pelaamisesta edelleen. Olen saanut rutkasti uusia ystäviä ja päässyt mukaan mitä mahtavimpaan yhteisöön. Minun mielestä siitä urheilussa on kyse.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Pelasin paljon, usein samoissa porukoissa ja huomasin sen toistuvan useimmilla pelureilla. Vakkarivuorot, valmennukset ja kisat on tosi kiva lisä normi pelien ympärille, mutta uskon että tosi moni kaipaa pientä porkkanaa tai pientä hyvän maun kisailua silloin tällöin niiden lisäksi. Tai ainakin minä kaipaan. Siitä on muodostunut muutaman mutkan kautta TÄHTILIIGA.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Tavoitteena siis on tuoda pelaajille tavalliseen padelarkeen pieni kilpailullinen vivahde.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Tervetuloa mukaan! Tähtiliiga on kaikille, olit sitten ensimmäisiä kuukausiasi pelaava harrastaja tai aktiivisesti kilpaileva oman elämän Augustin Tapia!</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalFootnote}>Ps. 10 pistettä ja tähtiä jos jaksoit lukea tänne asti</Text>
+      <Text style={[styles.modalFootnote, styles.modalParagraphSpacing]}>Pps. Jos emme ole julkaisseet liigaa kaupunkiisi, mutta tätä juuri kaupunkisi padelyhteisö kaipaisi, <Text onPress={onContactPress} style={styles.footnoteLink}>ota meihin yhteyttä</Text>!</Text>
+    </View>
+  </View>;
+}
+
+function LeagueRulesContent() {
+  return <View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalHeading}>Näin Tähtiliiga toimii</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalSubheading}>Tähtiliigan ABC</Text>
+      <Text style={styles.modalBullet}>• Nappaa pelikaverisi mukaan ja ilmottautukaa liigaan. Joukkuekoko 2-3 pelaajaa</Text>
+      <Text style={styles.modalBullet}>• Liigan ensimmäiset lohkot luodaan järjestäjien puolesta ja liiga starttaa ilmoitettuna ajankohtana</Text>
+      <Text style={styles.modalBullet}>• Pelaatte jokaisella kierroksella yhden pelin jokaista lohkonne vastustajaa vastaan. Joka kierros tulee siis 3 peliä. Kierros kestää 26pv joten aikaa pitäisi olla hyvin</Text>
+      <Text style={styles.modalBullet}>• Sovitte pelien ajankohdat sekä paikat lohkonne ryhmässä. Tähtiliiga sovellus luo teille automaattisesti lohkonne ryhmän missä voitte jutella. Tällä hetkellä käytössä Whatsapp, jossa lohkojen ryhmiä operoi manuaalisesti liigan vetäjät</Text>
+      <Text style={styles.modalBullet}>• Käytte pelaamassa pelin, merkkaatte tuloksen joko tähtiliigan sovellukseen / padelutioniin ja thats it</Text>
+      <Text style={styles.modalBullet}>• Jos olette kierroksen jälkeen lohkonne toinen tai kolmas, osallistutte karsintakierrokselle. (tarkemmat ohjeet alla)</Text>
+      <Text style={styles.modalBullet}>• eikun ilmoittautuminen sisään</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalHeading}>Tässä koko liigan säännöt avattuna</Text>
+      <Text style={styles.modalText}>Tähtiliiga pelataan joukkuepohjaisena lohkosarjana.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Joukkueet sijoitetaan ensimmäisellä kierroksella mahdollisimman tasaisiin lohkoihin pelitason perusteella. Tämän jälkeen lohkot elävät joukkueiden menestyksen mukaan.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Jokaisella kierroksella joukkueet pelaavat oman lohkonsa muita joukkueita vastaan.</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalSubheading}>Joukkueet</Text>
+      <Text style={styles.modalBullet}>• Joukkueessa on vähintään 2 pelaajaa ja enintään 3 pelaajaa.</Text>
+      <Text style={styles.modalBullet}>• Jokaisella joukkueella on yksi kapteeni. (pääsette valitsemaan automaattisesti tähtiliigan sovelluksesta)</Text>
+      <Text style={styles.modalBullet}>• Kapteeni vastaa joukkueen yhteydenpidosta ja otteluiden sopimisesta. (tähtiliiga luo automaattisesti lohkon kapteeneille chätit)</Text>
+      <Text style={styles.modalBullet}>• Joukkue saa valita kuhunkin otteluun pelaajat vapaasti omien aikataulujensa mukaan. (jos joukkueesa 3 pelaajaa)</Text>
+      <Text style={styles.modalBullet}>• Jos joukkueessa on 3 pelaajaa, jokaisen pelaajan tulee pelata vähintään 3 ottelua liigan aikana.</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalSubheading}>Lohkot</Text>
+      <Text style={styles.modalText}>Jokaisessa lohkossa on 4 joukkuetta.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Ensimmäisen kierroksen lohkojaon tekee Tähtiliigan järjestäjä yhdessä raadin kanssa. Tavoitteena on muodostaa mahdollisimman tasaiset lohkot.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Kierroksen jälkeen</Text>
+      <Text style={styles.modalBullet}>1. sija: nousee suoraan ylempään lohkoon</Text>
+      <Text style={styles.modalBullet}>4. sija: putoaa suoraan alempaan lohkoon</Text>
+      <Text style={styles.modalBullet}>2. sija: pelaa karsintaottelun ylemmän lohkon 3. sijaa vastaan</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Karsintaottelun voittaja pelaa seuraavalla kierroksella ylemmässä lohkossa.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Näin lohkot elävät jatkuvasti ja joukkueet löytävät pitkällä aikavälillä mahdollisimman hyvin oman pelitasonsa.</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalSubheading}>Karsintaottelut</Text>
+      <Text style={styles.modalText}>Karsintaottelut pelataan erillisellä karsintakierroksella normi kierroksen perään. Karsintakierros on aina vakio 7pv jonka aikana peli tulee pelata.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Kapteenien tulee sopia ottelu ja huolehtia siitä, että se pelataan määräaikaan mennessä.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Karsintaottelussa ottelua ei tarvitse pelata kolmatta erää, mikäli toinen joukkue voittaa kaksi ensimmäistä erää. Karsintaottelussa ei jaeta siis pisteitä normi kierroksen pelien tapaan. Haetaan vain voittaja.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Mikäli ottelua ei saada pelattua, Tähtiliigan järjestäjä ja raati ratkaisevat tilanteen tapauskohtaisesti.</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalSubheading}>Ottelusäännöt</Text>
+      <Text style={styles.modalText}>Ottelu koostuu kolmesta erästä.</Text>
+      <Text style={[styles.modalBullet, styles.modalParagraphSpacing]}>• Käytössä on Golden Point -sääntö.</Text>
+      <Text style={styles.modalBullet}>• Kaikki kolme erää pelataan normaalisti, vaikka ottelun voittaja olisi ratkennut jo kahdessa erässä.</Text>
+      <Text style={styles.modalBullet}>• Mikäli aikaa on jäljellä alle 25 minuuttia, kolmas erä pelataan lyhyenä eränä tilanteesta 2–2.</Text>
+      <Text style={styles.modalBullet}>• Jos kenttävuoro päättyy kesken ottelun, johdossa oleva joukkue voittaa ottelun.</Text>
+      <Text style={styles.modalBullet}>• Otteluun suositellaan vähintään 90 minuutin kenttävarausta. 120 minuuttia on suositeltava.</Text>
+      <Text style={[styles.modalSubheading, styles.modalParagraphSpacing]}>Pisteytys</Text>
+      <Text style={styles.modalText}>Jokaisesta voitetusta erästä saa 1 pisteen.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Lisäksi:</Text>
+      <Text style={styles.modalBullet}>• Ottelun voittaja: +2 pistettä</Text>
+      <Text style={styles.modalBullet}>• Ottelun häviäjä: +1 piste</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Näin jokaisessa ottelussa on jaossa yhteensä 6 pistettä.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Lisäksi joukkue voi saada kierroksen lopputuloksesta nousuun tai karsintaan liittyviä lisäpisteitä.</Text>
+      <Text style={styles.modalBullet}>• Suora nousu +2p</Text>
+      <Text style={styles.modalBullet}>• Karsintapelin voitto +1p</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalSubheading}>Varapelaajasääntö</Text>
+      <Text style={styles.modalText}>Tähtiliigan perimmäinen ajatus on saada mahdollisimman moneen peliin juuri ne pelaajat, jotka on ilmoitettu joukkueeseen. Varapelaaja on tarkoitettu ainoastaan poikkeustilanteisiin, esimerkiksi silloin, kun joukkue ei saa vähintään kahta omaa pelaajaansa sovittuun otteluun nopean loukkaantumiseen tai muun esteen sattuessa.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Varapelaajaa saa käyttää vain, jos joukkueesta ei saada vähintään kahta omaa jäsentä paikalle.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Varapelaaja tulee etsiä seuraavassa järjestyksessä:</Text>
+      <Text style={styles.modalBullet}>1. Liigan ulkopuolelta</Text>
+      <Text style={styles.modalBullet}>2. Mikäli sopivaa pelaajaa ei löydy, Tähtiliigan alemmista lohkoista</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Varapelaajan tulee:</Text>
+      <Text style={styles.modalBullet}>• luoda Tähtiliiga-profiili, mikäli profiilia ei vielä ole</Text>
+      <Text style={styles.modalBullet}>• maksaa 5 € varapelaajamaksu kyseisestä ottelusta</Text>
+      <Text style={styles.modalBullet}>• tulla lisätyksi kyseiseen otteluun Tähtiliigan app:sta tai tähtiliigan verkkosivuilta kapteenin johdosta</Text>
+      <Text style={styles.modalBullet}>• olla näkyvissä ottelun kokoonpanossa sekä vastustajalle että liigan ylläpidolle</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Varapelaajan käytöstä tulee ilmoittaa vastustajan kapteenille ennen ottelua chätissä.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Varapelaajia ei ole tarkoitettu joukkueen vakituisiksi pelaajiksi.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Mikäli joukkue käyttää varapelaajaa 4 kertaa tai useammin liigan aikana, järjestäjä ja raati voivat tarkastella tilannetta ja tarvittaessa rajoittaa varapelaajien käyttöä.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Omat pelaajat ensin, varapelaaja vasta oikeasti tarvittaessa. Varapelaajajärjestelmän tarkoitus on mahdollistaa pelien toteutuminen poikkeustilanteissa. Näin taataan liigan tasaisuus ja ennustettavuus pelaajien keskuudessa parhaalla mahdollisella tavalla.</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalSubheading}>Tasapisteet</Text>
+      <Text style={styles.modalText}>Mikäli joukkueet ovat kierroksen jälkeen tasapisteissä, sijoitus ratkaistaan seuraavasti:</Text>
+      <Text style={styles.modalBullet}>1. Pelattujen otteluiden määrä</Text>
+      <Text style={styles.modalBullet}>2. Keskinäisen ottelun voittaja, mikäli kaksi joukkuetta on tasapisteissä</Text>
+      <Text style={styles.modalBullet}>3. Keskinäisten otteluiden geimiero, mikäli tasapisteissä on vähintään kolme joukkuetta</Text>
+      <Text style={styles.modalBullet}>4. Tarvittaessa raadin päätös</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalSubheading}>Pelaamatta jättäminen</Text>
+      <Text style={styles.modalText}>Mikäli joukkue jättää ottelun pelaamatta, tulos voidaan kirjata seuraavasti:</Text>
+      <Text style={styles.modalBullet}>3 peliä pelaamatta: 6–0, 6–0, 6–0</Text>
+      <Text style={styles.modalBullet}>2 peliä pelaamatta: 6–0, 6–0, 0–6</Text>
+      <Text style={styles.modalBullet}>1 peli pelaamatta: tilanne ratkaistaan ottelukohtaisesti.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Tähtiliigan järjestäjä ja raati käsittelevät epäselvät ja poikkeukselliset tilanteet tapauskohtaisesti.</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalSubheading}>Pelaajien tasorajoitukset</Text>
+      <Text style={styles.modalText}>Tähtiliigan tavoitteena on pitää joukkueiden voimasuhteet mahdollisimman tasaisina.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Joukkueiden kokoonpanoissa voidaan rajoittaa tiettyjen korkeimpien taitotasojen pelaajien yhdistämistä samaan joukkueeseen.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Järjestäjällä ja raadilla on oikeus arvioida joukkueiden kokoonpanoja ennen liigan alkua, jotta lohkoista saadaan mahdollisimman kilpailulliset.</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalHeading}>Finaaliviikonloppu</Text>
+      <Text style={styles.modalText}>Liigakaudet huipentuu usein järjestetään finaaliviikonloppu.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Finaaliviikonlopun lohkot muodostuvat viimeisen varsinaisen kierroksen ja karsintojen jälkeisen tilanteen perusteella.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Jokainen lohko pelaa oman lohkonsa sisäisen turnauksen, jonka perusteella ratkaistaan finaaliviikonlopun sijoitukset ja lohkokohtaiset palkinnot. Jos joukkueesta ei pääse vähintään kahta pelaajaa paikalle, joukkue joutuu luovuttamaan ottelunsa.</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalHeading}>Palkinnot</Text>
+      <Text style={styles.modalText}>Tähtiliigan tavoitteena on tarjota jokaiselle joukkueelle mahdollisuus taistella palkinnoista.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Palkintoja jaetaan sekä koko liigan menestyksen että finaaliviikonlopun sijoitusten perusteella.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Lisäksi liigan aikana voidaan palkita kuukausittain erityisesti ansioituneita joukkueita ja pelaajia.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Koska lohkot elävät kierroksittain, myös jokaisella joukkueella on mahdollisuus nousta, kehittyä ja taistella palkinnoista.</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalHeading}>Raati</Text>
+      <Text style={styles.modalText}>Tähtiliigan raati muodostuu liigan osallistujista valituista kapteeneista sekä liigan järjestäjän edustajasta.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Raadin tehtävänä on käsitellä liigan aikana mahdollisesti syntyviä epäselviä tilanteita ja varmistaa sääntöjen mahdollisimman oikeudenmukainen tulkinta.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Raadin päätös on lopullinen tilanteissa, joita säännöissä ei ole yksiselitteisesti määritelty.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Tähtiliigan sääntöjen tärkein tavoite on varmistaa, että liiga pysyy reiluna, kilpailullisena ja hauskana kaikille.</Text>
+    </View>
+  </View>;
+}
+
+function ContactContent() {
+  return <View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalText}>Onko sinulla kysyttävää Tähtiliigasta?</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Haluatko tietää lisää osallistumisesta, joukkueen perustamisesta, säännöistä tai itse liigakonseptista?</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Ota rohkeasti yhteyttä!</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Tähtiliigan tavoitteena on rakentaa mahdollisimman toimiva ja pelaajalähtöinen liigakonsepti, joten otamme mielellämme vastaan myös palautetta, kehitysideoita ja yhteistyöehdotuksia.</Text>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalSubheading}>Yhteyshenkilö</Text>
+      <Text style={styles.modalText}>Eetu Rissanen</Text>
+      <Pressable onPress={() => { if (typeof window !== "undefined") window.location.href = "tel:+358442081638"; }}><Text style={[styles.contactLink, styles.modalParagraphSpacing]}>📞 044 208 1638</Text></Pressable>
+      <Pressable onPress={() => { if (typeof window !== "undefined") window.location.href = "mailto:ede.rissanen@gmail.com"; }}><Text style={styles.contactLink}>✉️ ede.rissanen@gmail.com</Text></Pressable>
+    </View>
+    <View style={styles.modalSection}>
+      <Text style={styles.modalText}>Olet sitten pelaaja, kapteeni, padeltoimija tai yhteistyöstä kiinnostunut yritys, laita rohkeasti viestiä.</Text>
+      <Text style={[styles.modalFootnote, styles.modalParagraphSpacing]}>Tähtiliigaa rakennetaan yhdessä pelaajien kanssa.</Text>
+    </View>
+  </View>;
 }
 
 const styles = StyleSheet.create({
@@ -403,4 +591,5 @@ const styles = StyleSheet.create({
   footerButtons: { flexDirection: "row", gap: 16 }, footerButtonsMobile: { gap: 8 }, footerButton: { flex: 1, minHeight: 108, alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 22, paddingHorizontal: 10, borderRadius: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line }, footerButtonIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.mint, alignItems: "center", justifyContent: "center" }, footerButtonIconText: { color: colors.green, fontSize: 18, fontWeight: "900" }, footerButtonLogo: { width: 26, height: 26 }, footerButtonLabel: { color: colors.ink, fontSize: 13, fontWeight: "800", textAlign: "center" }, messageIcon: { width: 19, height: 15, borderWidth: 2, borderColor: colors.green, borderRadius: 4, position: "relative" }, messageIconTail: { position: "absolute", bottom: -5, left: 3, width: 6, height: 6, borderLeftWidth: 2, borderBottomWidth: 2, borderColor: colors.green, backgroundColor: colors.mint, transform: [{ rotate: "-45deg" }] },
   placeholderCopy: { color: colors.muted, fontSize: 14, lineHeight: 21, marginTop: 12 },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", alignItems: "center", justifyContent: "center", padding: 20 }, modalBox: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 26, width: "100%", maxWidth: 480, maxHeight: "90%" }, modalScroll: { flexGrow: 0 }, modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }, modalTitle: { color: colors.ink, fontSize: 20, fontWeight: "900", flex: 1 }, modalClose: { color: colors.muted, fontSize: 26, fontWeight: "600", lineHeight: 26, paddingLeft: 12 }, modalFooter: { color: colors.muted, textAlign: "center", marginTop: 20, fontSize: 13 }, modalFooterLink: { color: colors.greenBright, fontWeight: "800" },
+  modalSection: { marginBottom: 18 }, modalHeading: { color: colors.green, fontSize: 14, fontWeight: "900", marginBottom: 8 }, modalText: { color: colors.ink, fontSize: 13, lineHeight: 19 }, modalFootnote: { color: colors.muted, fontSize: 12, lineHeight: 18, fontStyle: "italic" }, modalParagraphSpacing: { marginTop: 10 }, modalSubheading: { color: colors.ink, fontSize: 13, fontWeight: "900", marginBottom: 6 }, modalBullet: { color: colors.ink, fontSize: 13, lineHeight: 19, marginTop: 4 }, contactLink: { color: colors.greenBright, fontSize: 14, fontWeight: "800", marginTop: 6 }, footnoteLink: { color: colors.greenBright, fontWeight: "800", textDecorationLine: "underline" },
 });
