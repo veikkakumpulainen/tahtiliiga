@@ -27,20 +27,38 @@ export default function InfoScreen() {
 function AllAboutContent({ onContactPress }: { onContactPress: () => void }) {
   return <View>
     <View style={styles.modalSection}>
-      <Text style={styles.modalText}>Tähtiliiga on uudenlainen liigakonsepti. Se on rakennettu kaikille padelisteille, taitotasosta riippumatta.</Text>
+      <Text style={styles.modalHeading}>Mikä on Tähtiliiga?</Text>
+      <Text style={styles.modalText}>Tähtiliigan perimmäinen ajatus on yksinkertainen: haluamme mahdollistaa mahdollisimman monelle kaupungin pelaajalle tasaisia, mielekkäitä ja sopivan kilpailullisen vivahteen omaavia matseja arkeen. Meidän tavoite on tehdä mukaan ilmoittautumiseen mahdollisimman pieni kynnys, jos siis epäröit suuresti, olemme epäonnistuneet!</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Sinun ei siis todellakaan tarvitse olla kilpapelaaja osallistuaksesi tähtiliigaan. Riittää, että haluat pelata, kehittyä ja saada tavallisiin padelpeleihin hieman enemmän panosta. Tähtiliigan konsepti on hiottu niin, että jokainen joukkue pelaa omalla tasollaan oman tasoisia vastaan.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Lisäksi pidämme huolen, että meiltä löytyy Suomen parhaat ja runsaimmat palkinnot, kannustimet ja yhteistyöt liigan ympäriltä.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Tähtiliiga on kaikille, tervetuloa mukaan!</Text>
     </View>
     <View style={styles.modalSection}>
-      <Text style={styles.modalHeading}>Perimmäinen ajatus</Text>
-      <Text style={styles.modalText}>Tähtiliigan perimmäinen ajatus on yksinkertainen: haluamme mahdollistaa mahdollisimman monelle kaupungin pelaajalle tasaisia, mielekkäitä ja sopivan kilpailullisen vivahteen omaavia matseja arkeen. Meidän tavoite on tehdä mukaan ilmoittautumiseen mahdollisimman pieni kynnys, jos siis epäröit suuresti, olemme epäonnistuneet!</Text>
-      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Sinun ei todellakaan tarvitse olla kilpapelaaja osallistuaksesi tähtiliigaan. Riittää, että haluat pelata, kehittyä ja saada tavallisiin padelpeleihin hieman enemmän panosta.</Text>
-      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Tähtiliigan konsepti on hiottu niin, että joukkueet sijoitetaan heti ensimmäiselle kierrokselle mahdollisimman tasaväkisiin lohkoihin eli jokainen pelaa täällä omalla tasollaan oman tasoisia vastaan.</Text>
-      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Ensimmäisellä kierroksella joukkueet jaetaan teidän joukkueen pelitasoa vastaavaan lohkoon. Tämän jälkeen joukkueet liikkuvat lohkoissa menestyksensä mukaan. Lohkot elävät suuresti jokaisella kierroksella, joten vaihtelevaisuus ja uusien pelituttavuuksien haastaminen on taattua.</Text>
+      <Text style={styles.modalHeading}>Oma alusta?</Text>
+      <Text style={styles.modalText}>On olemassa Padelutionia, Playtomicia, Thrill:ä ja monen moista muuta alustaa, joissa liigaominaisuuksia löytyy. Missään näistä ei kuitenkaan keskitytä pelkästään liigoihin eikä mikään sovellu täysin tähän meidän konseptiimme.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Me päätimme, että jos tehdään, niin tehdään kunnolla.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Siksi Tähtiliigalla on nyt täysin oma alusta, joka on rakennettu alusta asti vastaamaan mahdollisimman hyvin juuri liigan arkea ja pelaajien tarpeita. Mobiilisovellus on aivan tuota pikaa valmis!</Text>
+      <Text style={[styles.modalSubheading, styles.modalParagraphSpacing]}>Kaikki yhdessä paikassa.</Text>
+      <Text style={styles.modalText}>Tähtiliigan omalla alustalla hoituu käytännössä kaikki:</Text>
+      <Text style={[styles.modalBullet, styles.modalParagraphSpacing]}>⭐️ Ilmoittautuminen liigaan</Text>
+      <Text style={styles.modalBullet}>⭐️ Osallistumismaksujen maksaminen</Text>
+      <Text style={styles.modalBullet}>⭐️ Uudet lohkot päivittyvät automaattisesti ja uuden oman lohkon chätit avautuvat kierrosten vaihtuessa</Text>
+      <Text style={styles.modalBullet}>⭐️ Pelien sopiminen</Text>
+      <Text style={styles.modalBullet}>⭐️ Pelien vahvistaminen, lukitseminen ja niiden tarkastelu</Text>
+      <Text style={styles.modalBullet}>⭐️ Pelitulosten merkitseminen</Text>
+      <Text style={styles.modalBullet}>⭐️ Reaaliaikainen tulostaulukko</Text>
+      <Text style={styles.modalBullet}>⭐️ Oman lohkon sekä koko sarjan tilanteen seuraaminen</Text>
+      <Text style={styles.modalBullet}>⭐️ Ja paljon muuta</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Näin tuodaan kaikki meidän liigan asiat yhteen paikkaan SIMPPELISTI ja tehdään pelaajien arjesta mahdollisimman vaivatonta. Kaikki Tähtiliigaan liittyvä hoituu siis Tähtiliigan omalla alustalla tai mobiilisovelluksessa. Ei montaa eri järjestelmää, sivua, kaaviota jne.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Ainoa poikkeus tällä hetkellä on vielä pelivuoron varaaminen, joka hoidetaan normaalisti manuaalisesti hallien omista varausjärjestelmistä.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Yksi liiga. Yksi alusta. Kaikki samassa paikassa.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Mahtavaa, eikö! ⭐️</Text>
     </View>
     <View style={styles.modalSection}>
       <Text style={styles.modalHeading}>Jokaisella on mahdollisuus voittaa</Text>
       <Text style={styles.modalText}>Tähtiliigan yksi tärkeimmistä tavoitteista on tehdä kilpailusta aidosti tasaväkistä.</Text>
-      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Koska joukkueet kilpailevat kierroksittain oman tasoisissa lohkoissaan, jokainen kerää pisteitä oman tasoisia vastustajia vastaan. Liigan pistejärjestelmä ja lohkojen eläminen on rakennettu juuri tätä varten.</Text>
-      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Tähtiliigassa sinun ei tarvitse olla paras maailmassa. Sinun tarvitsee olla paras omalla tasollasi.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Koska joukkueet kilpailevat kierroksittain oman tasoisissa lohkoissaan, jokainen kerää pisteitä oman tasoisia vastustajia vastaan. Lohkot elävät siis suuresti jokaisella kierroksella, joten vaihtelevaisuus ja uusien pelituttavuuksien haastaminen on taattua.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Tähtiliigassa menestyäksesi sinun ei siis tarvitse olla paras maailmassa. Sinun tarvitsee olla paras omalla tasollasi.</Text>
     </View>
     <View style={styles.modalSection}>
       <Text style={styles.modalHeading}>Tähtiliigan suurempi tavoite</Text>
@@ -74,10 +92,10 @@ function LeagueRulesContent() {
       <Text style={styles.modalBullet}>• Nappaa pelikaverisi mukaan ja ilmottautukaa liigaan. Joukkuekoko 2-3 pelaajaa</Text>
       <Text style={styles.modalBullet}>• Liigan ensimmäiset lohkot luodaan järjestäjien puolesta ja liiga starttaa ilmoitettuna ajankohtana</Text>
       <Text style={styles.modalBullet}>• Pelaatte jokaisella kierroksella yhden pelin jokaista lohkonne vastustajaa vastaan. Joka kierros tulee siis 3 peliä. Kierros kestää 26pv joten aikaa pitäisi olla hyvin</Text>
-      <Text style={styles.modalBullet}>• Sovitte pelien ajankohdat sekä paikat lohkonne ryhmässä. Tähtiliiga sovellus luo teille automaattisesti lohkonne ryhmän missä voitte jutella. Tällä hetkellä käytössä Whatsapp, jossa lohkojen ryhmiä operoi manuaalisesti liigan vetäjät</Text>
-      <Text style={styles.modalBullet}>• Käytte pelaamassa pelin, merkkaatte tuloksen joko tähtiliigan sovellukseen / padelutioniin ja thats it</Text>
+      <Text style={styles.modalBullet}>• Sovitte pelien ajankohdat sekä paikat lohkonne ryhmässä. Tähtiliiga sovellus luo teille automaattisesti lohkonne ryhmän missä voitte jutella.</Text>
+      <Text style={styles.modalBullet}>• Käytte pelaamassa pelin, merkkaatte tuloksen tähtiliigan alustalle ja <Text style={{ fontWeight: "800" }}>thats it!</Text></Text>
       <Text style={styles.modalBullet}>• Jos olette kierroksen jälkeen lohkonne toinen tai kolmas, osallistutte karsintakierrokselle. (tarkemmat ohjeet alla)</Text>
-      <Text style={styles.modalBullet}>• eikun ilmoittautuminen sisään</Text>
+      <Text style={styles.modalBullet}>• Eikun mukaan Tähtiliigaan! ⭐️</Text>
     </View>
     <View style={styles.modalSection}>
       <Text style={styles.modalHeading}>Tässä koko liigan säännöt avattuna</Text>
@@ -118,7 +136,7 @@ function LeagueRulesContent() {
       <Text style={styles.modalBullet}>• Kaikki kolme erää pelataan normaalisti, vaikka ottelun voittaja olisi ratkennut jo kahdessa erässä.</Text>
       <Text style={styles.modalBullet}>• Mikäli aikaa on jäljellä alle 25 minuuttia, kolmas erä pelataan lyhyenä eränä tilanteesta 2–2.</Text>
       <Text style={styles.modalBullet}>• Jos kenttävuoro päättyy kesken ottelun, johdossa oleva joukkue voittaa ottelun.</Text>
-      <Text style={styles.modalBullet}>• Otteluun suositellaan vähintään 90 minuutin kenttävarausta. 120 minuuttia on suositeltava.</Text>
+      <Text style={styles.modalBullet}>• Otteluun varataan vähintään 90 minuutin kenttävarausta. 120 minuuttia on suositeltava.</Text>
       <Text style={[styles.modalSubheading, styles.modalParagraphSpacing]}>Pisteytys</Text>
       <Text style={styles.modalText}>Jokaisesta voitetusta erästä saa 1 pisteen.</Text>
       <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Lisäksi:</Text>
@@ -131,7 +149,7 @@ function LeagueRulesContent() {
     </View>
     <View style={styles.modalSection}>
       <Text style={styles.modalSubheading}>Varapelaajasääntö</Text>
-      <Text style={styles.modalText}>Tähtiliigan perimmäinen ajatus on saada mahdollisimman moneen peliin juuri ne pelaajat, jotka on ilmoitettu joukkueeseen. Varapelaaja on tarkoitettu ainoastaan poikkeustilanteisiin, esimerkiksi silloin, kun joukkue ei saa vähintään kahta omaa pelaajaansa sovittuun otteluun nopean loukkaantumiseen tai muun esteen sattuessa.</Text>
+      <Text style={styles.modalText}>Tähtiliigan perimmäinen ajatus on saada mahdollisimman moneen peliin juuri ne pelaajat, jotka on ilmoitettu joukkueen jäseniksi. Varapelaaja on tarkoitettu ainoastaan poikkeustilanteisiin, esimerkiksi nopean loukkaantumiseen tai muun pakottavan esteen sattuessa.</Text>
       <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Varapelaajaa saa käyttää vain, jos joukkueesta ei saada vähintään kahta omaa jäsentä paikalle.</Text>
       <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Varapelaaja tulee etsiä seuraavassa järjestyksessä:</Text>
       <Text style={styles.modalBullet}>1. Liigan ulkopuolelta</Text>
@@ -176,10 +194,10 @@ function LeagueRulesContent() {
     </View>
     <View style={styles.modalSection}>
       <Text style={styles.modalHeading}>Palkinnot</Text>
-      <Text style={styles.modalText}>Tähtiliigan tavoitteena on tarjota jokaiselle joukkueelle mahdollisuus taistella palkinnoista.</Text>
+      <Text style={styles.modalText}>Tähtiliigan tavoitteena on tarjota jokaiselle joukkueelle tasa-arvoinen mahdollisuus taistella palkinnoista.</Text>
       <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Palkintoja jaetaan sekä koko liigan menestyksen että finaaliviikonlopun sijoitusten perusteella.</Text>
       <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Lisäksi liigan aikana voidaan palkita kuukausittain erityisesti ansioituneita joukkueita ja pelaajia.</Text>
-      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Koska lohkot elävät kierroksittain, myös jokaisella joukkueella on mahdollisuus nousta, kehittyä ja taistella palkinnoista.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Jokaisen liigakauden palkinnot ja yhteistyökumppanit vaihtelevat. Liigakohtaiset palkinnot ja kannustimet löytyvät aina kyseisen liigan omalta sivulta.</Text>
     </View>
     <View style={styles.modalSection}>
       <Text style={styles.modalHeading}>Raati</Text>
