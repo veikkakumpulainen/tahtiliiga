@@ -63,6 +63,10 @@ export default function ProfileForm() {
       setMessage("Etunimi ja sukunimi ovat pakollisia.");
       return;
     }
+    if (!skillLevel) {
+      setMessage("Valitse taitotaso.");
+      return;
+    }
     setSaving(true);
     setMessage("");
     const inferredGender = skillCategory === "Miesten" ? "male" : skillCategory === "Naisten" ? "female" : null;
@@ -128,7 +132,7 @@ export default function ProfileForm() {
 
     <Text style={styles.label}>TAITOTASO (SUUNTAA ANTAVA)</Text>
     <View style={styles.options}>
-      {skillCategories.map(([value, label]) => <Pressable key={value} onPress={() => { const next = skillCategory === value ? "" : value; setSkillCategory(next); setSkillLevel(null); }} style={[styles.option, skillCategory === value && styles.optionSelected]}>
+      {skillCategories.map(([value, label]) => <Pressable key={value} onPress={() => { if (skillCategory === value) return; setSkillCategory(value); setSkillLevel(null); }} style={[styles.option, skillCategory === value && styles.optionSelected]}>
         <Text style={[styles.optionText, skillCategory === value && styles.optionTextSelected]}>{label}</Text>
       </Pressable>)}
     </View>
@@ -136,7 +140,7 @@ export default function ProfileForm() {
     {skillCategory ? <View style={[styles.options, styles.skillLevelsRow]}>
       {skillLevelLetters.map((letter) => {
         const value = `${skillCategory} ${letter}`;
-        return <Pressable key={letter} onPress={() => setSkillLevel(skillLevel === value ? null : value)} style={[styles.option, skillLevel === value && styles.optionSelected]}>
+        return <Pressable key={letter} onPress={() => setSkillLevel(value)} style={[styles.option, skillLevel === value && styles.optionSelected]}>
           <Text style={[styles.optionText, skillLevel === value && styles.optionTextSelected]}>{letter}</Text>
         </Pressable>;
       })}
