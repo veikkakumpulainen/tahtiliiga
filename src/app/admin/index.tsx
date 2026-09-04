@@ -55,7 +55,7 @@ export default function AdminScreen() {
   if (authLoading) return <View style={styles.loading}><ActivityIndicator color={colors.lime} /></View>;
   if (!session) return <Redirect href="/(auth)/login" />;
   if (isAdmin === null) return <View style={styles.loading}><ActivityIndicator color={colors.lime} /></View>;
-  if (!isAdmin) return <Redirect href="/(tabs)/info" />;
+  if (!isAdmin) return <Redirect href="/" />;
 
   const resetForm = () => { setName(""); setStartDate(""); setDeadline(""); setEditing(false); setMessage(""); };
   const saveLeague = async () => { if (!supabase || !session?.user.id || !name.trim() || !startDate.trim()) { setMessage("Anna liigan nimi ja aloituspäivä."); return; } setBusy(true); const values = { name: name.trim(), start_date: startDate.trim(), registration_deadline: deadline.trim() || null }; const result = editing && selectedLeague ? await supabase.from("leagues").update(values).eq("id", selectedLeague.id) : await supabase.from("leagues").insert({ ...values, created_by: session.user.id, status: "registration_open" }); setBusy(false); if (result.error) { setMessage(`Liigan tallennus epäonnistui: ${result.error.message}`); return; } resetForm(); await loadLeagues(); setMessage("Liiga tallennettu."); };
