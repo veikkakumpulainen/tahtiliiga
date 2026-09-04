@@ -65,7 +65,7 @@ export default function CreateLeagueScreen() {
     }));
 
     if (!supabase || !session?.user.id || !name.trim() || !parsedStartDate || !parsedEndDate) {
-      setError("Anna liigan nimi sekä alku- ja loppupäivä muodossa DD-MM-YYYY.");
+      setError("Anna liigan nimi sekä alku- ja loppupäivä muodossa D.M.YYYY.");
       return;
     }
     if (parsedEndDate < parsedStartDate) {
@@ -73,7 +73,7 @@ export default function CreateLeagueScreen() {
       return;
     }
     if (deadline.trim() && !parsedDeadline) {
-      setError("Anna ilmoittautumisen deadline muodossa DD-MM-YYYY.");
+      setError("Anna ilmoittautumisen deadline muodossa D.M.YYYY.");
       return;
     }
     if (parsedDeadline && parsedDeadline > parsedStartDate) {
@@ -154,11 +154,11 @@ export default function CreateLeagueScreen() {
     <Text style={styles.label}>KAUPUNKI</Text>
     <TextInput value={city} onChangeText={setCity} placeholder="Esim. Jyväskylä" placeholderTextColor={colors.muted} style={styles.input} />
     <Text style={styles.label}>LIIGAN ALKAMISPÄIVÄ</Text>
-    <TextInput value={startDate} onChangeText={setStartDate} placeholder="DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.input} />
+    <TextInput value={startDate} onChangeText={setStartDate} placeholder="D.M.YYYY" placeholderTextColor={colors.muted} style={styles.input} />
     <Text style={styles.label}>LIIGAN LOPPUPÄIVÄ</Text>
-    <TextInput value={endDate} onChangeText={setEndDate} placeholder="DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.input} />
+    <TextInput value={endDate} onChangeText={setEndDate} placeholder="D.M.YYYY" placeholderTextColor={colors.muted} style={styles.input} />
     <Text style={styles.label}>ILMOITTAUTUMISEN DEADLINE</Text>
-    <TextInput value={deadline} onChangeText={setDeadline} placeholder="DD-MM-YYYY (valinnainen)" placeholderTextColor={colors.muted} style={styles.input} />
+    <TextInput value={deadline} onChangeText={setDeadline} placeholder="D.M.YYYY (valinnainen)" placeholderTextColor={colors.muted} style={styles.input} />
 
     <Text style={styles.label}>ILMOITTAUTUMISEN JULKAISU</Text>
     <View style={styles.publishRow}>
@@ -174,7 +174,7 @@ export default function CreateLeagueScreen() {
       {opensKnown ? <>
         <Text style={styles.hint}>Liiga näkyy käyttäjille &ldquo;Ilmoittautuminen aukeaa&rdquo; -tietona valittuna päivänä.</Text>
         <Text style={styles.label}>ILMOITTAUTUMINEN AUKEAA</Text>
-        <TextInput value={opensDate} onChangeText={setOpensDate} placeholder="DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.input} />
+        <TextInput value={opensDate} onChangeText={setOpensDate} placeholder="D.M.YYYY" placeholderTextColor={colors.muted} style={styles.input} />
       </> : <Text style={styles.hint}>Liiga näkyy käyttäjille tulevana, ja "Ilmoittautuminen avautuu pian" -tekstillä ilman tarkkaa päivää.</Text>}
     </> : null}
 
@@ -182,8 +182,8 @@ export default function CreateLeagueScreen() {
     {rounds.map((round, index) => <View key={index} style={styles.round}>
       {rounds.length > 1 ? <View style={styles.roundTop}><Pressable onPress={() => removeRound(index)}><Text style={styles.removeRound}>Poista</Text></Pressable></View> : null}
       <TextInput value={round.name} onChangeText={(value) => updateRound(index, "name", value)} placeholder="Kierroksen nimi" placeholderTextColor={colors.muted} style={styles.roundInput} />
-      <TextInput value={round.startDate} onChangeText={(value) => updateRound(index, "startDate", value)} placeholder="Alkaa DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.roundInput} />
-      <TextInput value={round.endDate} onChangeText={(value) => updateRound(index, "endDate", value)} placeholder="Päättyy DD-MM-YYYY" placeholderTextColor={colors.muted} style={styles.roundInput} />
+      <TextInput value={round.startDate} onChangeText={(value) => updateRound(index, "startDate", value)} placeholder="Alkaa D.M.YYYY" placeholderTextColor={colors.muted} style={styles.roundInput} />
+      <TextInput value={round.endDate} onChangeText={(value) => updateRound(index, "endDate", value)} placeholder="Päättyy D.M.YYYY" placeholderTextColor={colors.muted} style={styles.roundInput} />
       <Text style={styles.roundTypeLabel}>KIERROKSEN TYYPPI</Text>
       <View style={styles.roundTypes}>
         <Pressable onPress={() => updateRound(index, "roundType", "regular")} style={[styles.roundType, round.roundType === "regular" && styles.roundTypeSelected]}><Text style={[styles.roundTypeText, round.roundType === "regular" && styles.roundTypeTextSelected]}>Tavallinen</Text></Pressable>
