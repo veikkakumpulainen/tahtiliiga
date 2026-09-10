@@ -6,7 +6,8 @@ import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { colors, shadow } from "../../theme";
 
-type Team = { id: string; leagueId: string; leagueName: string; leagueStatus: string; groupId?: string };
+type Team = { id: string; leagueId: string; leagueName: string; leagueStatus: string; category: string; groupId?: string };
+const categoryLabels: Record<string, string> = { avoin: "Avoin", mixty: "Mixty" };
 type LeagueOption = { id: string; name: string; status: string };
 type Message = { id: string; name: string; sub: string; body: string; time: string; own: boolean };
 type GroupMessageRow = { id: string; message: string; created_at: string; user_id: string; sender_first_name: string; team_name: string };
@@ -31,8 +32,8 @@ export default function ChatTabScreen() {
   const loadTeams = useCallback(async () => {
     if (!supabase || !session?.user.id) return;
     const client = supabase;
-    const { data: membershipData } = await client.from("team_members").select("team_id, teams(id, name, league_id)").eq("user_id", session.user.id).eq("status", "active");
-    const memberships = (membershipData ?? []) as unknown as { teams?: { id: string; name: string; league_id: string } | { id: string; name: string; league_id: string }[] | null }[];
+    const { data: membershipData } = await client.from("team_members").select("team_id, teams(id, name, league_id, category)").eq("user_id", session.user.id).eq("status", "active");
+    const memberships = (membershipData ?? []) as unknown as { teams?: { id: string; name: string; league_id: string; category: string } | { id: string; name: string; league_id: string; category: string }[] | null }[];
     const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : []);
     const leagueIds = [...new Set(teamRows.map((team) => team.league_id))];
     const teamIds = teamRows.map((team) => team.id);
@@ -45,7 +46,7 @@ export default function ChatTabScreen() {
     const nextTeams = teamRows.map((team) => {
       const league = leagueMap.get(team.league_id);
       const group = groupMap.get(team.id);
-      return { id: team.id, leagueId: team.league_id, leagueName: league?.name ?? "", leagueStatus: league?.status ?? "", groupId: group?.group_id };
+      return { id: team.id, leagueId: team.league_id, leagueName: league?.name ?? "", leagueStatus: league?.status ?? "", category: team.category, groupId: group?.group_id };
     }).sort((left, right) => Number(right.leagueStatus === "ongoing") - Number(left.leagueStatus === "ongoing"));
     setTeams(nextTeams);
     setSelectedTeamId((current) => current && nextTeams.some((team) => team.id === current) ? current : nextTeams[0]?.id ?? null);
@@ -138,12 +139,12 @@ export default function ChatTabScreen() {
       <Pressable onPress={() => setView("lohko")} style={[styles.segment, view === "lohko" && styles.segmentActive]}><Text style={[styles.segmentText, view === "lohko" && styles.segmentTextActive]}>Lohko</Text></Pressable>
       <Pressable onPress={() => setView("yhteiso")} style={[styles.segment, view === "yhteiso" && styles.segmentActive]}><Text style={[styles.segmentText, view === "yhteiso" && styles.segmentTextActive]}>Yhteisö</Text></Pressable>
     </View>
-    {view === "lohko" && teams.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selector}>
+    {view === "lohko" && teams.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectorScroll} contentContainerStyle={styles.selector}>
       {teams.map((team) => <Pressable key={team.id} onPress={() => setSelectedTeamId(team.id)} style={[styles.selectorButton, selectedTeam?.id === team.id && styles.selectorSelected]}>
-        <Text numberOfLines={1} style={[styles.selectorText, selectedTeam?.id === team.id && styles.selectorTextSelected]}>{team.leagueName}</Text>
+        <Text numberOfLines={1} style={[styles.selectorText, selectedTeam?.id === team.id && styles.selectorTextSelected]}>{categoryLabels[team.category] ?? team.category}</Text>
       </Pressable>)}
     </ScrollView> : null}
-    {view === "yhteiso" && communityLeagueOptions.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selector}>
+    {view === "yhteiso" && communityLeagueOptions.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectorScroll} contentContainerStyle={styles.selector}>
       {communityLeagueOptions.map((league) => <Pressable key={league.id} onPress={() => setSelectedCommunityLeagueId(league.id)} style={[styles.selectorButton, communityLeagueId === league.id && styles.selectorSelected]}>
         <Text numberOfLines={1} style={[styles.selectorText, communityLeagueId === league.id && styles.selectorTextSelected]}>{league.name}</Text>
       </Pressable>)}
@@ -178,7 +179,8 @@ const styles = StyleSheet.create({
   segmentActive: { backgroundColor: colors.green, borderColor: colors.green },
   segmentText: { color: colors.ink, fontSize: 13, fontWeight: "800" },
   segmentTextActive: { color: colors.lime },
-  selector: { paddingHorizontal: 18, gap: 8, paddingTop: 12 },
+  selectorScroll: { flexGrow: 0, flexShrink: 0, height: 62 },
+  selector: { paddingHorizontal: 18, gap: 8, paddingTop: 12, alignItems: "center" },
   selectorButton: { minHeight: 38, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, justifyContent: "center" },
   selectorSelected: { backgroundColor: colors.green, borderColor: colors.green },
   selectorText: { color: colors.ink, fontSize: 12, fontWeight: "800" },

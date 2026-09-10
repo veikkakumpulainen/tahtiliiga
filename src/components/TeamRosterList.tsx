@@ -10,16 +10,21 @@ export function groupRosterByTeam(rows: TeamRosterRow[]): RosterTeam[] {
 }
 
 export default function TeamRosterList({ teams }: { teams: RosterTeam[] }) {
-  return <>{teams.map((team) => <View key={team.id} style={styles.card}>
-    <Text style={styles.teamName}>{team.name}</Text>
+  return <>{teams.map((team, teamIndex) => <View key={team.id} style={styles.card}>
+    <View style={styles.teamRow}>
+      <Text style={styles.teamNumber}>{teamIndex + 1}</Text>
+      <Text style={styles.teamName}>{team.name}</Text>
+    </View>
     <Text style={styles.players}>{team.players.map((player, index) => <Text key={player.player_id} style={player.status === "pending" ? styles.pendingPlayer : undefined}>
-      {index > 0 ? ", " : ""}{player.first_name} {player.last_name}{player.is_captain ? " (kapteeni)" : ""}{player.status === "pending" ? " (kutsu lähetetty)" : ""}
+      {index > 0 ? ", " : ""}{player.first_name} {player.last_name}{player.is_captain ? " (C)" : ""}{player.status === "pending" ? " (kutsu lähetetty)" : ""}
     </Text>)}</Text>
   </View>)}</>;
 }
 
 const styles = StyleSheet.create({
   card: { backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginTop: 12, ...shadow },
+  teamRow: { flexDirection: "row", alignItems: "center", gap: 9 },
+  teamNumber: { color: colors.greenBright, fontSize: 13, fontWeight: "900" },
   teamName: { color: colors.ink, fontSize: 16, fontWeight: "800" },
   players: { color: colors.muted, fontSize: 13, marginTop: 6, lineHeight: 19 },
   pendingPlayer: { color: colors.muted, fontStyle: "italic", opacity: 0.6 },

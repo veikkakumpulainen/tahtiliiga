@@ -89,8 +89,9 @@ export default function AdminNotificationsScreen() {
     setTitle(""); setBody("");
   };
 
-  return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+  return <View style={styles.page}>
     <ScreenHeader />
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
     <View style={styles.body}>
       <Pressable onPress={() => router.replace("/admin")} style={styles.back}><Text style={styles.backText}>‹ Takaisin adminiin</Text></Pressable>
       <Text style={styles.sectionTitle}>Lähetä push-ilmoitus</Text>
@@ -131,11 +132,13 @@ export default function AdminNotificationsScreen() {
       <Pressable onPress={send} disabled={!canSend || busy} style={[styles.primary, (!canSend || busy) && styles.primaryDisabled]}>{busy ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryText}>Lähetä ilmoitus</Text>}</Pressable>
       {message ? <Text style={styles.message}>{message}</Text> : null}
     </View>
-  </ScrollView>;
+    </ScrollView>
+  </View>;
 }
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
+  scroll: { flex: 1 },
   content: { paddingBottom: 40 },
   loading: { flex: 1, backgroundColor: colors.green, justifyContent: "center", alignItems: "center" },
   body: { padding: 22, paddingTop: 18 },

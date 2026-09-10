@@ -147,8 +147,9 @@ export default function CreateLeagueScreen() {
     router.replace(`/admin/league/${league.id}` as never);
   };
 
-  return <ScrollView style={styles.page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+  return <View style={styles.page}>
     <ScreenHeader />
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
     <Text style={styles.label}>LIIGAN NIMI</Text>
     <TextInput value={name} onChangeText={setName} placeholder="Esim. Jyväskylä Syksy 2026" placeholderTextColor={colors.muted} style={styles.input} />
     <Text style={styles.label}>KAUPUNKI</Text>
@@ -200,11 +201,13 @@ export default function CreateLeagueScreen() {
     {error ? <Text style={styles.error}>{error}</Text> : null}
     <Pressable style={styles.button} onPress={() => void save()} disabled={saving}>{saving ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.buttonText}>Luo liiga</Text>}</Pressable>
     <Pressable onPress={() => router.back()} style={styles.cancel}><Text style={styles.cancelText}>Peruuta</Text></Pressable>
-  </ScrollView>;
+    </ScrollView>
+  </View>;
 }
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
+  scroll: { flex: 1 },
   content: { paddingBottom: 40 },
   label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 20, marginHorizontal: 22, marginBottom: 7 },
   input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, color: colors.ink, padding: 14, marginHorizontal: 22 },

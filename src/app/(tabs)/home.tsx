@@ -36,9 +36,7 @@ type OpenLeague = { id: string; name: string; start_date: string; end_date: stri
 export default function HomeScreen() {
   const { session } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
-  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [unreadGroupIds, setUnreadGroupIds] = useState<Set<string>>(new Set());
-  const [teamCounts, setTeamCounts] = useState<Record<string, number>>({});
   const [rosterRows, setRosterRows] = useState<RosterPlayer[]>([]);
   const [paymentStatuses, setPaymentStatuses] = useState<Record<string, string>>({});
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -73,14 +71,12 @@ export default function HomeScreen() {
     const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : []);
     const leagueIds = [...new Set(teamRows.map((team) => team.league_id))];
     const teamIds = teamRows.map((team) => team.id);
-    const [{ data: leagueRows }, { data: groupRows }, { data: teamCountRows }, { data: paymentRows }, rosterResults] = await Promise.all([
+    const [{ data: leagueRows }, { data: groupRows }, { data: paymentRows }, rosterResults] = await Promise.all([
       leagueIds.length ? client.from("leagues").select("id, name, start_date, end_date, status").in("id", leagueIds) : Promise.resolve({ data: [] }),
       teamIds.length ? client.from("group_teams").select("team_id, group_id, groups(id, name)").in("team_id", teamIds) : Promise.resolve({ data: [] }),
-      leagueIds.length ? client.rpc("get_league_team_counts", { target_league_ids: leagueIds }) : Promise.resolve({ data: [] }),
       teamIds.length ? client.from("payments").select("team_id, user_id, payment_status").in("team_id", teamIds) : Promise.resolve({ data: [] }),
       Promise.all(leagueIds.map((leagueId) => client.rpc("get_league_team_rosters", { target_league_id: leagueId }))),
     ]);
-    setTeamCounts(Object.fromEntries((teamCountRows ?? []).map((row: { league_id: string; team_count: number }) => [row.league_id, Number(row.team_count)])));
     setPaymentStatuses(Object.fromEntries((paymentRows ?? []).map((row: { team_id: string; user_id: string; payment_status: string }) => [`${row.team_id}:${row.user_id}`, row.payment_status])));
     setRosterRows(rosterResults.flatMap((result) => (result.data ?? []) as RosterPlayer[]).filter((row) => teamIds.includes(row.team_id)));
 
@@ -120,7 +116,6 @@ export default function HomeScreen() {
     }).sort((left, right) => Number(right.leagueStatus === "ongoing") - Number(left.leagueStatus === "ongoing"));
 
     setTeams(nextTeams);
-    setSelectedTeamId((current) => current && nextTeams.some((team) => team.id === current) ? current : nextTeams[0]?.id ?? null);
   }, [session?.user.id]);
 
   useFocusEffect(useCallback(() => { void loadHome(); }, [loadHome]));
@@ -155,14 +150,14 @@ export default function HomeScreen() {
     return () => clearTimeout(timeout);
   }, [inviteSuccess]);
 
-  const selectedTeam = teams.find((team) => team.id === selectedTeamId) ?? teams[0];
   const myCategoriesInOpenLeague = new Set(teams.filter((team) => team.leagueId === openLeague?.id).map((team) => team.category));
   const canRegisterOtherCategory = openLeague?.status === "registration_open" && myCategoriesInOpenLeague.size < 2 && myCategoriesInOpenLeague.size > 0;
   const missingCategory = myCategoriesInOpenLeague.has("avoin") ? "mixty" : myCategoriesInOpenLeague.has("mixty") ? "avoin" : undefined;
   const registerMissingLabel = missingCategory === "avoin" ? "Ilmoittaudu avoimeen" : missingCategory === "mixty" ? "Ilmoittaudu mixtyyn" : "Ilmoittaudu toiseen sarjaan";
 
-  return <ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+  return <View style={styles.page}>
     <ScreenHeader />
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
     {inviteSuccess ? <View style={styles.inviteSuccessBanner}>
       <Text style={styles.inviteSuccessText}>{inviteSuccess}</Text>
       <Pressable onPress={() => setInviteSuccess("")} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.inviteSuccessClose}>×</Text></Pressable>
@@ -196,52 +191,54 @@ export default function HomeScreen() {
         </> : <Text style={styles.cardNote}>{openLeague.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(openLeague.registration_opens_at)}.` : "Ilmoittautuminen avautuu pian."}</Text>}
       </> : <Text style={styles.emptyCopy}>Uudet liigat ilmestyvät tähän, kun ilmoittautuminen avataan.</Text>}
     </View> : teams.length === 0 ? null : <>
-      {selectedTeam ? <View style={styles.leagueCard}>
-        <Text style={styles.leagueName}>{selectedTeam.leagueName || "Liigan nimi puuttuu"}</Text>
-        <Text style={styles.cardLabel}>SARJA</Text>
-        <Text style={styles.season}>{categoryLabels[selectedTeam.category] ?? selectedTeam.category}</Text>
-        <Text style={styles.cardLabel}>JOUKKUE</Text>
-        <Text style={styles.teamName}>{selectedTeam.name}</Text>
-        <View style={styles.rosterList}>
-          {rosterRows.filter((player) => player.team_id === selectedTeam.id).map((player) => <Text key={player.player_id} style={styles.rosterRow}>
-            {player.first_name} {player.last_name}{player.is_captain ? " (C)" : ""}{" "}
-            <Text style={paymentStatuses[`${selectedTeam.id}:${player.player_id}`] === "paid" ? styles.rosterPaid : styles.rosterUnpaid}>
-              {paymentStatuses[`${selectedTeam.id}:${player.player_id}`] === "paid" ? "(osallistuminen maksettu)" : "(osallistuminen maksamatta)"}
-            </Text>
-          </Text>)}
-        </View>
-        {paymentStatuses[`${selectedTeam.id}:${session?.user.id}`] === "paid" ? <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>✓ Osallistumismaksu maksettu</Text></View> : <>
-          <Pressable style={styles.payButton} onPress={() => void payOwnFee(selectedTeam)} disabled={payingTeamId === selectedTeam.id}>
-            {payingTeamId === selectedTeam.id ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.payButtonText}>Maksa osallistuminen ({PARTICIPATION_FEE} €)</Text>}
-          </Pressable>
+      {(() => {
+        const currentLeagueId = teams[0].leagueId;
+        const currentLeagueTeams = teams.filter((team) => team.leagueId === currentLeagueId);
+        const primary = currentLeagueTeams[0];
+        return <View style={styles.leagueCard}>
+          <Text style={styles.leagueName}>{primary.leagueName || "Liigan nimi puuttuu"}</Text>
+          <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
+          {primary.leagueStatus !== "ongoing" ? <View style={styles.dateRow}>
+            <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(primary.startDate)}</Text></View>
+            <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(primary.endDate)}</Text></View>
+          </View> : null}
+          {currentLeagueTeams.map((team, index) => <View key={team.id} style={index > 0 ? styles.myTeamBlock : undefined}>
+            <Text style={styles.cardLabel}>SARJA</Text>
+            <Text style={styles.season}>{categoryLabels[team.category] ?? team.category}</Text>
+            <Text style={styles.cardLabel}>JOUKKUE</Text>
+            <Text style={styles.teamName}>{team.name}</Text>
+            <View style={styles.rosterList}>
+              {rosterRows.filter((player) => player.team_id === team.id).map((player) => <Text key={player.player_id} style={styles.rosterRow}>
+                {player.first_name} {player.last_name}{player.is_captain ? " (C)" : ""}{" "}
+                <Text style={paymentStatuses[`${team.id}:${player.player_id}`] === "paid" ? styles.rosterPaid : styles.rosterUnpaid}>
+                  {paymentStatuses[`${team.id}:${player.player_id}`] === "paid" ? "(osallistuminen maksettu)" : "(osallistuminen maksamatta)"}
+                </Text>
+              </Text>)}
+            </View>
+            {paymentStatuses[`${team.id}:${session?.user.id}`] === "paid" ? <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>✓ Osallistumismaksu maksettu</Text></View> : <Pressable style={styles.payButton} onPress={() => void payOwnFee(team)} disabled={payingTeamId === team.id}>
+              {payingTeamId === team.id ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.payButtonText}>Maksa osallistuminen ({PARTICIPATION_FEE} €)</Text>}
+            </Pressable>}
+            {team.leagueStatus === "ongoing" && team.groupId ? <>
+              <Link href={`/group/${team.groupId}/chat`} asChild><Pressable style={styles.chatButton}>
+                <Text style={styles.chatButtonText}>Lohkochat</Text>
+                {unreadGroupIds.has(team.groupId) ? <View style={styles.buttonUnreadDot} /> : null}
+                <Text style={styles.arrow}>→</Text>
+              </Pressable></Link>
+              <GroupMatches teamId={team.id} teamName={team.name} />
+            </> : null}
+          </View>)}
           {payError ? <Text style={styles.payErrorText}>{payError}</Text> : null}
-        </>}
-        {selectedTeam.leagueStatus !== "ongoing" ? <>
-          <View style={styles.dateRow}>
-            <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(selectedTeam.startDate)}</Text></View>
-            <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(selectedTeam.endDate)}</Text></View>
-          </View>
-          <Text style={styles.cardLabel}>JOUKKUEITA ILMOITTAUTUNUT</Text><Text style={styles.season}>{teamCounts[selectedTeam.leagueId] ?? 0}</Text>
-        </> : null}
-        {selectedTeam.leagueStatus === "ongoing" && selectedTeam.groupId ? <>
-          <Link href={`/group/${selectedTeam.groupId}/chat`} asChild><Pressable style={styles.chatButton}>
-            <Text style={styles.chatButtonText}>Lohkochat</Text>
-            {unreadGroupIds.has(selectedTeam.groupId) ? <View style={styles.buttonUnreadDot} /> : null}
-            <Text style={styles.arrow}>→</Text>
-          </Pressable></Link>
-          <GroupMatches teamId={selectedTeam.id} teamName={selectedTeam.name} />
-        </> : <Text style={styles.cardNote}>Lohkochat ja otteluparit aukeavat liigan alkaessa.</Text>}
-      </View> : null}
-      {canRegisterOtherCategory && openLeague ? <View style={styles.secondCategoryPrompt}>
-        <Text style={styles.secondCategoryText}>Voit ilmoittautua myös liigan {openLeague.name} toiseen sarjaan.</Text>
-        <Pressable style={styles.browseButton} onPress={() => router.push({ pathname: `/league/${openLeague.id}/register`, params: { category: missingCategory } } as never)}><Text style={styles.browseText}>{registerMissingLabel}</Text><Text style={styles.arrow}>→</Text></Pressable>
-      </View> : null}
+          {canRegisterOtherCategory && openLeague ? <Pressable style={styles.browseButton} onPress={() => router.push({ pathname: `/league/${openLeague.id}/register`, params: { category: missingCategory } } as never)}><Text style={styles.browseText}>{registerMissingLabel}</Text><Text style={styles.arrow}>→</Text></Pressable> : null}
+        </View>;
+      })()}
     </>}
-  </ScrollView>;
+    </ScrollView>
+  </View>;
 }
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
+  scroll: { flex: 1 },
   content: { paddingBottom: 32 },
   inviteSuccessBanner: { marginHorizontal: 18, marginTop: 14, backgroundColor: colors.mint, borderRadius: 12, borderWidth: 1, borderColor: colors.green, padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   inviteSuccessText: { color: colors.greenBright, fontSize: 14, fontWeight: "800", flex: 1, lineHeight: 20 },
@@ -261,11 +258,12 @@ const styles = StyleSheet.create({
   emptyCopy: { color: colors.muted, fontSize: 14, lineHeight: 21 },
   browseButton: { backgroundColor: colors.green, borderRadius: 13, padding: 15, marginTop: 19, flexDirection: "row", alignItems: "center" },
   browseText: { color: colors.surface, fontWeight: "800" },
-  openLeagueCard: { backgroundColor: colors.mint, borderRadius: 16, margin: 18, marginTop: 16, padding: 16, ...shadow },
+  openLeagueCard: { backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1.5, borderColor: colors.green, margin: 18, marginTop: 16, padding: 16, ...shadow },
   openLeagueName: { color: colors.ink, fontSize: 19, fontWeight: "800", marginTop: 10 },
   categoryText: { color: colors.greenBright, fontSize: 13, fontWeight: "800", marginTop: 8 },
-  leagueCard: { backgroundColor: colors.surface, borderRadius: 22, marginHorizontal: 18, marginTop: 16, marginBottom: 12, padding: 20, ...shadow },
+  leagueCard: { backgroundColor: colors.surface, borderRadius: 22, borderWidth: 1.5, borderColor: colors.green, marginHorizontal: 18, marginTop: 16, marginBottom: 12, padding: 20, ...shadow },
   cardLabel: { color: colors.muted, fontSize: 9, letterSpacing: 1.1, fontWeight: "900", marginTop: 15 },
+  myTeamBlock: { marginTop: 22, paddingTop: 18, borderTopWidth: 1, borderTopColor: colors.line },
   leagueName: { color: colors.ink, fontSize: 21, fontWeight: "800" },
   teamName: { color: colors.ink, fontSize: 16, fontWeight: "800", marginTop: 5 },
   season: { color: colors.muted, fontSize: 13, marginTop: 5 },
@@ -275,8 +273,6 @@ const styles = StyleSheet.create({
   chatButtonText: { color: colors.surface, fontSize: 14, fontWeight: "800" },
   buttonUnreadDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.coral, marginLeft: 8 },
   arrow: { color: colors.lime, fontSize: 20, marginLeft: "auto" },
-  secondCategoryPrompt: { backgroundColor: colors.surface, borderRadius: 22, marginHorizontal: 18, marginTop: 4, marginBottom: 12, padding: 20, ...shadow },
-  secondCategoryText: { color: colors.muted, fontSize: 14, lineHeight: 20 },
   rosterList: { marginTop: 6 },
   rosterRow: { color: colors.ink, fontSize: 13, fontWeight: "700", marginTop: 3 },
   rosterPaid: { color: colors.greenBright, fontWeight: "700" },

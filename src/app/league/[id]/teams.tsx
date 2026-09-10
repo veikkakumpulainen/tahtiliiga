@@ -33,8 +33,9 @@ export default function LeagueTeamsScreen() {
     void load();
   }, [leagueId]);
 
-  return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+  return <View style={styles.page}>
     <ScreenHeader />
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
     <View style={styles.body}>
       <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹ Takaisin</Text></Pressable>
 
@@ -53,11 +54,13 @@ export default function LeagueTeamsScreen() {
         </View>;
       })}
     </View>
-  </ScrollView>;
+    </ScrollView>
+  </View>;
 }
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
+  scroll: { flex: 1 },
   content: { paddingBottom: 40 },
   body: { padding: 22 },
   back: { alignSelf: "flex-start", paddingVertical: 8, marginBottom: 12 },

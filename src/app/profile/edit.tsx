@@ -11,17 +11,20 @@ export default function EditProfileScreen() {
   if (loadingSession) return <View style={styles.loading}><ActivityIndicator color={colors.lime} /></View>;
   if (!session) return <Redirect href="/(auth)/login" />;
 
-  return <ScrollView style={styles.page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+  return <View style={styles.page}>
     <ScreenHeader />
-    <View style={styles.body}>
-      <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹ Takaisin</Text></Pressable>
-      <ProfileForm />
-    </View>
-  </ScrollView>;
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <View style={styles.body}>
+        <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹ Takaisin</Text></Pressable>
+        <ProfileForm />
+      </View>
+    </ScrollView>
+  </View>;
 }
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
+  scroll: { flex: 1 },
   content: { paddingBottom: 40 },
   loading: { flex: 1, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
   body: { padding: 22 },

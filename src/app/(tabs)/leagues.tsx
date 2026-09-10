@@ -23,20 +23,29 @@ export default function LeaguesScreen() {
   const [loadingStandings, setLoadingStandings] = useState(false);
   const [error, setError] = useState("");
 
+  const loadOpenLeague = useCallback(async (client: NonNullable<typeof supabase>) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: openRows } = await client.from("leagues").select("id, name, status, start_date, registration_deadline").in("status", ["registration_open", "upcoming"]).order("start_date", { ascending: true });
+    const rows = (openRows ?? []) as { id: string; name: string; status: string; registration_deadline: string | null }[];
+    const openRow = rows.filter((row) => row.status === "registration_open").find((row) => !row.registration_deadline || row.registration_deadline >= today) ?? rows.find((row) => row.status === "upcoming") ?? null;
+    setLeague(openRow ? { id: openRow.id, name: openRow.name, status: openRow.status } : null);
+    setCategory("avoin");
+  }, []);
+
   const loadLeague = useCallback(async () => {
-    if (!supabase || !session?.user.id) { setLoadingLeague(false); return; }
+    if (!supabase) { setLoadingLeague(false); return; }
     setLoadingLeague(true);
     const client = supabase;
+    if (!session?.user.id) {
+      await loadOpenLeague(client);
+      setLoadingLeague(false);
+      return;
+    }
     const { data: membershipData } = await client.from("team_members").select("teams(league_id, category)").eq("user_id", session.user.id).eq("status", "active");
     const memberships = (membershipData ?? []) as unknown as { teams: { league_id: string; category: string } | { league_id: string; category: string }[] | null }[];
     const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : []);
     if (teamRows.length === 0) {
-      const today = new Date().toISOString().slice(0, 10);
-      const { data: openRows } = await client.from("leagues").select("id, name, status, start_date, registration_deadline").in("status", ["registration_open", "upcoming"]).order("start_date", { ascending: true });
-      const rows = (openRows ?? []) as { id: string; name: string; status: string; registration_deadline: string | null }[];
-      const openRow = rows.filter((row) => row.status === "registration_open").find((row) => !row.registration_deadline || row.registration_deadline >= today) ?? rows.find((row) => row.status === "upcoming") ?? null;
-      setLeague(openRow ? { id: openRow.id, name: openRow.name, status: openRow.status } : null);
-      setCategory("avoin");
+      await loadOpenLeague(client);
       setLoadingLeague(false);
       return;
     }
@@ -49,7 +58,7 @@ export default function LeaguesScreen() {
     const categoriesForChosen = chosen ? [...new Set(withLeague.filter((item) => item.league.id === chosen.league.id).map((item) => item.category))] : [];
     setCategory(categoriesForChosen.length === 1 ? categoriesForChosen[0] : "avoin");
     setLoadingLeague(false);
-  }, [session?.user.id]);
+  }, [session?.user.id, loadOpenLeague]);
 
   useFocusEffect(useCallback(() => { void loadLeague(); }, [loadLeague]));
 
@@ -96,21 +105,25 @@ export default function LeaguesScreen() {
   const categoryTeams = groupRosterByTeam(rosterRows.filter((row) => row.category === category));
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <View style={styles.page}>
       <ScreenHeader />
-      <View style={styles.body}>
-        {loadingLeague ? <ActivityIndicator color={colors.green} style={styles.loading} /> : !league ? <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>Et ole vielä ilmoittautunut liigaan.</Text>
+      {loadingLeague ? <ActivityIndicator color={colors.green} style={styles.loading} /> : !league ? <View style={styles.body}>
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>{session ? "Et ole vielä ilmoittautunut liigaan." : "Ei avoinna olevaa liigaa juuri nyt."}</Text>
           <Text style={styles.emptyText}>Avoinna olevat liigat löytyvät Koti-välilehdeltä.</Text>
           <Link href="/(tabs)/home" asChild><Pressable style={styles.homeButton}><Text style={styles.homeButtonText}>Koti-välilehdelle</Text></Pressable></Link>
-        </View> : <>
+        </View>
+      </View> : <>
+        <View style={styles.fixedHeader}>
           <Text style={styles.leagueName}>{league.name}</Text>
           <View style={styles.categoryRow}>
             {categories.map(([value, label]) => <Pressable key={value} onPress={() => setCategory(value)} style={[styles.categoryButton, category === value && styles.categoryButtonSelected]}>
               <Text style={[styles.categoryText, category === value && styles.categoryTextSelected]}>{label}</Text>
             </Pressable>)}
           </View>
-
+        </View>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.scrollBody}>
           {league.status !== "ongoing" ? (
             loadingRoster ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <View style={styles.empty}>
               <Text style={styles.emptyTitle}>Joukkueita ei voitu ladata.</Text>
@@ -152,16 +165,20 @@ export default function LeaguesScreen() {
               </View>
             </View>;
           })}</View>}
-        </>}
-      </View>
-    </ScrollView>
+        </View>
+        </ScrollView>
+      </>}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
+  scroll: { flex: 1 },
   content: { paddingBottom: 32 },
   body: { padding: 22, paddingTop: 27 },
+  fixedHeader: { paddingHorizontal: 22, paddingTop: 27, paddingBottom: 4, backgroundColor: colors.canvas },
+  scrollBody: { paddingHorizontal: 22, paddingTop: 16 },
   leagueName: { color: colors.ink, fontSize: 26, fontWeight: "800" },
   categoryRow: { flexDirection: "row", gap: 8, marginTop: 18 },
   categoryButton: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingVertical: 11, alignItems: "center", backgroundColor: colors.surface },
