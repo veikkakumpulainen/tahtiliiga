@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { router } from "expo-router";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import { colors } from "../theme";
@@ -31,6 +32,9 @@ export default function ProfileForm() {
   const [message, setMessage] = useState("");
   const [sendingVerification, setSendingVerification] = useState(false);
   const [verificationMessage, setVerificationMessage] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const emailVerified = Boolean(profile?.email_verified_at);
 
@@ -103,6 +107,20 @@ export default function ProfileForm() {
     setVerificationMessage(error ? (waitSeconds ? `Odota ${waitSeconds} sekuntia ennen kuin voit pyytää uuden linkin.` : `Lähetys epäonnistui: ${error.message}`) : "Vahvistuslinkki lähetetty sähköpostiisi.");
   };
 
+  const deleteAccount = async () => {
+    if (!supabase) return;
+    setDeleting(true);
+    setDeleteError("");
+    const { error } = await supabase.functions.invoke("delete-account", { method: "POST" });
+    if (error) {
+      setDeleting(false);
+      setDeleteError(`Tilin poisto epäonnistui: ${error.message}`);
+      return;
+    }
+    await supabase.auth.signOut();
+    router.replace("/(auth)/login");
+  };
+
   if (loading) return <View style={styles.loadingBox}><ActivityIndicator color={colors.green} /></View>;
 
   return <View>
@@ -150,6 +168,26 @@ export default function ProfileForm() {
     <Pressable onPress={() => void saveProfile()} disabled={saving} style={styles.save}>
       {saving ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.saveText}>Tallenna tiedot</Text>}
     </Pressable>
+
+    <Pressable onPress={() => setShowDeleteConfirm(true)} style={styles.deleteLink}>
+      <Text style={styles.deleteLinkText}>Poista tili</Text>
+    </Pressable>
+
+    <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => setShowDeleteConfirm(false)}>
+      <Pressable style={styles.modalBackdrop} onPress={() => !deleting && setShowDeleteConfirm(false)}>
+        <Pressable style={styles.modalBox} onPress={(event) => event.stopPropagation()}>
+          <Text style={styles.modalTitle}>Poista tili lopullisesti?</Text>
+          <Text style={styles.modalText}>Nimesi, sähköpostisi ja puhelinnumerosi poistetaan eikä tunnuksella voi enää kirjautua sisään. Historialliset ottelutulokset ja joukkuejäsenyydet säilyvät liigan tilastoja varten ilman nimeäsi.</Text>
+          {deleteError ? <Text style={styles.error}>{deleteError}</Text> : null}
+          <Pressable onPress={() => void deleteAccount()} disabled={deleting} style={styles.deleteConfirmButton}>
+            {deleting ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.deleteConfirmButtonText}>Poista tili lopullisesti</Text>}
+          </Pressable>
+          <Pressable onPress={() => setShowDeleteConfirm(false)} disabled={deleting} style={styles.modalCancel}>
+            <Text style={styles.modalCancelText}>Peruuta</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
   </View>;
 }
 
@@ -174,4 +212,14 @@ const styles = StyleSheet.create({
   error: { color: colors.coral, fontSize: 13, lineHeight: 19, marginTop: 16 },
   save: { backgroundColor: colors.green, borderRadius: 13, padding: 16, alignItems: "center", marginTop: 22 },
   saveText: { color: colors.surface, fontSize: 15, fontWeight: "800" },
+  deleteLink: { alignItems: "center", marginTop: 18, padding: 8 },
+  deleteLinkText: { color: colors.coral, fontSize: 13, fontWeight: "700" },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: 24 },
+  modalBox: { backgroundColor: colors.surface, borderRadius: 16, padding: 22, width: "100%", maxWidth: 420 },
+  modalTitle: { color: colors.ink, fontSize: 17, fontWeight: "900", marginBottom: 10 },
+  modalText: { color: colors.muted, fontSize: 13, lineHeight: 19, marginBottom: 18 },
+  deleteConfirmButton: { backgroundColor: colors.coral, borderRadius: 12, padding: 15, alignItems: "center" },
+  deleteConfirmButtonText: { color: colors.surface, fontSize: 14, fontWeight: "800" },
+  modalCancel: { alignItems: "center", padding: 12, marginTop: 4 },
+  modalCancelText: { color: colors.muted, fontSize: 13, fontWeight: "700" },
 });

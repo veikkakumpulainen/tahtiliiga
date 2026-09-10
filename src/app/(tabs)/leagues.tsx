@@ -30,7 +30,16 @@ export default function LeaguesScreen() {
     const { data: membershipData } = await client.from("team_members").select("teams(league_id, category)").eq("user_id", session.user.id).eq("status", "active");
     const memberships = (membershipData ?? []) as unknown as { teams: { league_id: string; category: string } | { league_id: string; category: string }[] | null }[];
     const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : []);
-    if (teamRows.length === 0) { setLeague(null); setLoadingLeague(false); return; }
+    if (teamRows.length === 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: openRows } = await client.from("leagues").select("id, name, status, start_date, registration_deadline").in("status", ["registration_open", "upcoming"]).order("start_date", { ascending: true });
+      const rows = (openRows ?? []) as { id: string; name: string; status: string; registration_deadline: string | null }[];
+      const openRow = rows.filter((row) => row.status === "registration_open").find((row) => !row.registration_deadline || row.registration_deadline >= today) ?? rows.find((row) => row.status === "upcoming") ?? null;
+      setLeague(openRow ? { id: openRow.id, name: openRow.name, status: openRow.status } : null);
+      setCategory("avoin");
+      setLoadingLeague(false);
+      return;
+    }
     const leagueIds = [...new Set(teamRows.map((team) => team.league_id))];
     const { data: leagueRows } = await client.from("leagues").select("id, name, status").in("id", leagueIds);
     const leagueMap = new Map((leagueRows ?? []).map((row) => [row.id, row]));

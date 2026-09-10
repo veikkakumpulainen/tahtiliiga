@@ -8,7 +8,8 @@
     "scheme": "tahtiliiga",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.veikkakumpulainen.tahtiliiga"
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +18,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.veikkakumpulainen.tahtiliiga"
     },
     "web": {
       "output": "static",
@@ -33,11 +35,25 @@
           "imageWidth": 76
         }
       ],
-      "expo-image"
+      "expo-image",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/splash-icon.png",
+          "color": "#123F2A"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "01caf462-de9b-40da-900e-7e22957a4a9c"
+      },
+      "router": {}
+    },
+    "owner": "veikkakumpulainens-team"
   }
 }

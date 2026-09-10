@@ -59,7 +59,7 @@ export default function TermsScreen() {
     },
     {
       heading: "13. Yhteydenotto",
-      text: "Kysymyksistä käyttöehdoista: [yhteystiedot]"
+      text: "Kysymyksistä käyttöehdoista: ede.rissanen@gmail.com"
     }
   ];
 

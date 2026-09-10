@@ -11,7 +11,7 @@ export default function PrivacyPolicyScreen() {
     { title: "Tietosuojaseloste", subtitle: "Voimassa: 1.9.2026" },
     {
       heading: "1. Rekisterinpitäjä",
-      text: "Tähtiliiga\nYhteystiedot: [yhteystiedot]\nSähköposti: [sähköposti]"
+      text: "Tähtiliiga\nYhteyshenkilö: Eetu Rissanen\nPuhelin: 044 208 1638\nSähköposti: ede.rissanen@gmail.com"
     },
     {
       heading: "2. Kerättävät henkilötiedot",
@@ -35,7 +35,7 @@ export default function PrivacyPolicyScreen() {
     },
     {
       heading: "7. Käyttäjän oikeudet",
-      text: "Sinulla on oikeus:\n• Saada pääsy omiin tietoihisi\n• Korjata virheelliset tiedot\n• Pyytää tietojen poistamista\n• Vastustaa tietojen käsittelyä\n• Peruuttaa suostumus markkinointiviesteihin\n\nOikeuksien käyttämiseksi ota yhteyttä rekisterinpitäjään."
+      text: "Sinulla on oikeus:\n• Saada pääsy omiin tietoihisi\n• Korjata virheelliset tiedot\n• Poistaa tilisi itse sovelluksen Profiili-näkymästä (\"Poista tili\") tai pyytää poistoa rekisterinpitäjältä\n• Vastustaa tietojen käsittelyä\n• Peruuttaa suostumus markkinointiviesteihin\n\nTilin poistaminen anonymisoi nimesi, sähköpostisi ja puhelinnumerosi eikä tunnuksella voi enää kirjautua. Otteluhistoria ja joukkuejäsenyydet säilyvät liigan tilastoja varten ilman henkilötietojasi."
     },
     {
       heading: "8. Tietoturva",
@@ -51,7 +51,7 @@ export default function PrivacyPolicyScreen() {
     },
     {
       heading: "11. Yhteydenotto",
-      text: "Tietosuojaan liittyvissä kysymyksissä ota yhteyttä: [yhteystiedot]"
+      text: "Tietosuojaan liittyvissä kysymyksissä ota yhteyttä: ede.rissanen@gmail.com"
     }
   ];
 
