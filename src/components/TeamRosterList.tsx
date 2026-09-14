@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
-import { colors, shadow } from "../theme";
+import { colors } from "../theme";
 
 export type TeamRosterRow = { team_id: string; team_name: string; player_id: string; first_name: string; last_name: string; is_captain: boolean; status: "pending" | "active" };
 export type RosterTeam = { id: string; name: string; players: TeamRosterRow[] };
@@ -22,7 +22,7 @@ export default function TeamRosterList({ teams }: { teams: RosterTeam[] }) {
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginTop: 12, ...shadow },
+  card: { backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginTop: 12 },
   teamRow: { flexDirection: "row", alignItems: "center", gap: 9 },
   teamNumber: { color: colors.greenBright, fontSize: 13, fontWeight: "900" },
   teamName: { color: colors.ink, fontSize: 16, fontWeight: "800" },

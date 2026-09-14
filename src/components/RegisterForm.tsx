@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { privacySections, termsSections } from "../lib/legalContent";
 import { supabase } from "../lib/supabase";
 import { colors } from "../theme";
 
@@ -10,13 +11,12 @@ const skillLevelLetters = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
 
 type ModalType = "terms" | "privacy" | null;
 
-export default function RegisterForm({ redirect, onRegistered, onResultChange }: { redirect?: string; onRegistered?: () => void; onResultChange?: (result: "session" | "pending" | null) => void }) {
+export default function RegisterForm({ onRegistered, onResultChange }: { onRegistered?: () => void; onResultChange?: (result: "session" | "pending" | null) => void }) {
   const { width } = useWindowDimensions();
   const isMobile = width < MOBILE_BREAKPOINT;
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", password: "", confirmation: "", skillCategory: "", skillLevel: "", termsPrivacyAccepted: false, marketingAccepted: false });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<"session" | "pending" | null>(null);
   const [showModal, setShowModal] = useState<ModalType>(null);
 
   const update = <K extends keyof typeof form>(key: K, value: typeof form[K]) => setForm((current) => ({ ...current, [key]: value }));
@@ -65,34 +65,22 @@ export default function RegisterForm({ redirect, onRegistered, onResultChange }:
       setError(authError.message.includes("already") ? "Sähköpostiosoite on jo käytössä." : `Tilin luominen epäonnistui: ${authError.message}`);
       return;
     }
+    let registrationResult: "session" | "pending";
     if (data.session) {
       const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/verify-email` : undefined;
       void supabase.auth.signInWithOtp({ email: form.email.trim(), options: { emailRedirectTo: redirectTo, shouldCreateUser: false } });
-      setResult("session");
-      if (onResultChange) onResultChange("session");
+      registrationResult = "session";
     } else {
-      setResult("pending");
-      if (onResultChange) onResultChange("pending");
+      registrationResult = "pending";
     }
+    if (onResultChange) onResultChange(registrationResult);
+    continueAfterRegister(registrationResult);
   };
 
-  const continueAfterRegister = () => {
+  const continueAfterRegister = (registrationResult: "session" | "pending") => {
     if (onRegistered) onRegistered();
-    else router.replace((redirect || "/(tabs)/home") as never);
+    else router.replace({ pathname: "/(tabs)/home", params: { justRegistered: registrationResult } } as never);
   };
-
-  if (result === "session") return <View>
-    <Text style={styles.successTitle}>Tili luotu onnistuneesti!</Text>
-    <Text style={styles.successCopy}>Muista vahvistaa sähköpostiosoitteesi, jotta voit ilmoittautua liigoihin. Lähetimme vahvistuslinkin osoitteeseesi {form.email.trim()} — muista tarkistaa myös roskapostikansio.</Text>
-    <Pressable style={styles.button} onPress={continueAfterRegister}>
-      <Text style={styles.buttonText}>Jatka</Text>
-    </Pressable>
-  </View>;
-
-  if (result === "pending") return <View>
-    <Text style={styles.successTitle}>Tili luotiin!</Text>
-    <Text style={styles.successCopy}>Tarkista sähköpostisi ja vahvista tili ennen kirjautumista.</Text>
-  </View>;
 
   return <View>
     <View style={[styles.nameRow, isMobile && styles.nameRowMobile]}>
@@ -192,8 +180,6 @@ const styles = StyleSheet.create({
   error: { color: colors.coral, fontSize: 12, marginTop: 14, lineHeight: 18 },
   button: { backgroundColor: colors.green, borderRadius: 8, padding: 16, alignItems: "center", marginTop: 22 },
   buttonText: { color: colors.surface, fontSize: 15, fontWeight: "900" },
-  successTitle: { color: colors.ink, fontSize: 20, fontWeight: "900" },
-  successCopy: { color: colors.muted, fontSize: 14, lineHeight: 21, marginTop: 10 },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", alignItems: "center", justifyContent: "center", padding: 20 },
   modalBox: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 26, width: "100%", maxWidth: 600, maxHeight: "85%" },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.line, paddingBottom: 12 },
@@ -207,50 +193,18 @@ const styles = StyleSheet.create({
 
 function TermsContent() {
   return <View>
-    <View style={styles.modalSection}>
-      <Text style={styles.modalHeading}>1. Palvelun kuvaus</Text>
-      <Text style={styles.modalText}>Tähtiliiga on padeliliigapalvelu, joka mahdollistaa joukkueiden muodostamisen, liigaan ilmoittautumisen, ottelutulosten tallentamisen ja liigakauden hallinnan.</Text>
-    </View>
-    <View style={styles.modalSection}>
-      <Text style={styles.modalHeading}>2. Käyttäjätilin käyttö</Text>
-      <Text style={styles.modalText}>Käyttäjä sitoutuu antamaan totuudenmukaisia tietoja, pitämään salasanansa salassa, vastaamaan tilinsä käytöstä ja noudattamaan lainsäädäntöä.</Text>
-    </View>
-    <View style={styles.modalSection}>
-      <Text style={styles.modalHeading}>3. Osallistumismaksut</Text>
-      <Text style={styles.modalText}>Osallistumismaksut tulee suorittaa Stripe-palvelun kautta. Maksut ovat lopullisia eikä niitä palauteta ilman perustavaa syytä.</Text>
-    </View>
-    <View style={styles.modalSection}>
-      <Text style={styles.modalHeading}>4. Vastuunrajoitus</Text>
-      <Text style={styles.modalText}>Palvelu tarjotaan &ldquo;sellaisenaan&rdquo; ilman takuuta. Tähtiliiga ei vastaa palvelun keskeytymisestä, tietojen menetyksestä tai muista vahingoista.</Text>
-    </View>
-    <View style={styles.modalSection}>
-      <Text style={styles.modalHeading}>5. Sovellettava laki</Text>
-      <Text style={styles.modalText}>Näihin ehtoihin sovelletaan Suomen lakia.</Text>
-    </View>
+    {termsSections.map((section, idx) => <View key={idx} style={styles.modalSection}>
+      <Text style={styles.modalHeading}>{section.heading}</Text>
+      <Text style={styles.modalText}>{section.text}</Text>
+    </View>)}
   </View>;
 }
 
 function PrivacyContent() {
   return <View>
-    <View style={styles.modalSection}>
-      <Text style={styles.modalHeading}>1. Kerättävät henkilötiedot</Text>
-      <Text style={styles.modalText}>Keräämme etunimi, sukunimi, sähköpostiosoite, puhelinnumero, taitotaso ja muut palvelun käyttöön liittyvät tiedot.</Text>
-    </View>
-    <View style={styles.modalSection}>
-      <Text style={styles.modalHeading}>2. Tietojen käyttötarkoitus</Text>
-      <Text style={styles.modalText}>Tietoja käytetään tilin luomiseen, palvelun tarjoamiseen, viestintään, maksuprosessin käsittelyyn ja markkinointiviesteihin (vain suostumuksella).</Text>
-    </View>
-    <View style={styles.modalSection}>
-      <Text style={styles.modalHeading}>3. Kolmannet osapuolet</Text>
-      <Text style={styles.modalText}>Tietoja jaetaan Supabase-palvelulle (tietokannan isäntäpalvelu) ja Stripe-palvelulle (maksuprosessi). Muille ei jaeta ilman suostumusta.</Text>
-    </View>
-    <View style={styles.modalSection}>
-      <Text style={styles.modalHeading}>4. Tietojen säilytys</Text>
-      <Text style={styles.modalText}>Tiedot säilytetään koko tilin aktiivisen käyttöajan ja tilin poistamisen jälkeen lakisääteisen kauden verran.</Text>
-    </View>
-    <View style={styles.modalSection}>
-      <Text style={styles.modalHeading}>5. Käyttäjän oikeudet</Text>
-      <Text style={styles.modalText}>Sinulla on oikeus saada pääsy tietoihisi, korjata virheelliset tiedot, pyytää poistamista ja peruuttaa suostumus markkinointiviesteihin.</Text>
-    </View>
+    {privacySections.map((section, idx) => <View key={idx} style={styles.modalSection}>
+      <Text style={styles.modalHeading}>{section.heading}</Text>
+      <Text style={styles.modalText}>{section.text}</Text>
+    </View>)}
   </View>;
 }

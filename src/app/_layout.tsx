@@ -2,6 +2,8 @@ import { Analytics } from "@vercel/analytics/react";
 import { Stack } from "expo-router";
 import { Platform } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { ChatNotifyProvider } from "../context/ChatNotifyContext";
+import { SelectedLeagueProvider } from "../context/SelectedLeagueContext";
 import { useAuth } from "../hooks/useAuth";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 
@@ -9,7 +11,8 @@ export default function RootLayout() {
   const { session } = useAuth();
   usePushNotifications(session);
   return (
-    <>
+    <ChatNotifyProvider>
+    <SelectedLeagueProvider>
       <StatusBar style="light" />
       {Platform.OS === "web" ? <Analytics /> : null}
       <Stack screenOptions={{ headerShown: false }}>
@@ -24,6 +27,7 @@ export default function RootLayout() {
         <Stack.Screen name="group/[id]/chat" options={{ presentation: "card" }} />
         <Stack.Screen name="reset-password" />
       </Stack>
-    </>
+    </SelectedLeagueProvider>
+    </ChatNotifyProvider>
   );
 }

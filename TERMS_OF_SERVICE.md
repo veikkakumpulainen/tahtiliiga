@@ -5,6 +5,7 @@
 ## 1. Palvelun kuvaus
 
 Tähtiliiga on padeliliigapalvelu, joka mahdollistaa:
+
 - Joukkueiden muodostamisen
 - Liigaan ilmoittautumisen
 - Ottelutulosten tallentamisen
@@ -13,6 +14,7 @@ Tähtiliiga on padeliliigapalvelu, joka mahdollistaa:
 ## 2. Käyttäjätilin käyttö
 
 Käyttäjä sitoutuu:
+
 - Antamaan totuudenmukaisia tietoja rekisteröitymisen yhteydessä
 - Pitämään salasanansa salassa
 - Vastaamaan tilinsä käytöstä
@@ -22,6 +24,7 @@ Käyttäjä sitoutuu:
 ## 3. Kiellettävät toiminnot
 
 Käyttäjä ei saa:
+
 - Väärinkäyttää palvelua tai häiritä muita käyttäjiä
 - Lähettää asiatonta sisältöä tai loukkaavia viestejä
 - Yrittää vahingoittaa palvelun turvallisuutta
@@ -46,6 +49,7 @@ Käyttäjä ei saa:
 ## 6. Vastuunrajoitus
 
 Tähtiliiga ei vastaa:
+
 - Palvelun keskeytymisestä tai viivästymisestä
 - Tietojen menetyksestä
 - Välillisistä tai satunnaisista vahingoista
@@ -56,14 +60,16 @@ Palvelu tarjotaan "sellaisenaan" ilman takuuta.
 ## 7. Palvelun muuttaminen
 
 Tähtiliiga varaa oikeuden:
+
 - Muuttaa palvelun sisältöä ja toiminnallisuutta
 - Keskeyttää palvelun kokonaan tai osittain
 - Muuttaa maksut
-- Ilmoittaa muutoksista etukäteen kohtuullisen ajan
+- Ilmoittaa muutoksista etukäteen kohtuullisen ajan puitteissa
 
 ## 8. Käyttäjätilien sulkeminen
 
 Tähtiliiga voi sulkea tilin:
+
 - Jos käyttäjä rikkoo näitä ehtoja
 - Jos käyttäjä harjoittaa väärinkäyttöä
 - Jos käyttäjä ei ole aktiivinen pitkään aikaan
@@ -88,6 +94,7 @@ Sulkemisen jälkeen tiedot poistetaan soveltuvien lakien mukaisesti.
 ## 11. Muutokset ehtoihin
 
 Tähtiliiga voi muuttaa näitä ehtoja:
+
 - Ilmoittamalla muutoksesta käyttäjälle etukäteen
 - Muutokset astuvat voimaan ilmoituspäivän jälkeen
 - Jatkamalla palvelun käyttöä, käyttäjä hyväksyy muutokset
@@ -100,4 +107,4 @@ Tähtiliiga voi muuttaa näitä ehtoja:
 
 ## 13. Yhteydenotto
 
-Kysymyksistä käyttöehdoista: [yhteystiedot]
+Kysymyksiä käyttöehdoista: ede.rissanen@gmail.com

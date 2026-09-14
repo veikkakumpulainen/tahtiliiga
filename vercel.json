@@ -1,17 +1,5 @@
 {
   "cleanUrls": true,
-  "redirects": [
-    { "source": "/home", "destination": "/", "permanent": false },
-    { "source": "/leagues", "destination": "/", "permanent": false },
-    { "source": "/info", "destination": "/", "permanent": false },
-    { "source": "/login", "destination": "/", "permanent": false },
-    { "source": "/register", "destination": "/", "permanent": false },
-    { "source": "/forgot-password", "destination": "/", "permanent": false },
-    { "source": "/profile/edit", "destination": "/", "permanent": false },
-    { "source": "/league/:id/register", "destination": "/", "permanent": false },
-    { "source": "/league/:id/teams", "destination": "/", "permanent": false },
-    { "source": "/group/:id/chat", "destination": "/", "permanent": false }
-  ],
   "rewrites": [
     { "source": "/admin/league/:id/register-team", "destination": "/admin/league/[id]/register-team.html" },
     { "source": "/admin/league/:id", "destination": "/admin/league/[id].html" },

@@ -15,7 +15,7 @@ export default function EditProfileScreen() {
     <ScreenHeader />
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.body}>
-        <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹ Takaisin</Text></Pressable>
+        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/info")} style={styles.back}><Text style={styles.backText}>‹ Takaisin</Text></Pressable>
         <ProfileForm />
       </View>
     </ScrollView>

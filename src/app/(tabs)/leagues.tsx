@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useFocusEffect } from "expo-router";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import ScreenHeader from "../../components/ScreenHeader";
 import TeamRosterList, { groupRosterByTeam, type TeamRosterRow } from "../../components/TeamRosterList";
+import { useSelectedLeague } from "../../context/SelectedLeagueContext";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { colors, shadow } from "../../theme";
@@ -13,6 +14,7 @@ const categories = [["avoin", "Avoin"], ["mixty", "Mixty"]] as const;
 
 export default function LeaguesScreen() {
   const { session } = useAuth();
+  const { selectedLeague, loading: leaguesContextLoading } = useSelectedLeague();
   const [league, setLeague] = useState<League | null>(null);
   const [category, setCategory] = useState<string>("avoin");
   const [loadingLeague, setLoadingLeague] = useState(true);
@@ -22,6 +24,7 @@ export default function LeaguesScreen() {
   const [standingsView, setStandingsView] = useState<"groups" | "total">("groups");
   const [loadingStandings, setLoadingStandings] = useState(false);
   const [error, setError] = useState("");
+  const scrollRef = useRef<ScrollView>(null);
 
   const loadOpenLeague = useCallback(async (client: NonNullable<typeof supabase>) => {
     const today = new Date().toISOString().slice(0, 10);
@@ -34,31 +37,28 @@ export default function LeaguesScreen() {
 
   const loadLeague = useCallback(async () => {
     if (!supabase) { setLoadingLeague(false); return; }
+    if (leaguesContextLoading) return;
     setLoadingLeague(true);
     const client = supabase;
-    if (!session?.user.id) {
+    if (!selectedLeague) {
+      // No leagues exist anywhere yet (or nobody's logged in) - fall back to
+      // the registration_open/upcoming browse prompt.
       await loadOpenLeague(client);
       setLoadingLeague(false);
       return;
     }
-    const { data: membershipData } = await client.from("team_members").select("teams(league_id, category)").eq("user_id", session.user.id).eq("status", "active");
-    const memberships = (membershipData ?? []) as unknown as { teams: { league_id: string; category: string } | { league_id: string; category: string }[] | null }[];
-    const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : []);
-    if (teamRows.length === 0) {
-      await loadOpenLeague(client);
-      setLoadingLeague(false);
-      return;
+    setLeague(selectedLeague);
+    if (session?.user.id) {
+      const { data: membershipData } = await client.from("team_members").select("teams(league_id, category)").eq("user_id", session.user.id).eq("status", "active");
+      const memberships = (membershipData ?? []) as unknown as { teams: { league_id: string; category: string } | { league_id: string; category: string }[] | null }[];
+      const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : []);
+      const categoriesForSelected = [...new Set(teamRows.filter((team) => team.league_id === selectedLeague.id).map((team) => team.category))];
+      setCategory(categoriesForSelected.length === 1 ? categoriesForSelected[0] : "avoin");
+    } else {
+      setCategory("avoin");
     }
-    const leagueIds = [...new Set(teamRows.map((team) => team.league_id))];
-    const { data: leagueRows } = await client.from("leagues").select("id, name, status").in("id", leagueIds);
-    const leagueMap = new Map((leagueRows ?? []).map((row) => [row.id, row]));
-    const withLeague = teamRows.map((team) => ({ category: team.category, league: leagueMap.get(team.league_id) })).filter((item): item is { category: string; league: League } => Boolean(item.league));
-    const chosen = withLeague.find((item) => item.league.status === "ongoing") ?? withLeague[0] ?? null;
-    setLeague(chosen ? chosen.league : null);
-    const categoriesForChosen = chosen ? [...new Set(withLeague.filter((item) => item.league.id === chosen.league.id).map((item) => item.category))] : [];
-    setCategory(categoriesForChosen.length === 1 ? categoriesForChosen[0] : "avoin");
     setLoadingLeague(false);
-  }, [session?.user.id, loadOpenLeague]);
+  }, [session?.user.id, loadOpenLeague, selectedLeague, leaguesContextLoading]);
 
   useFocusEffect(useCallback(() => { void loadLeague(); }, [loadLeague]));
 
@@ -105,7 +105,7 @@ export default function LeaguesScreen() {
   const categoryTeams = groupRosterByTeam(rosterRows.filter((row) => row.category === category));
 
   return (
-    <View style={styles.page}>
+    <View style={[styles.page, Platform.OS === "web" && styles.pageWeb]}>
       <ScreenHeader />
       {loadingLeague ? <ActivityIndicator color={colors.green} style={styles.loading} /> : !league ? <View style={styles.body}>
         <View style={styles.empty}>
@@ -115,14 +115,18 @@ export default function LeaguesScreen() {
         </View>
       </View> : <>
         <View style={styles.fixedHeader}>
-          <Text style={styles.leagueName}>{league.name}</Text>
-          <View style={styles.categoryRow}>
-            {categories.map(([value, label]) => <Pressable key={value} onPress={() => setCategory(value)} style={[styles.categoryButton, category === value && styles.categoryButtonSelected]}>
+          {selectedLeague?.id === league.id ? null : <Text style={styles.leagueName}>{league.name}</Text>}
+          <View style={[styles.categoryRow, selectedLeague?.id === league.id && styles.categoryRowNoLeagueName]}>
+            {categories.map(([value, label]) => <Pressable key={value} onPress={() => { setCategory(value); scrollRef.current?.scrollTo({ y: 0, animated: true }); }} style={[styles.categoryButton, category === value && styles.categoryButtonSelected]}>
               <Text style={[styles.categoryText, category === value && styles.categoryTextSelected]}>{label}</Text>
             </Pressable>)}
           </View>
+          {league.status === "ongoing" ? <View style={styles.viewSelector}>
+            <Pressable onPress={() => { setStandingsView("groups"); scrollRef.current?.scrollTo({ y: 0, animated: true }); }} style={[styles.viewButton, standingsView === "groups" && styles.viewButtonSelected]}><Text style={[styles.viewButtonText, standingsView === "groups" && styles.viewButtonTextSelected]}>Lohkotilanne</Text></Pressable>
+            <Pressable onPress={() => { setStandingsView("total"); scrollRef.current?.scrollTo({ y: 0, animated: true }); }} style={[styles.viewButton, standingsView === "total" && styles.viewButtonSelected]}><Text style={[styles.viewButtonText, standingsView === "total" && styles.viewButtonTextSelected]}>Koko liiga</Text></Pressable>
+          </View> : null}
         </View>
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.scrollBody}>
           {league.status !== "ongoing" ? (
             loadingRoster ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <View style={styles.empty}>
@@ -138,10 +142,7 @@ export default function LeaguesScreen() {
           </View> : (standingsView === "groups" ? groupIds.length === 0 : standings.length === 0) ? <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Tulostaulukoita ei ole vielä saatavilla.</Text>
             <Text style={styles.emptyText}>Lohkojen joukkueet ja ottelut näkyvät tässä, kun järjestäjä on julkaissut ne.</Text>
-          </View> : <View><View style={styles.viewSelector}>
-            <Pressable onPress={() => setStandingsView("groups")} style={[styles.viewButton, standingsView === "groups" && styles.viewButtonSelected]}><Text style={[styles.viewButtonText, standingsView === "groups" && styles.viewButtonTextSelected]}>Lohkotilanne</Text></Pressable>
-            <Pressable onPress={() => setStandingsView("total")} style={[styles.viewButton, standingsView === "total" && styles.viewButtonSelected]}><Text style={[styles.viewButtonText, standingsView === "total" && styles.viewButtonTextSelected]}>Koko liiga</Text></Pressable>
-          </View>{standingsView === "total" ? <View style={styles.groupSection}>
+          </View> : standingsView === "total" ? <View style={styles.groupSection}>
             <Text style={styles.groupName}>Koko liigan pisteet</Text>
             <View style={styles.table}>
               <View style={styles.header}>
@@ -164,7 +165,7 @@ export default function LeaguesScreen() {
                 </View>)}
               </View>
             </View>;
-          })}</View>}
+          })}
         </View>
         </ScrollView>
       </>}
@@ -174,6 +175,7 @@ export default function LeaguesScreen() {
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
+  pageWeb: { paddingBottom: 3 },
   scroll: { flex: 1 },
   content: { paddingBottom: 32 },
   body: { padding: 22, paddingTop: 27 },
@@ -181,6 +183,7 @@ const styles = StyleSheet.create({
   scrollBody: { paddingHorizontal: 22, paddingTop: 16 },
   leagueName: { color: colors.ink, fontSize: 26, fontWeight: "800" },
   categoryRow: { flexDirection: "row", gap: 8, marginTop: 18 },
+  categoryRowNoLeagueName: { marginTop: 0 },
   categoryButton: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingVertical: 11, alignItems: "center", backgroundColor: colors.surface },
   categoryButtonSelected: { backgroundColor: colors.green, borderColor: colors.green },
   categoryText: { color: colors.ink, fontSize: 12, fontWeight: "900", textAlign: "center" },

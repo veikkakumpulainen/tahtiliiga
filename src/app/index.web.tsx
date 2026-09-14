@@ -331,7 +331,11 @@ export default function WebHomeScreen() {
           <Pressable onPress={() => setShowRegister(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.modalClose}>×</Text></Pressable>
         </View>
         <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
-          <RegisterForm onRegistered={() => setShowRegister(false)} onResultChange={setRegisterResult} />
+          <RegisterForm onRegistered={() => setShowRegister(false)} onResultChange={(result) => {
+            setRegisterResult(result);
+            if (result === "session") setInviteSuccess("Tili luotu onnistuneesti! Muista vahvistaa sähköpostiosoitteesi, jotta voit ilmoittautua liigoihin. Tarkista sähköpostisi (myös roskapostikansio).");
+            else if (result === "pending") setInviteSuccess("Tili luotiin! Tarkista sähköpostisi ja vahvista tilisi ennen kirjautumista.");
+          }} />
           {!registerResult ? <Text style={styles.modalFooter}>Onko sinulla jo tili? <Text onPress={() => { setShowRegister(false); setShowLogin(true); }} style={styles.modalFooterLink}>Kirjaudu sisään</Text></Text> : null}
         </ScrollView>
       </Pressable>

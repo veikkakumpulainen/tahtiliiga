@@ -1,16 +1,16 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Link, router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import GroupMatches from "../../components/GroupMatches";
 import LeagueRoundSchedule from "../../components/LeagueRoundSchedule";
 import ScreenHeader from "../../components/ScreenHeader";
+import { useSelectedLeague } from "../../context/SelectedLeagueContext";
 import { useAuth } from "../../hooks/useAuth";
 import { formatFinnishDate } from "../../lib/dates";
 import { supabase } from "../../lib/supabase";
 import { buildPaymentUrl, getOrCreatePaymentId, PARTICIPATION_FEE } from "../../lib/stripe";
-import { colors, shadow } from "../../theme";
+import { colors } from "../../theme";
 
 type Team = {
   id: string;
@@ -35,8 +35,9 @@ type OpenLeague = { id: string; name: string; start_date: string; end_date: stri
 
 export default function HomeScreen() {
   const { session } = useAuth();
+  const { selectedLeague, refresh: refreshMyLeagues } = useSelectedLeague();
+  const { justRegistered } = useLocalSearchParams<{ justRegistered?: string }>();
   const [teams, setTeams] = useState<Team[]>([]);
-  const [unreadGroupIds, setUnreadGroupIds] = useState<Set<string>>(new Set());
   const [rosterRows, setRosterRows] = useState<RosterPlayer[]>([]);
   const [paymentStatuses, setPaymentStatuses] = useState<Record<string, string>>({});
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -46,6 +47,7 @@ export default function HomeScreen() {
   const [openLeague, setOpenLeague] = useState<OpenLeague | null>(null);
   const [payingTeamId, setPayingTeamId] = useState<string | null>(null);
   const [payError, setPayError] = useState("");
+  const [selectedTeamCategory, setSelectedTeamCategory] = useState<string | null>(null);
 
   const loadOpenLeague = useCallback(async () => {
     if (!supabase) return;
@@ -80,19 +82,6 @@ export default function HomeScreen() {
     setPaymentStatuses(Object.fromEntries((paymentRows ?? []).map((row: { team_id: string; user_id: string; payment_status: string }) => [`${row.team_id}:${row.user_id}`, row.payment_status])));
     setRosterRows(rosterResults.flatMap((result) => (result.data ?? []) as RosterPlayer[]).filter((row) => teamIds.includes(row.team_id)));
 
-    const groupIds = (groupRows ?? []).map((group) => group.group_id);
-    if (groupIds.length) {
-      const { data: messages } = await client.from("group_messages").select("group_id, user_id, created_at").in("group_id", groupIds).order("created_at", { ascending: false });
-      const unread = new Set<string>();
-      for (const groupId of groupIds) {
-        const lastRead = await AsyncStorage.getItem(`group-chat-read-${groupId}`);
-        if ((messages ?? []).some((message) => message.group_id === groupId && message.user_id !== session.user.id && (!lastRead || message.created_at > lastRead))) unread.add(groupId);
-      }
-      setUnreadGroupIds(unread);
-    } else {
-      setUnreadGroupIds(new Set());
-    }
-
     const leagueMap = new Map((leagueRows ?? []).map((league) => [league.id, league]));
     const groupMap = new Map((groupRows ?? []).map((group) => [group.team_id, group]));
     const nextTeams = teamRows.map((team) => {
@@ -116,7 +105,8 @@ export default function HomeScreen() {
     }).sort((left, right) => Number(right.leagueStatus === "ongoing") - Number(left.leagueStatus === "ongoing"));
 
     setTeams(nextTeams);
-  }, [session?.user.id]);
+    void refreshMyLeagues();
+  }, [session?.user.id, refreshMyLeagues]);
 
   useFocusEffect(useCallback(() => { void loadHome(); }, [loadHome]));
 
@@ -142,28 +132,74 @@ export default function HomeScreen() {
     const url = buildPaymentUrl(paymentId);
     if (!url) { setPayError("Maksulinkkiä ei ole vielä määritetty."); return; }
     await WebBrowser.openBrowserAsync(url);
+    await loadHome();
   };
 
+  const teamIdsKey = teams.map((team) => team.id).join(",");
+
   useEffect(() => {
-    if (!inviteSuccess) return;
-    const timeout = setTimeout(() => setInviteSuccess(""), 8000);
-    return () => clearTimeout(timeout);
-  }, [inviteSuccess]);
+    if (!supabase || !teamIdsKey) return;
+    const client = supabase;
+    const teamIds = new Set(teamIdsKey.split(","));
+    // No `filter` here on purpose: postgres_changes filter strings only support
+    // simple comparisons (eq/lt/gt/...), not an `in.(...)` list - a filter built
+    // from a joined id list here would silently never match. RLS already limits
+    // delivery to payments this user may see, so filter the small remainder
+    // client-side instead.
+    // Unique topic per effect run: see useUnreadChat.ts for why a fixed
+    // topic name can make client.channel() dedupe onto an already-subscribed
+    // channel and throw when .on() is called on it.
+    const channel = client.channel(`own-payment-status:${session?.user.id}:${Date.now()}:${Math.random()}`);
+    channel.on("postgres_changes", { event: "UPDATE", schema: "public", table: "payments" }, (payload) => {
+      const row = payload.new as { team_id: string; user_id: string; payment_status: string };
+      if (!teamIds.has(row.team_id)) return;
+      setPaymentStatuses((current) => ({ ...current, [`${row.team_id}:${row.user_id}`]: row.payment_status }));
+      if (row.payment_status === "paid" && row.user_id === session?.user.id) setInviteSuccess("Osallistumismaksu maksettu onnistuneesti! Kiitos.");
+    });
+    channel.subscribe();
+    return () => { void client.removeChannel(channel); };
+  }, [teamIdsKey, session?.user.id]);
+
+  useEffect(() => {
+    if (justRegistered === "session") setInviteSuccess("Tili luotu onnistuneesti! Muista vahvistaa sähköpostiosoitteesi, jotta voit ilmoittautua liigoihin. Tarkista sähköpostisi (myös roskapostikansio).");
+    else if (justRegistered === "pending") setInviteSuccess("Tili luotiin! Tarkista sähköpostisi ja vahvista tilisi ennen kirjautumista.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const myCategoriesInOpenLeague = new Set(teams.filter((team) => team.leagueId === openLeague?.id).map((team) => team.category));
   const canRegisterOtherCategory = openLeague?.status === "registration_open" && myCategoriesInOpenLeague.size < 2 && myCategoriesInOpenLeague.size > 0;
   const missingCategory = myCategoriesInOpenLeague.has("avoin") ? "mixty" : myCategoriesInOpenLeague.has("mixty") ? "avoin" : undefined;
   const registerMissingLabel = missingCategory === "avoin" ? "Ilmoittaudu avoimeen" : missingCategory === "mixty" ? "Ilmoittaudu mixtyyn" : "Ilmoittaudu toiseen sarjaan";
+  const targetLeagueId = selectedLeague?.id ?? teams[0]?.leagueId;
+  const currentLeagueTeams = targetLeagueId ? teams.filter((team) => team.leagueId === targetLeagueId).sort((left, right) => Number(left.category === "mixty") - Number(right.category === "mixty")) : [];
+  const primary = currentLeagueTeams[0];
+  const showCategoryToggle = primary?.leagueStatus === "ongoing" && currentLeagueTeams.length > 1;
+  const visibleLeagueTeams = showCategoryToggle
+    ? currentLeagueTeams.filter((team) => team.category === (selectedTeamCategory ?? primary.category))
+    : currentLeagueTeams;
 
-  return <View style={styles.page}>
+  return <View style={[styles.page, Platform.OS === "web" && styles.pageWeb]}>
     <ScreenHeader />
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-    {inviteSuccess ? <View style={styles.inviteSuccessBanner}>
-      <Text style={styles.inviteSuccessText}>{inviteSuccess}</Text>
-      <Pressable onPress={() => setInviteSuccess("")} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.inviteSuccessClose}>×</Text></Pressable>
+    <Modal visible={Boolean(inviteSuccess)} transparent animationType="fade" onRequestClose={() => {}}>
+      <View style={styles.inviteSuccessBackdrop}>
+        <View style={styles.inviteSuccessBox}>
+          <Pressable onPress={() => setInviteSuccess("")} accessibilityRole="button" accessibilityLabel="Sulje" style={styles.inviteSuccessClose}><Text style={styles.inviteSuccessCloseText}>×</Text></Pressable>
+          <Text style={styles.inviteSuccessText}>{inviteSuccess}</Text>
+          <Pressable onPress={() => setInviteSuccess("")} style={styles.inviteSuccessButton}><Text style={styles.inviteSuccessButtonText}>Selvä</Text></Pressable>
+        </View>
+      </View>
+    </Modal>
+    {showCategoryToggle ? <View style={styles.fixedHeader}>
+      <View style={styles.categoryToggle}>
+        {currentLeagueTeams.map((team) => <Pressable key={team.id} onPress={() => setSelectedTeamCategory(team.category)} style={[styles.categoryToggleButton, (selectedTeamCategory ?? primary.category) === team.category && styles.categoryToggleButtonSelected]}>
+          <Text style={[styles.categoryToggleText, (selectedTeamCategory ?? primary.category) === team.category && styles.categoryToggleTextSelected]}>{categoryLabels[team.category] ?? team.category}</Text>
+        </Pressable>)}
+      </View>
     </View> : null}
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <View style={[styles.scrollBody, showCategoryToggle && styles.scrollBodyWithFixedHeader]}>
     {invitations.length > 0 ? <View style={styles.invites}>
-      {invitations.map((invitation) => <View style={styles.inviteCard} key={invitation.team_id}>
+      {invitations.map((invitation) => <View key={invitation.team_id}>
         <Text style={styles.inviteTitle}>Sinut on lisätty joukkueeseen {invitation.team_name}</Text>
         <Text style={styles.inviteCopy}>{invitation.league_name}{invitation.captain_name ? ` · Kapteeni ${invitation.captain_name}` : ""}</Text>
         <Text style={styles.inviteDates}>{formatFinnishDate(invitation.league_start_date)}{invitation.league_end_date ? ` - ${formatFinnishDate(invitation.league_end_date)}` : ""}</Text>
@@ -190,61 +226,65 @@ export default function HomeScreen() {
           <Pressable style={styles.browseButton} onPress={() => router.push(`/league/${openLeague.id}/register` as never)}><Text style={styles.browseText}>Ilmoittaudu joukkueella</Text><Text style={styles.arrow}>→</Text></Pressable>
         </> : <Text style={styles.cardNote}>{openLeague.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(openLeague.registration_opens_at)}.` : "Ilmoittautuminen avautuu pian."}</Text>}
       </> : <Text style={styles.emptyCopy}>Uudet liigat ilmestyvät tähän, kun ilmoittautuminen avataan.</Text>}
-    </View> : teams.length === 0 ? null : <>
-      {(() => {
-        const currentLeagueId = teams[0].leagueId;
-        const currentLeagueTeams = teams.filter((team) => team.leagueId === currentLeagueId);
-        const primary = currentLeagueTeams[0];
-        return <View style={styles.leagueCard}>
-          <Text style={styles.leagueName}>{primary.leagueName || "Liigan nimi puuttuu"}</Text>
-          <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
-          {primary.leagueStatus !== "ongoing" ? <View style={styles.dateRow}>
-            <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(primary.startDate)}</Text></View>
-            <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(primary.endDate)}</Text></View>
-          </View> : null}
-          {currentLeagueTeams.map((team, index) => <View key={team.id} style={index > 0 ? styles.myTeamBlock : undefined}>
-            <Text style={styles.cardLabel}>SARJA</Text>
-            <Text style={styles.season}>{categoryLabels[team.category] ?? team.category}</Text>
+    </View> : !primary ? null : <View style={styles.leagueCard}>
+      {primary.leagueStatus !== "ongoing" ? <View style={styles.dateRow}>
+        <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(primary.startDate)}</Text></View>
+        <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(primary.endDate)}</Text></View>
+      </View> : null}
+      {canRegisterOtherCategory && openLeague ? <View style={styles.dateRow}>
+        <View><Text style={styles.cardLabel}>ILMOITTAUTUMISEN DEADLINE</Text><Text style={styles.season}>{formatFinnishDate(openLeague.registration_deadline)}</Text></View>
+      </View> : null}
+      {visibleLeagueTeams.map((team) => { const teamPlayers = rosterRows.filter((player) => player.team_id === team.id); const allPaid = team.leagueStatus === "ongoing" && teamPlayers.length > 0 && teamPlayers.every((player) => paymentStatuses[`${team.id}:${player.player_id}`] === "paid"); return <View key={team.id} style={styles.teamBox}>
+        {showCategoryToggle ? <>
+          <Text style={styles.cardLabel}>JOUKKUE</Text>
+          <Text style={styles.teamName}>{team.name}</Text>
+        </> : <View style={styles.teamHeaderRow}>
+          <View>
             <Text style={styles.cardLabel}>JOUKKUE</Text>
             <Text style={styles.teamName}>{team.name}</Text>
-            <View style={styles.rosterList}>
-              {rosterRows.filter((player) => player.team_id === team.id).map((player) => <Text key={player.player_id} style={styles.rosterRow}>
-                {player.first_name} {player.last_name}{player.is_captain ? " (C)" : ""}{" "}
-                <Text style={paymentStatuses[`${team.id}:${player.player_id}`] === "paid" ? styles.rosterPaid : styles.rosterUnpaid}>
-                  {paymentStatuses[`${team.id}:${player.player_id}`] === "paid" ? "(osallistuminen maksettu)" : "(osallistuminen maksamatta)"}
-                </Text>
-              </Text>)}
-            </View>
-            {paymentStatuses[`${team.id}:${session?.user.id}`] === "paid" ? <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>✓ Osallistumismaksu maksettu</Text></View> : <Pressable style={styles.payButton} onPress={() => void payOwnFee(team)} disabled={payingTeamId === team.id}>
-              {payingTeamId === team.id ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.payButtonText}>Maksa osallistuminen ({PARTICIPATION_FEE} €)</Text>}
-            </Pressable>}
-            {team.leagueStatus === "ongoing" && team.groupId ? <>
-              <Link href={`/group/${team.groupId}/chat`} asChild><Pressable style={styles.chatButton}>
-                <Text style={styles.chatButtonText}>Lohkochat</Text>
-                {unreadGroupIds.has(team.groupId) ? <View style={styles.buttonUnreadDot} /> : null}
-                <Text style={styles.arrow}>→</Text>
-              </Pressable></Link>
-              <GroupMatches teamId={team.id} teamName={team.name} />
-            </> : null}
-          </View>)}
-          {payError ? <Text style={styles.payErrorText}>{payError}</Text> : null}
-          {canRegisterOtherCategory && openLeague ? <Pressable style={styles.browseButton} onPress={() => router.push({ pathname: `/league/${openLeague.id}/register`, params: { category: missingCategory } } as never)}><Text style={styles.browseText}>{registerMissingLabel}</Text><Text style={styles.arrow}>→</Text></Pressable> : null}
-        </View>;
-      })()}
-    </>}
+          </View>
+          <View style={styles.teamHeaderRight}>
+            <Text style={styles.cardLabel}>SARJA</Text>
+            <Text style={styles.season}>{categoryLabels[team.category] ?? team.category}</Text>
+          </View>
+        </View>}
+        <View style={styles.rosterList}>
+          {teamPlayers.map((player) => <Text key={player.player_id} style={styles.rosterRow}>
+            {player.first_name} {player.last_name}{player.is_captain ? " (C)" : ""}
+            {allPaid ? null : <>{" "}<Text style={paymentStatuses[`${team.id}:${player.player_id}`] === "paid" ? styles.rosterPaid : styles.rosterUnpaid}>
+              {paymentStatuses[`${team.id}:${player.player_id}`] === "paid" ? "(osallistuminen maksettu)" : "(osallistuminen maksamatta)"}
+            </Text></>}
+          </Text>)}
+        </View>
+        {allPaid ? null : paymentStatuses[`${team.id}:${session?.user.id}`] === "paid" ? <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>✓ Osallistumismaksu maksettu</Text></View> : <Pressable style={styles.payButton} onPress={() => void payOwnFee(team)} disabled={payingTeamId === team.id}>
+          {payingTeamId === team.id ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.payButtonText}>Maksa osallistuminen ({PARTICIPATION_FEE} €)</Text>}
+        </Pressable>}
+        {team.leagueStatus === "ongoing" && team.groupId ? <GroupMatches teamId={team.id} teamName={team.name} /> : null}
+      </View>; })}
+      {payError ? <Text style={styles.payErrorText}>{payError}</Text> : null}
+      {canRegisterOtherCategory && openLeague ? <Pressable style={styles.browseButton} onPress={() => router.push({ pathname: `/league/${openLeague.id}/register`, params: { category: missingCategory } } as never)}><Text style={styles.browseText}>{registerMissingLabel}</Text><Text style={styles.arrow}>→</Text></Pressable> : null}
+    </View>}
+    </View>
     </ScrollView>
   </View>;
 }
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
+  pageWeb: { paddingBottom: 3 },
   scroll: { flex: 1 },
   content: { paddingBottom: 32 },
-  inviteSuccessBanner: { marginHorizontal: 18, marginTop: 14, backgroundColor: colors.mint, borderRadius: 12, borderWidth: 1, borderColor: colors.green, padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  inviteSuccessText: { color: colors.greenBright, fontSize: 14, fontWeight: "800", flex: 1, lineHeight: 20 },
-  inviteSuccessClose: { color: colors.greenBright, fontSize: 22, lineHeight: 22, fontWeight: "700" },
-  invites: { paddingHorizontal: 18, paddingTop: 18, gap: 12 },
-  inviteCard: { backgroundColor: colors.surface, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: colors.greenBright, ...shadow },
+  scrollBody: { paddingHorizontal: 22, paddingTop: 27 },
+  scrollBodyWithFixedHeader: { paddingTop: 0 },
+  fixedHeader: { paddingHorizontal: 22, paddingTop: 27, paddingBottom: 16, backgroundColor: colors.canvas },
+  inviteSuccessBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", alignItems: "center", justifyContent: "center", padding: 24 },
+  inviteSuccessBox: { backgroundColor: colors.mint, borderRadius: 18, paddingTop: 38, paddingBottom: 28, paddingHorizontal: 26, width: "100%", maxWidth: 440, alignItems: "center" },
+  inviteSuccessClose: { position: "absolute", top: 12, right: 16, padding: 6 },
+  inviteSuccessCloseText: { color: colors.greenBright, fontSize: 24, lineHeight: 24, fontWeight: "700" },
+  inviteSuccessText: { color: colors.greenBright, fontSize: 15, fontWeight: "800", lineHeight: 21, textAlign: "center", marginTop: 8 },
+  inviteSuccessButton: { backgroundColor: colors.green, borderRadius: 12, paddingVertical: 13, paddingHorizontal: 28, marginTop: 20 },
+  inviteSuccessButtonText: { color: colors.surface, fontWeight: "800", fontSize: 14 },
+  invites: { marginTop: 18, gap: 12 },
   inviteTitle: { color: colors.ink, fontSize: 16, fontWeight: "800" },
   inviteCopy: { color: colors.muted, fontSize: 13, marginTop: 5 },
   inviteDates: { color: colors.muted, fontSize: 13, marginTop: 3 },
@@ -258,20 +298,23 @@ const styles = StyleSheet.create({
   emptyCopy: { color: colors.muted, fontSize: 14, lineHeight: 21 },
   browseButton: { backgroundColor: colors.green, borderRadius: 13, padding: 15, marginTop: 19, flexDirection: "row", alignItems: "center" },
   browseText: { color: colors.surface, fontWeight: "800" },
-  openLeagueCard: { backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1.5, borderColor: colors.green, margin: 18, marginTop: 16, padding: 16, ...shadow },
+  openLeagueCard: { marginTop: 4 },
   openLeagueName: { color: colors.ink, fontSize: 19, fontWeight: "800", marginTop: 10 },
   categoryText: { color: colors.greenBright, fontSize: 13, fontWeight: "800", marginTop: 8 },
-  leagueCard: { backgroundColor: colors.surface, borderRadius: 22, borderWidth: 1.5, borderColor: colors.green, marginHorizontal: 18, marginTop: 16, marginBottom: 12, padding: 20, ...shadow },
+  leagueCard: { marginTop: 4, marginBottom: 12 },
   cardLabel: { color: colors.muted, fontSize: 9, letterSpacing: 1.1, fontWeight: "900", marginTop: 15 },
-  myTeamBlock: { marginTop: 22, paddingTop: 18, borderTopWidth: 1, borderTopColor: colors.line },
-  leagueName: { color: colors.ink, fontSize: 21, fontWeight: "800" },
+  teamBox: { backgroundColor: colors.canvas, borderRadius: 14, borderWidth: 1, borderColor: colors.line, padding: 16, marginTop: 16 },
+  categoryToggle: { flexDirection: "row", gap: 9 },
+  categoryToggleButton: { flex: 1, height: 42, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  categoryToggleButtonSelected: { backgroundColor: colors.green, borderColor: colors.green },
+  categoryToggleText: { color: colors.ink, fontWeight: "900", fontSize: 13 },
+  categoryToggleTextSelected: { color: colors.surface },
   teamName: { color: colors.ink, fontSize: 16, fontWeight: "800", marginTop: 5 },
+  teamHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  teamHeaderRight: { alignItems: "flex-end" },
   season: { color: colors.muted, fontSize: 13, marginTop: 5 },
   dateRow: { flexDirection: "row", gap: 24 },
   cardNote: { color: colors.green, backgroundColor: colors.mint, borderRadius: 12, padding: 13, marginTop: 20, fontSize: 13, lineHeight: 19, fontWeight: "700" },
-  chatButton: { backgroundColor: colors.green, borderRadius: 13, padding: 15, marginTop: 10, flexDirection: "row", alignItems: "center" },
-  chatButtonText: { color: colors.surface, fontSize: 14, fontWeight: "800" },
-  buttonUnreadDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.coral, marginLeft: 8 },
   arrow: { color: colors.lime, fontSize: 20, marginLeft: "auto" },
   rosterList: { marginTop: 6 },
   rosterRow: { color: colors.ink, fontSize: 13, fontWeight: "700", marginTop: 3 },

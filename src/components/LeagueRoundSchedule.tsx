@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
   button: { borderWidth: 1, borderColor: colors.green, borderRadius: 12, padding: 13, marginTop: 18, flexDirection: "row", alignItems: "center" },
   buttonText: { color: colors.green, fontSize: 13, fontWeight: "800" },
   arrow: { color: colors.green, fontSize: 18, marginLeft: "auto" },
-  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(16, 38, 29, 0.48)" },
+  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
   modal: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 22, paddingBottom: 34 },
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 16, marginBottom: 14 },
   eyebrow: { color: colors.greenBright, fontSize: 10, letterSpacing: 1, fontWeight: "900" },

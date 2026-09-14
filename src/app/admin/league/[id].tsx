@@ -26,13 +26,18 @@ const teamInfoStyles = StyleSheet.create({
   actions: { flexDirection: "row", alignItems: "center", gap: 12 },
   infoButton: { width: 24, height: 24, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: colors.mint },
   infoText: { color: colors.green, fontSize: 14, fontWeight: "900" },
-  backdrop: { flex: 1, backgroundColor: "rgba(16, 38, 29, 0.48)", justifyContent: "center", padding: 24 },
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", padding: 24 },
   modal: { backgroundColor: colors.surface, borderRadius: 12, padding: 20 },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16 },
   modalTitle: { color: colors.ink, flex: 1, fontSize: 20, fontWeight: "800" },
   close: { color: colors.green, fontSize: 24, fontWeight: "800", lineHeight: 24 },
   detailLabel: { color: colors.muted, fontSize: 10, fontWeight: "900", letterSpacing: 1, marginTop: 18 },
   detailValue: { color: colors.ink, fontSize: 15, lineHeight: 22, marginTop: 5 },
+  membersLoading: { marginTop: 8, alignSelf: "flex-start" },
+  memberRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 8 },
+  memberName: { color: colors.ink, fontSize: 14, fontWeight: "700", flex: 1 },
+  memberPaid: { color: colors.greenBright, fontSize: 12, fontWeight: "800" },
+  memberUnpaid: { color: colors.coral, fontSize: 12, fontWeight: "800" },
 });
 
 const roundStyles = StyleSheet.create({
@@ -136,10 +141,13 @@ export default function LeagueManagementScreen() {
   const [playerSearchResults, setPlayerSearchResults] = useState<PlayerSearchResult[]>([]);
   const [searchingPlayers, setSearchingPlayers] = useState(false);
   const [confirmTeamDelete, setConfirmTeamDelete] = useState(false);
+  const [confirmLeagueDelete, setConfirmLeagueDelete] = useState(false);
   const [message, setMessage] = useState("");
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<{ id: string; name: string; skillLevel: string | null; hasPaid: boolean }[]>([]);
+  const [loadingSelectedTeam, setLoadingSelectedTeam] = useState(false);
 
   const load = async () => {
     if (!supabase || !id) return;
@@ -186,6 +194,25 @@ export default function LeagueManagementScreen() {
   const removeAssignment = async (assignmentId: string) => { if (!supabase) return; const { error } = await supabase.from("group_teams").delete().eq("id", assignmentId); if (error) setMessage(error.message); else await load(); };
   const closeManagedTeam = () => { setManagedTeam(null); setRoster([]); setRosterCaptainId(null); setTeamSearch(""); setPlayerSearch(""); setPlayerSearchResults([]); setConfirmTeamDelete(false); };
   const loadRoster = async (team: Team) => { if (!supabase) return; const [{ data, error }, { data: paymentData }] = await Promise.all([supabase.from("team_members").select("user_id,is_captain,status,profiles(first_name,last_name)").eq("team_id", team.id), supabase.from("payments").select("user_id,payment_status").eq("team_id", team.id)]); if (error) { setMessage(`Joukkueen pelaajien lataus epäonnistui: ${error.message}`); return; } const paidUserIds = new Set((paymentData ?? []).filter((payment) => payment.payment_status === "paid").map((payment) => payment.user_id)); const players = ((data ?? []) as { user_id: string; is_captain: boolean; status: string; profiles: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null }[]).map((member) => { const profile = Array.isArray(member.profiles) ? member.profiles[0] : member.profiles; return { id: member.user_id, name: profile ? `${profile.first_name} ${profile.last_name}` : "Pelaaja", isCaptain: member.is_captain, isActive: member.status === "active", hasPaid: paidUserIds.has(member.user_id) }; }); setManagedTeam(team); setRoster(players); setRosterCaptainId(players.find((player) => player.isCaptain)?.id ?? null); setPlayerSearch(""); setPlayerSearchResults([]); };
+
+  const openTeamInfo = async (team: Team) => {
+    setSelectedTeam(team);
+    setSelectedTeamMembers([]);
+    if (!supabase) return;
+    setLoadingSelectedTeam(true);
+    const [{ data, error }, { data: paymentData }] = await Promise.all([
+      supabase.from("team_members").select("user_id,profiles(first_name,last_name,skill_level)").eq("team_id", team.id).eq("status", "active"),
+      supabase.from("payments").select("user_id,payment_status").eq("team_id", team.id),
+    ]);
+    setLoadingSelectedTeam(false);
+    if (error) { setMessage(`Joukkueen pelaajien lataus epäonnistui: ${error.message}`); return; }
+    const paidUserIds = new Set((paymentData ?? []).filter((payment) => payment.payment_status === "paid").map((payment) => payment.user_id));
+    const members = ((data ?? []) as { user_id: string; profiles: { first_name: string; last_name: string; skill_level: string | null } | { first_name: string; last_name: string; skill_level: string | null }[] | null }[]).map((member) => {
+      const profile = Array.isArray(member.profiles) ? member.profiles[0] : member.profiles;
+      return { id: member.user_id, name: profile ? `${profile.first_name} ${profile.last_name}` : "Pelaaja", skillLevel: profile?.skill_level ?? null, hasPaid: paidUserIds.has(member.user_id) };
+    });
+    setSelectedTeamMembers(members);
+  };
 
   const togglePlayerPaid = async (playerId: string, paid: boolean) => {
     if (!supabase || !managedTeam) return;
@@ -310,7 +337,7 @@ export default function LeagueManagementScreen() {
 </Pressable>
  </View>
 <View style={styles.categories}>{categoryOrder.map((value) => <Pressable key={value} onPress={() => setNewGroupCategory(value)} style={[styles.categoryOption, newGroupCategory === value && styles.categoryOptionSelected]}><Text style={[styles.categoryOptionText, newGroupCategory === value && styles.categoryOptionTextSelected]}>{categoryLabels[value]}</Text></Pressable>)}</View>
-{groups.map((group) => { const groupAssignments = assignments.filter((assignment) => assignment.group_id === group.id); const assignedIds = new Set(assignments.map((assignment) => assignment.team_id)); const available = teams.filter((team) => !assignedIds.has(team.id) && team.category === group.category); const isExpanded = league.status !== "ongoing" || expandedGroupId === group.id; return <View key={group.id} style={styles.group}>
+{groups.filter((group) => group.category === newGroupCategory).map((group) => { const groupAssignments = assignments.filter((assignment) => assignment.group_id === group.id); const assignedIds = new Set(assignments.map((assignment) => assignment.team_id)); const available = teams.filter((team) => !assignedIds.has(team.id) && team.category === group.category); const isExpanded = league.status !== "ongoing" || expandedGroupId === group.id; return <View key={group.id} style={styles.group}>
 <Pressable onPress={() => league.status === "ongoing" && setExpandedGroupId((current) => current === group.id ? null : group.id)} style={styles.groupTop} disabled={league.status !== "ongoing"} accessibilityRole={league.status === "ongoing" ? "button" : undefined} accessibilityState={{ expanded: isExpanded }}>
 <Text style={styles.groupName}>{categoryLabels[group.category] ?? group.category} · {group.name}{league.status === "ongoing" ? isExpanded ? " −" : " +" : ""}</Text>
 <Pressable onPress={() => removeGroup(group.id)}>
@@ -320,7 +347,7 @@ export default function LeagueManagementScreen() {
 {isExpanded ? <><Text style={styles.status}>{group.status}</Text>{groupAssignments.map((assignment) => { const team = teams.find((item) => item.id === assignment.team_id); return <View key={assignment.id} style={styles.item}>
 <Text style={styles.itemText}>{team ? `${team.name} · Taso ${team.skill_level}` : "Joukkue"}</Text>
 <View style={teamInfoStyles.actions}>
-{team?.skill_description ? <Pressable onPress={() => setSelectedTeam(team)} style={teamInfoStyles.infoButton} accessibilityRole="button" accessibilityLabel={`Näytä joukkueen ${team.name} lisätiedot`}>
+{team ? <Pressable onPress={() => void openTeamInfo(team)} style={teamInfoStyles.infoButton} accessibilityRole="button" accessibilityLabel={`Näytä joukkueen ${team.name} lisätiedot`}>
 <Text style={teamInfoStyles.infoText}>i</Text>
 </Pressable> : null}
 <Pressable onPress={() => removeAssignment(assignment.id)}>
@@ -332,9 +359,9 @@ export default function LeagueManagementScreen() {
 </Pressable>)}<GroupMatches groupId={group.id} isAdmin /></> : null}</View>; })}{(league.status === "registration_open" || league.status === "registration_closed") ? <Pressable onPress={() => void updateStatus("ongoing")} style={styles.start}>
 <Text style={styles.startText}>Käynnistä liiga</Text>
 </Pressable> : null}
-<Pressable onPress={() => void deleteLeague()} style={styles.deleteLeague}>
+{confirmLeagueDelete ? <View style={rosterStyles.deleteConfirm}><Text style={rosterStyles.deleteConfirmText}>Poistetaanko liiga {league.name} pysyvästi? Kaikki lohkot, ottelut ja joukkueet poistuvat mukana.</Text><View style={styles.inline}><Pressable onPress={() => void deleteLeague()} style={rosterStyles.confirmDelete}><Text style={rosterStyles.confirmDeleteText}>Vahvista poisto</Text></Pressable><Pressable onPress={() => setConfirmLeagueDelete(false)} style={rosterStyles.cancelDelete}><Text style={rosterStyles.cancelDeleteText}>Peruuta</Text></Pressable></View></View> : <Pressable onPress={() => setConfirmLeagueDelete(true)} style={styles.deleteLeague}>
 <Text style={styles.deleteLeagueText}>Poista liiga</Text>
-</Pressable>
+</Pressable>}
 </View>
 </ScrollView>
 </View>
@@ -350,6 +377,11 @@ export default function LeagueManagementScreen() {
 <Text style={teamInfoStyles.detailLabel}>TAITOTASO</Text>
 <Text style={teamInfoStyles.detailValue}>{selectedTeam?.skill_level}</Text>{selectedTeam?.skill_description ? <><Text style={teamInfoStyles.detailLabel}>TAITOTASOKUVAUS</Text>
 <Text style={teamInfoStyles.detailValue}>{selectedTeam.skill_description}</Text></> : null}
+<Text style={teamInfoStyles.detailLabel}>PELAAJAT</Text>
+{loadingSelectedTeam ? <ActivityIndicator color={colors.green} style={teamInfoStyles.membersLoading} /> : selectedTeamMembers.map((member) => <View key={member.id} style={teamInfoStyles.memberRow}>
+<Text style={teamInfoStyles.memberName}>{member.name}{member.skillLevel ? ` · ${member.skillLevel}` : ""}</Text>
+<Text style={member.hasPaid ? teamInfoStyles.memberPaid : teamInfoStyles.memberUnpaid}>{member.hasPaid ? "Maksettu" : "Ei maksettu"}</Text>
+</View>)}
 </Pressable>
 </Pressable>
 </Modal>
