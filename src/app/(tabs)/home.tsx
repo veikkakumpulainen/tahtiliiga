@@ -269,7 +269,7 @@ export default function HomeScreen() {
           <Pressable onPress={() => setShowRoundSchedule(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
         </View>
       </View>
-      {leaguePlayerCount !== null ? <Text style={styles.playerCountTextRow}>PELAAJIA LIIGASSA {leaguePlayerCount}</Text> : null}
+      {leaguePlayerCount !== null && primary.leagueStatus !== "ongoing" ? <Text style={styles.playerCountTextRow}>PELAAJIA LIIGASSA {leaguePlayerCount}</Text> : null}
       {primary.leagueStatus !== "ongoing" || (canRegisterOtherCategory && openLeague) ? <View style={styles.dateRow}>
         {primary.leagueStatus !== "ongoing" ? <>
           <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(primary.startDate)}</Text></View>
