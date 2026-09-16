@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", justifyContent: "flex-end" },
   modalBox: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "85%" },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 22, paddingTop: 22, paddingBottom: 8 },
-  modalTitle: { color: colors.ink, fontSize: 18, fontWeight: "800", flex: 1 },
+  modalTitle: { color: colors.green, fontSize: 18, fontWeight: "800", flex: 1 },
   modalClose: { color: colors.muted, fontSize: 24, fontWeight: "600", lineHeight: 24 },
   modalContent: { flexGrow: 0 },
   modalContentInner: { paddingHorizontal: 22, paddingBottom: 34 },
