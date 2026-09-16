@@ -6,7 +6,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useUnreadChat } from "../../hooks/useUnreadChat";
 import { isProductionSupabase } from "../../lib/supabase";
 
-const tabs = [["home", "Koti", "⌂"], ["leagues", "Liiga", "▥"], ["chat", "Chat", "💬"], ["info", "Muu", "i"]] as const;
+const tabs = [["home", "Koti", "⌂"], ["leagues", "Liiga", "▥"], ["chat", "Chat", "💬"], ["info", "Muu", "☰"]] as const;
 
 export default function TabLayout() {
   const { loading } = useAuth();
