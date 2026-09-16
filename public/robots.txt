@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /profile
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /league/
+Disallow: /group/
+
+Sitemap: https://xn--thtiliiga-v2a.fi/sitemap.xml
