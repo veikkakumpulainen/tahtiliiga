@@ -23,11 +23,11 @@ export default function ScreenHeader() {
     <Modal visible={showLeagueIntro} transparent animationType="fade" onRequestClose={() => setShowLeagueIntro(false)}>
       <Pressable style={styles.modalBackdrop} onPress={() => setShowLeagueIntro(false)}>
         <View style={styles.modalBox}>
-          <View style={styles.modalHeader}>
+          <Pressable style={styles.modalHeader} onPress={(event) => event.stopPropagation()}>
             <Text style={styles.modalTitle}>Jyväskylän Tähtiliiga</Text>
             <Pressable onPress={() => setShowLeagueIntro(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.modalClose}>×</Text></Pressable>
-          </View>
-          <ScrollView style={[styles.modalScroll, { maxHeight: Math.round(windowHeight * 0.6) }]} showsVerticalScrollIndicator={false}><LeagueIntroContent /></ScrollView>
+          </Pressable>
+          <ScrollView style={[styles.modalScroll, { maxHeight: Math.round(windowHeight * 0.6) }]} contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}><LeagueIntroContent /></ScrollView>
         </View>
       </Pressable>
     </Modal>
@@ -41,9 +41,10 @@ const styles = StyleSheet.create({
   infoButton: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: colors.surface, alignItems: "center", justifyContent: "center" },
   infoButtonText: { color: colors.surface, fontSize: 12, fontWeight: "900" },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", alignItems: "center", justifyContent: "center", padding: 20 },
-  modalBox: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 26, width: "100%", maxWidth: 480, maxHeight: "85%" },
+  modalBox: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, width: "100%", maxWidth: 480, maxHeight: "85%" },
   modalScroll: { flexGrow: 0 },
-  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
+  modalScrollContent: { paddingHorizontal: 26, paddingBottom: 26 },
+  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 26, paddingTop: 26, paddingBottom: 6 },
   modalTitle: { color: colors.ink, fontSize: 18, fontWeight: "900", flex: 1 },
   modalClose: { color: colors.muted, fontSize: 26, fontWeight: "600", lineHeight: 26, paddingLeft: 12 },
 });
