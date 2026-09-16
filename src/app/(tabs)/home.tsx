@@ -218,13 +218,11 @@ export default function HomeScreen() {
         <View style={styles.dateRow}>
           <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(openLeague.start_date)}</Text></View>
           <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(openLeague.end_date)}</Text></View>
+          {openLeague.status === "registration_open" ? <View><Text style={styles.cardLabel}>ILMOITTAUTUMISEN DEADLINE</Text><Text style={styles.season}>{formatFinnishDate(openLeague.registration_deadline)}</Text></View> : null}
         </View>
-        {openLeague.status === "registration_open" ? <>
-          <View style={styles.dateRow}>
-            <View><Text style={styles.cardLabel}>ILMOITTAUTUMISEN DEADLINE</Text><Text style={styles.season}>{formatFinnishDate(openLeague.registration_deadline)}</Text></View>
-          </View>
+        {openLeague.status === "registration_open" ? (
           <Pressable style={styles.browseButton} onPress={() => router.push(`/league/${openLeague.id}/register` as never)}><Text style={styles.browseText}>Ilmoittaudu joukkueella</Text><Text style={styles.arrow}>→</Text></Pressable>
-        </> : <Text style={styles.cardNote}>{openLeague.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(openLeague.registration_opens_at)}.` : "Ilmoittautuminen avautuu pian."}</Text>}
+        ) : <Text style={styles.cardNote}>{openLeague.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(openLeague.registration_opens_at)}.` : "Ilmoittautuminen avautuu pian."}</Text>}
       </> : <Text style={styles.emptyCopy}>Uudet liigat ilmestyvät tähän, kun ilmoittautuminen avataan.</Text>}
     </View> : !primary ? null : <View style={styles.leagueCard}>
       {primary.leagueStatus !== "ongoing" ? <View style={styles.dateRow}>
@@ -313,7 +311,7 @@ const styles = StyleSheet.create({
   teamHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   teamHeaderRight: { alignItems: "flex-end" },
   season: { color: colors.muted, fontSize: 13, marginTop: 5 },
-  dateRow: { flexDirection: "row", gap: 24 },
+  dateRow: { flexDirection: "row", flexWrap: "wrap", gap: 24, rowGap: 12 },
   cardNote: { color: colors.green, backgroundColor: colors.mint, borderRadius: 12, padding: 13, marginTop: 20, fontSize: 13, lineHeight: 19, fontWeight: "700" },
   arrow: { color: colors.lime, fontSize: 20, marginLeft: "auto" },
   rosterList: { marginTop: 6 },
