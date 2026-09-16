@@ -52,6 +52,7 @@ export default function HomeScreen() {
   const [leaguePlayerCount, setLeaguePlayerCount] = useState<number | null>(null);
   const [showLeagueIntro, setShowLeagueIntro] = useState(false);
   const [showRoundSchedule, setShowRoundSchedule] = useState(false);
+  const [activeRoundName, setActiveRoundName] = useState<string | null>(null);
 
   const loadOpenLeague = useCallback(async () => {
     if (!supabase) return;
@@ -183,6 +184,18 @@ export default function HomeScreen() {
     return () => { cancelled = true; };
   }, [teams, invitations.length, openLeague?.id, selectedLeague?.id]);
 
+  useEffect(() => {
+    const leagueId = selectedLeague?.id ?? teams[0]?.leagueId;
+    if (!supabase || !leagueId) { setActiveRoundName(null); return; }
+    const client = supabase;
+    let cancelled = false;
+    void client.from("league_rounds").select("name").eq("league_id", leagueId).eq("status", "active").order("start_date", { ascending: false }).limit(1).maybeSingle().then(({ data }) => {
+      if (cancelled) return;
+      setActiveRoundName(data?.name ?? null);
+    });
+    return () => { cancelled = true; };
+  }, [selectedLeague?.id, teams]);
+
   const myCategoriesInOpenLeague = new Set(teams.filter((team) => team.leagueId === openLeague?.id).map((team) => team.category));
   const canRegisterOtherCategory = openLeague?.status === "registration_open" && myCategoriesInOpenLeague.size < 2 && myCategoriesInOpenLeague.size > 0;
   const missingCategory = myCategoriesInOpenLeague.has("avoin") ? "mixty" : myCategoriesInOpenLeague.has("mixty") ? "avoin" : undefined;
@@ -193,7 +206,9 @@ export default function HomeScreen() {
   const primary = currentLeagueTeams[0];
   const showCategoryToggle = primary?.leagueStatus === "ongoing" && currentLeagueTeams.length > 1;
   const myTeamCategories = [...new Set(currentLeagueTeams.map((team) => team.category))];
-  const categoryHeaderText = primary?.leagueStatus !== "ongoing" ? "Padel - Avoin ja Mixty" : myTeamCategories.length === 2 ? "Padel - Avoin ja Mixty" : myTeamCategories.includes("mixty") ? "Padel - Mixty" : "Padel - Avoin";
+  const categoryHeaderText = primary?.leagueStatus !== "ongoing"
+    ? "Padel - Avoin ja Mixty"
+    : `Padel${activeRoundName ? ` - ${activeRoundName}` : ""}${myTeamCategories.length === 1 ? ` - ${categoryLabels[myTeamCategories[0]] ?? myTeamCategories[0]}` : ""}`;
   const showTeamCategoryLabel = !(primary?.leagueStatus === "ongoing" && myTeamCategories.length === 1);
   const visibleLeagueTeams = showCategoryToggle
     ? currentLeagueTeams.filter((team) => team.category === (selectedTeamCategory ?? primary.category))
@@ -265,8 +280,8 @@ export default function HomeScreen() {
         ) : <Text style={styles.cardNote}>{openLeague.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(openLeague.registration_opens_at)}.` : "Ilmoittautuminen avautuu pian."}</Text>}
       </> : <Text style={styles.emptyCopy}>Uudet liigat ilmestyvät tähän, kun ilmoittautuminen avataan.</Text>}
     </View> : !primary ? null : <View style={styles.leagueCard}>
-      <View style={[styles.categoryRow, showCategoryToggle && styles.categoryRowButtonsOnly]}>
-        {showCategoryToggle ? null : <Text style={styles.categoryText}>{categoryHeaderText}</Text>}
+      <View style={styles.categoryRow}>
+        <Text style={styles.categoryText}>{categoryHeaderText}</Text>
         <View style={styles.infoButtonsInline}>
           <Pressable onPress={() => setShowLeagueIntro(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable>
           <Pressable onPress={() => setShowRoundSchedule(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
@@ -346,7 +361,6 @@ const styles = StyleSheet.create({
   browseText: { color: colors.surface, fontWeight: "800" },
   openLeagueCard: { marginTop: 4 },
   categoryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8, gap: 8 },
-  categoryRowButtonsOnly: { justifyContent: "flex-end" },
   categoryText: { color: colors.greenBright, fontSize: 13, fontWeight: "800" },
   playerCountTextRow: { color: colors.coral, fontSize: 11, fontWeight: "900", letterSpacing: 0.3, marginTop: 8 },
   infoButtonsInline: { flexDirection: "row", gap: 8 },
