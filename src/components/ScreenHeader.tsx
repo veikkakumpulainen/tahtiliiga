@@ -22,13 +22,13 @@ export default function ScreenHeader() {
     </View>
     <Modal visible={showLeagueIntro} transparent animationType="fade" onRequestClose={() => setShowLeagueIntro(false)}>
       <Pressable style={styles.modalBackdrop} onPress={() => setShowLeagueIntro(false)}>
-        <Pressable style={styles.modalBox} onPress={(event) => event.stopPropagation()}>
+        <View style={styles.modalBox} onStartShouldSetResponder={() => true}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Jyväskylän Tähtiliiga</Text>
             <Pressable onPress={() => setShowLeagueIntro(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.modalClose}>×</Text></Pressable>
           </View>
-          <ScrollView style={[styles.modalScroll, { maxHeight: Math.round(windowHeight * 0.6) }]} showsVerticalScrollIndicator={false} nestedScrollEnabled><LeagueIntroContent /></ScrollView>
-        </Pressable>
+          <ScrollView style={[styles.modalScroll, { maxHeight: Math.round(windowHeight * 0.6) }]} showsVerticalScrollIndicator={false}><LeagueIntroContent /></ScrollView>
+        </View>
       </Pressable>
     </Modal>
   </>;
