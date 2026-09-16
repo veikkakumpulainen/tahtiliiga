@@ -225,12 +225,12 @@ export default function HomeScreen() {
       </> : <Text style={styles.emptyCopy}>Uudet liigat ilmestyvät tähän, kun ilmoittautuminen avataan.</Text>}
     </View> : !primary ? null : <View style={styles.leagueCard}>
       <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
-      {primary.leagueStatus !== "ongoing" ? <View style={styles.dateRow}>
-        <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(primary.startDate)}</Text></View>
-        <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(primary.endDate)}</Text></View>
-      </View> : null}
-      {canRegisterOtherCategory && openLeague ? <View style={styles.dateRow}>
-        <View><Text style={styles.cardLabel}>ILMOITTAUTUMISEN DEADLINE</Text><Text style={styles.season}>{formatFinnishDate(openLeague.registration_deadline)}</Text></View>
+      {primary.leagueStatus !== "ongoing" || (canRegisterOtherCategory && openLeague) ? <View style={styles.dateRow}>
+        {primary.leagueStatus !== "ongoing" ? <>
+          <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(primary.startDate)}</Text></View>
+          <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(primary.endDate)}</Text></View>
+        </> : null}
+        {canRegisterOtherCategory && openLeague ? <View><Text style={styles.cardLabel}>ILMOITTAUTUMISEN DEADLINE</Text><Text style={styles.season}>{formatFinnishDate(openLeague.registration_deadline)}</Text></View> : null}
       </View> : null}
       {visibleLeagueTeams.map((team) => { const teamPlayers = rosterRows.filter((player) => player.team_id === team.id); const allPaid = team.leagueStatus === "ongoing" && teamPlayers.length > 0 && teamPlayers.every((player) => paymentStatuses[`${team.id}:${player.player_id}`] === "paid"); return <View key={team.id} style={styles.teamBox}>
         {showCategoryToggle ? <>
