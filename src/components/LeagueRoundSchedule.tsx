@@ -6,7 +6,7 @@ import { colors } from "../theme";
 
 type LeagueRound = { id: string; name: string; start_date: string; end_date: string };
 
-export default function LeagueRoundSchedule({ leagueId }: { leagueId: string }) {
+export default function LeagueRoundSchedule({ leagueId, label = "Näytä kierrosten aikataulu" }: { leagueId: string; label?: string }) {
   const [visible, setVisible] = useState(false);
   const [rounds, setRounds] = useState<LeagueRound[]>([]);
   const [loading, setLoading] = useState(false);
@@ -30,7 +30,7 @@ export default function LeagueRoundSchedule({ leagueId }: { leagueId: string }) 
 
   return <>
     <Pressable onPress={() => setVisible(true)} style={styles.button} accessibilityRole="button">
-      <Text style={styles.buttonText}>Näytä kierrosten aikataulu</Text>
+      <Text style={styles.buttonText}>{label}</Text>
       <Text style={styles.arrow}>→</Text>
     </Pressable>
     <Modal visible={visible} transparent animationType="slide" onRequestClose={() => setVisible(false)}>
