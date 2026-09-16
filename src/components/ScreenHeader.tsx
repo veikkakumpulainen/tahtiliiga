@@ -30,15 +30,15 @@ export default function ScreenHeader() {
         </Pressable> : null}
       </View>
     </View>
-    <Modal visible={showLeagueIntro} transparent animationType="fade" onRequestClose={() => setShowLeagueIntro(false)}>
+    <Modal visible={showLeagueIntro} transparent animationType="slide" onRequestClose={() => setShowLeagueIntro(false)}>
       <Pressable style={styles.modalBackdrop} onPress={() => setShowLeagueIntro(false)}>
-        <Pressable style={styles.modalBox} onPress={(event) => event.stopPropagation()}>
-          <View style={styles.modalHeader}>
+        <View style={styles.modalBox}>
+          <Pressable style={styles.modalHeader} onPress={(event) => event.stopPropagation()}>
             <Text style={styles.modalTitle}>Jyväskylän Tähtiliiga</Text>
             <Pressable onPress={() => setShowLeagueIntro(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.modalClose}>×</Text></Pressable>
-          </View>
-          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}><LeagueIntroContent /></ScrollView>
-        </Pressable>
+          </Pressable>
+          <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalContentInner} showsVerticalScrollIndicator={false}><LeagueIntroContent /></ScrollView>
+        </View>
       </Pressable>
     </Modal>
     {selectedLeague ? <LeagueRoundSchedule leagueId={selectedLeague.id} visible={showRoundSchedule} onClose={() => setShowRoundSchedule(false)} /> : null}
@@ -56,10 +56,11 @@ const styles = StyleSheet.create({
   calendarGlyphBar: { height: 2.5, backgroundColor: colors.surface, marginTop: 1.5 },
   calendarGlyphRingLeft: { position: "absolute", top: -2.5, left: 1.5, width: 1.5, height: 3, borderRadius: 1, backgroundColor: colors.surface },
   calendarGlyphRingRight: { position: "absolute", top: -2.5, right: 1.5, width: 1.5, height: 3, borderRadius: 1, backgroundColor: colors.surface },
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", alignItems: "center", justifyContent: "center", padding: 20 },
-  modalBox: { backgroundColor: colors.surface, borderRadius: 16, padding: 22, width: "100%", maxWidth: 480, maxHeight: "85%" },
-  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 4 },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", justifyContent: "flex-end" },
+  modalBox: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "85%" },
+  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 22, paddingTop: 22, paddingBottom: 8 },
   modalTitle: { color: colors.ink, fontSize: 18, fontWeight: "800", flex: 1 },
   modalClose: { color: colors.muted, fontSize: 24, fontWeight: "600", lineHeight: 24 },
-  modalContent: { marginTop: 8 },
+  modalContent: { flexGrow: 0 },
+  modalContentInner: { paddingHorizontal: 22, paddingBottom: 34 },
 });
