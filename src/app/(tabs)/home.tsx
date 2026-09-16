@@ -208,7 +208,7 @@ export default function HomeScreen() {
   const myTeamCategories = [...new Set(currentLeagueTeams.map((team) => team.category))];
   const categoryHeaderText = primary?.leagueStatus !== "ongoing"
     ? "Padel - Avoin ja Mixty"
-    : `Padel${activeRoundName ? ` - ${activeRoundName}` : ""}${myTeamCategories.length === 1 ? ` - ${categoryLabels[myTeamCategories[0]] ?? myTeamCategories[0]}` : ""}`;
+    : `${activeRoundName ?? ""}${myTeamCategories.length === 1 ? `${activeRoundName ? " - " : ""}${categoryLabels[myTeamCategories[0]] ?? myTeamCategories[0]}` : ""}`;
   const showTeamCategoryLabel = !(primary?.leagueStatus === "ongoing" && myTeamCategories.length === 1);
   const visibleLeagueTeams = showCategoryToggle
     ? currentLeagueTeams.filter((team) => team.category === (selectedTeamCategory ?? primary.category))
