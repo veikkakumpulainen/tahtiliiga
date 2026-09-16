@@ -48,6 +48,7 @@ export default function HomeScreen() {
   const [payingTeamId, setPayingTeamId] = useState<string | null>(null);
   const [payError, setPayError] = useState("");
   const [selectedTeamCategory, setSelectedTeamCategory] = useState<string | null>(null);
+  const [leaguePlayerCount, setLeaguePlayerCount] = useState<number | null>(null);
 
   const loadOpenLeague = useCallback(async () => {
     if (!supabase) return;
@@ -166,6 +167,19 @@ export default function HomeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const leagueId = teams.length === 0 && invitations.length === 0 ? openLeague?.id : (selectedLeague?.id ?? teams[0]?.leagueId);
+    if (!supabase || !leagueId) { setLeaguePlayerCount(null); return; }
+    const client = supabase;
+    let cancelled = false;
+    void client.rpc("get_league_team_rosters", { target_league_id: leagueId }).then(({ data }) => {
+      if (cancelled) return;
+      const rows = (data ?? []) as { player_id: string }[];
+      setLeaguePlayerCount(new Set(rows.map((row) => row.player_id)).size);
+    });
+    return () => { cancelled = true; };
+  }, [teams, invitations.length, openLeague?.id, selectedLeague?.id]);
+
   const myCategoriesInOpenLeague = new Set(teams.filter((team) => team.leagueId === openLeague?.id).map((team) => team.category));
   const canRegisterOtherCategory = openLeague?.status === "registration_open" && myCategoriesInOpenLeague.size < 2 && myCategoriesInOpenLeague.size > 0;
   const missingCategory = myCategoriesInOpenLeague.has("avoin") ? "mixty" : myCategoriesInOpenLeague.has("mixty") ? "avoin" : undefined;
@@ -213,7 +227,7 @@ export default function HomeScreen() {
     </View> : null}
     {teams.length === 0 && invitations.length === 0 ? <View style={styles.openLeagueCard}>
       {openLeague ? <>
-        <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
+        <Text style={styles.categoryText}>Padel - Avoin ja Mixty{leaguePlayerCount !== null ? <Text style={styles.playerCountText}> · Pelaajia liigassa {leaguePlayerCount}</Text> : null}</Text>
         <View style={styles.dateRow}>
           <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(openLeague.start_date)}</Text></View>
           <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(openLeague.end_date)}</Text></View>
@@ -224,7 +238,7 @@ export default function HomeScreen() {
         ) : <Text style={styles.cardNote}>{openLeague.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(openLeague.registration_opens_at)}.` : "Ilmoittautuminen avautuu pian."}</Text>}
       </> : <Text style={styles.emptyCopy}>Uudet liigat ilmestyvät tähän, kun ilmoittautuminen avataan.</Text>}
     </View> : !primary ? null : <View style={styles.leagueCard}>
-      <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
+      <Text style={styles.categoryText}>Padel - Avoin ja Mixty{leaguePlayerCount !== null ? <Text style={styles.playerCountText}> · Pelaajia liigassa {leaguePlayerCount}</Text> : null}</Text>
       {primary.leagueStatus !== "ongoing" || (canRegisterOtherCategory && openLeague) ? <View style={styles.dateRow}>
         {primary.leagueStatus !== "ongoing" ? <>
           <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(primary.startDate)}</Text></View>
@@ -298,6 +312,7 @@ const styles = StyleSheet.create({
   browseText: { color: colors.surface, fontWeight: "800" },
   openLeagueCard: { marginTop: 4 },
   categoryText: { color: colors.greenBright, fontSize: 13, fontWeight: "800", marginTop: 8 },
+  playerCountText: { color: colors.muted, fontWeight: "700" },
   leagueCard: { marginTop: 4, marginBottom: 12 },
   cardLabel: { color: colors.muted, fontSize: 9, letterSpacing: 1.1, fontWeight: "900", marginTop: 15 },
   teamBox: { backgroundColor: colors.canvas, borderRadius: 14, borderWidth: 1, borderColor: colors.line, padding: 16, marginTop: 16 },
