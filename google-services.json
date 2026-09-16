@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "416000074461",
+    "project_id": "tahtiliiga-43a84",
+    "storage_bucket": "tahtiliiga-43a84.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:416000074461:android:1bda29370e17a9f48af134",
+        "android_client_info": {
+          "package_name": "com.veikkakumpulainen.tahtiliiga"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDM-N5hWtIsl7BJgTal-SLemZB5GviucJA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

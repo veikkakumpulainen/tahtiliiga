@@ -13,24 +13,25 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#171717",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.veikkakumpulainen.tahtiliiga"
+      "package": "com.veikkakumpulainen.tahtiliiga",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/tahtiliigalogo.png"
+      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#123F2A",
+          "backgroundColor": "#171717",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
@@ -40,7 +41,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/splash-icon.png",
-          "color": "#123F2A"
+          "color": "#171717"
         }
       ]
     ],

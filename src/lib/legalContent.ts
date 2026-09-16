@@ -111,7 +111,7 @@ Sulkemisen jälkeen tiedot poistetaan soveltuvien lakien mukaisesti.`,
   },
   {
     heading: `13. Yhteydenotto`,
-    text: `Kysymyksiä käyttöehdoista: ede.rissanen@gmail.com`,
+    text: `Kysymyksiä käyttöehdoista: eetu@tähtiliiga.fi`,
   },
 ];
 
@@ -121,7 +121,7 @@ export const privacySections: LegalSection[] = [
     text: `Tähtiliiga
 Yhteyshenkilö: Eetu Rissanen
 Puhelin: 044 208 1638
-Sähköposti: ede.rissanen@gmail.com`,
+Sähköposti: eetu@tähtiliiga.fi`,
   },
   {
     heading: `2. Kerättävät henkilötiedot`,
@@ -217,6 +217,6 @@ Oikeuksien käyttämiseksi ota yhteyttä rekisterinpitäjään.`,
   },
   {
     heading: `11. Yhteydenotto`,
-    text: `Tietosuojaan liittyvissä kysymyksissä ota yhteyttä: ede.rissanen@gmail.com`,
+    text: `Tietosuojaan liittyvissä kysymyksissä ota yhteyttä: eetu@tähtiliiga.fi`,
   },
 ];

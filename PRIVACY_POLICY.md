@@ -7,7 +7,7 @@
 Tähtiliiga
 Yhteyshenkilö: Eetu Rissanen
 Puhelin: 044 208 1638
-Sähköposti: ede.rissanen@gmail.com
+Sähköposti: eetu@tähtiliiga.fi
 
 ## 2. Kerättävät henkilötiedot
 
@@ -103,4 +103,4 @@ Tietojen käsittely noudattaa EU:n GDPR-asetusta. Tarvittaessa voit tehdä valit
 
 ## 11. Yhteydenotto
 
-Tietosuojaan liittyvissä kysymyksissä ota yhteyttä: ede.rissanen@gmail.com
+Tietosuojaan liittyvissä kysymyksissä ota yhteyttä: eetu@tähtiliiga.fi

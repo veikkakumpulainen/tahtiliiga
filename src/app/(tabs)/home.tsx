@@ -259,7 +259,7 @@ export default function HomeScreen() {
         {allPaid ? null : paymentStatuses[`${team.id}:${session?.user.id}`] === "paid" ? <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>✓ Osallistumismaksu maksettu</Text></View> : <Pressable style={styles.payButton} onPress={() => void payOwnFee(team)} disabled={payingTeamId === team.id}>
           {payingTeamId === team.id ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.payButtonText}>Maksa osallistuminen ({PARTICIPATION_FEE} €)</Text>}
         </Pressable>}
-        {team.leagueStatus === "ongoing" && team.groupId ? <GroupMatches teamId={team.id} teamName={team.name} /> : null}
+        {team.leagueStatus === "ongoing" && team.groupId ? <GroupMatches teamId={team.id} teamName={team.name} ownGroupName={team.groupName} /> : null}
       </View>; })}
       {payError ? <Text style={styles.payErrorText}>{payError}</Text> : null}
       {canRegisterOtherCategory && openLeague ? <Pressable style={styles.browseButton} onPress={() => router.push({ pathname: `/league/${openLeague.id}/register`, params: { category: missingCategory } } as never)}><Text style={styles.browseText}>{registerMissingLabel}</Text><Text style={styles.arrow}>→</Text></Pressable> : null}
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   pageWeb: { paddingBottom: 3 },
   scroll: { flex: 1 },
   content: { paddingBottom: 32 },
-  scrollBody: { paddingHorizontal: 22, paddingTop: 27 },
+  scrollBody: { paddingHorizontal: 22, paddingTop: 10 },
   scrollBodyWithFixedHeader: { paddingTop: 0 },
   fixedHeader: { paddingHorizontal: 22, paddingTop: 27, paddingBottom: 16, backgroundColor: colors.canvas },
   inviteSuccessBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", alignItems: "center", justifyContent: "center", padding: 24 },

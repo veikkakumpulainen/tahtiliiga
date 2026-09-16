@@ -107,4 +107,4 @@ Tähtiliiga voi muuttaa näitä ehtoja:
 
 ## 13. Yhteydenotto
 
-Kysymyksiä käyttöehdoista: ede.rissanen@gmail.com
+Kysymyksiä käyttöehdoista: eetu@tähtiliiga.fi

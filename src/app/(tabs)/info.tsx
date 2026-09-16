@@ -30,7 +30,8 @@ function AllAboutContent({ onContactPress }: { onContactPress: () => void }) {
       <Text style={styles.modalHeading}>Mikä on Tähtiliiga?</Text>
       <Text style={styles.modalText}>Tähtiliigan perimmäinen ajatus on yksinkertainen: haluamme mahdollistaa mahdollisimman monelle kaupungin pelaajalle tasaisia, mielekkäitä ja sopivan kilpailullisen vivahteen omaavia matseja arkeen. Meidän tavoite on tehdä mukaan ilmoittautumiseen mahdollisimman pieni kynnys, jos siis epäröit suuresti, olemme epäonnistuneet!</Text>
       <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Sinun ei siis todellakaan tarvitse olla kilpapelaaja osallistuaksesi tähtiliigaan. Riittää, että haluat pelata, kehittyä ja saada tavallisiin padelpeleihin hieman enemmän panosta. Tähtiliigan konsepti on hiottu niin, että jokainen joukkue pelaa omalla tasollaan oman tasoisia vastaan.</Text>
-      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Lisäksi pidämme huolen, että meiltä löytyy Suomen parhaat ja runsaimmat palkinnot, kannustimet ja yhteistyöt liigan ympäriltä.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Liiga ei ole sidonnainen mihinkään alueen padeltoimijaan tai ei toimi minkään yksittäisen padelyrityksen alla. Tähtiliigaa on oma yrityksensä jota pyörittää oma tiimi. Näin ollen saadaan käyttöön kaupungin kaikki padelkentät (jotka täyttävät laadultaan vaatimustason), parannettua kaupungin padelyhteisöä sekä yhteistyötä ja tarjottua kaikille padeltoimijoille hyötyä liigan olemassa olosta. 🤩</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Pidämme myös huolen siitä, että meiltä löytyy Suomen parhaat ja runsaimmat palkinnot, kannustimet ja yhteistyöt liigan ympäriltä.</Text>
       <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Tähtiliiga on kaikille, tervetuloa mukaan!</Text>
     </View>
     <View style={styles.modalSection}>
@@ -221,7 +222,7 @@ function ContactContent() {
       <Text style={styles.modalSubheading}>Yhteyshenkilö</Text>
       <Text style={styles.modalText}>Eetu Rissanen</Text>
       <Pressable onPress={() => void Linking.openURL("tel:+358442081638")}><Text style={[styles.contactLink, styles.modalParagraphSpacing]}>📞 044 208 1638</Text></Pressable>
-      <Pressable onPress={() => void Linking.openURL("mailto:ede.rissanen@gmail.com")}><Text style={styles.contactLink}>✉️ ede.rissanen@gmail.com</Text></Pressable>
+      <Pressable onPress={() => void Linking.openURL("mailto:eetu@tähtiliiga.fi")}><Text style={styles.contactLink}>✉️ eetu@tähtiliiga.fi</Text></Pressable>
     </View>
     <View style={styles.modalSection}>
       <Text style={styles.modalText}>Olet sitten pelaaja, kapteeni, padeltoimija tai yhteistyöstä kiinnostunut yritys, laita rohkeasti viestiä.</Text>

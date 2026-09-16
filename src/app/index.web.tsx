@@ -1,6 +1,6 @@
 import { Link } from "expo-router";
 import Head from "expo-router/head";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import LoginForm from "../components/LoginForm";
 import ProfileForm from "../components/ProfileForm";
@@ -22,10 +22,10 @@ type TeamPlayer = { id: string; name: string; pending: boolean; isCaptain: boole
 type Team = { id: string; name: string; category: string; players: TeamPlayer[] };
 type RosterRow = { team_id: string; team_name: string; category: string; player_id: string; first_name: string; last_name: string; is_captain: boolean; status: string };
 const categories = [["avoin", "Avoin"], ["mixty", "Mixty"]] as const;
-type InfoModal = "about" | "league" | "vision";
+type InfoModal = "about" | "league" | "vision" | "leagueIntro";
 type Invitation = { team_id: string; team_name: string; league_id: string; league_name: string; captain_name: string | null; league_start_date: string; league_end_date: string | null };
 
-const infoModalTitles: Record<InfoModal, string> = { about: "Kaikki tähtiliigasta", league: "Liigakonsepti + säännöt", vision: "Yhteyttä" };
+const infoModalTitles: Record<InfoModal, string> = { about: "Kaikki tähtiliigasta", league: "Liigakonsepti + säännöt", vision: "Yhteyttä", leagueIntro: "Jyväskylän Tähtiliiga" };
 
 const PRETTY_HOSTNAMES: Record<string, string> = { "xn--thtiliiga-v2a.fi": "tähtiliiga.fi", "www.xn--thtiliiga-v2a.fi": "www.tähtiliiga.fi" };
 
@@ -245,7 +245,10 @@ export default function WebHomeScreen() {
       <View style={[styles.leagueColumn, isMobile && styles.leagueColumnMobile]}>
         {loading ? <View style={styles.loading}><ActivityIndicator color={colors.green} /></View> : league ? <><View style={styles.leagueHeading}><Pressable onPress={() => { if (typeof window !== "undefined") window.open("https://www.padelution.com/leagues/jyvaskyla-kesaliiga-2026", "_blank"); }} style={styles.currentLeagueLinkButton}><Text style={[styles.currentLeagueLink, isMobile && styles.currentLeagueLinkMobile]}>Nykyisessä Jyväskylän Kesäliigassamme mukana +200 pelaajaa!</Text></Pressable></View><View style={[styles.leagueFeature, styles.leagueFeatureActive, isMobile && styles.leagueFeatureMobile]}>
           <Text style={[styles.leagueName, styles.leagueNameActive, isMobile && styles.leagueNameMobile]}>{league.name}</Text>
-          <Text style={[styles.categoryText, styles.categoryTextActive]}>Padel - Avoin ja Mixty</Text>
+          <View style={styles.categoryRow}>
+            <Text style={[styles.categoryText, styles.categoryTextActive, styles.categoryTextInRow]}>Padel - Avoin ja Mixty</Text>
+            <Pressable onPress={() => setInfoModal("leagueIntro")} accessibilityRole="button" accessibilityLabel="Lisätietoa Tähtiliigasta" style={styles.categoryInfoButton}><Text style={styles.categoryInfoButtonText}>i</Text></Pressable>
+          </View>
           <View style={[styles.detailsRow, styles.detailsRowActive, isMobile && styles.detailsRowMobile]}><View><Text style={[styles.detailLabel, styles.detailLabelActive]}>LIIGA ALKAA</Text><Text style={[styles.detailValue, styles.detailValueActive]}>{formatFinnishDate(league.start_date)}</Text></View><View><Text style={[styles.detailLabel, styles.detailLabelActive]}>LIIGA LOPPUU</Text><Text style={[styles.detailValue, styles.detailValueActive]}>{league.end_date ? formatFinnishDate(league.end_date) : "Ei määritetty"}</Text></View><View><Text style={[styles.detailLabel, styles.detailLabelActive]}>ILMOITTAUTUMISEN DEADLINE</Text><Text style={[styles.detailValue, styles.detailValueActive]}>{league.registration_deadline ? formatFinnishDate(league.registration_deadline) : "Ei määritetty"}</Text></View></View>
           {userTeams.length > 0 ? <View style={styles.myTeamBox}>
             <View style={[styles.myTeamRow, isMobile && styles.myTeamRowMobile]}>
@@ -265,7 +268,10 @@ export default function WebHomeScreen() {
           </View>}
         </View></> : upcomingLeague ? <><View style={styles.leagueHeading}><Pressable onPress={() => { if (typeof window !== "undefined") window.open("https://www.padelution.com/leagues/jyvaskyla-kesaliiga-2026", "_blank"); }} style={styles.currentLeagueLinkButton}><Text style={[styles.currentLeagueLink, isMobile && styles.currentLeagueLinkMobile]}>Nykyisessä Jyväskylän Kesäliigassamme mukana +200 pelaajaa!</Text></Pressable></View><View style={[styles.leagueFeature, styles.leagueFeatureUpcoming, isMobile && styles.leagueFeatureMobile]}>
           <Text style={[styles.leagueName, styles.leagueNameUpcoming, isMobile && styles.leagueNameMobile]}>{upcomingLeague.name}</Text>
-          <Text style={styles.categoryTextUpcoming}>Padel - Avoin ja Mixty</Text>
+          <View style={styles.categoryRow}>
+            <Text style={[styles.categoryTextUpcoming, styles.categoryTextInRow]}>Padel - Avoin ja Mixty</Text>
+            <Pressable onPress={() => setInfoModal("leagueIntro")} accessibilityRole="button" accessibilityLabel="Lisätietoa Tähtiliigasta" style={styles.categoryInfoButton}><Text style={styles.categoryInfoButtonText}>i</Text></Pressable>
+          </View>
           <View style={[styles.detailsRow, styles.detailsRowUpcoming, isMobile && styles.detailsRowMobile]}><View><Text style={[styles.detailLabel, styles.detailLabelUpcoming]}>LIIGA ALKAA</Text><Text style={[styles.detailValue, styles.detailValueUpcoming]}>{formatFinnishDate(upcomingLeague.start_date)}</Text></View><View><Text style={[styles.detailLabel, styles.detailLabelUpcoming]}>LIIGA LOPPUU</Text><Text style={[styles.detailValue, styles.detailValueUpcoming]}>{upcomingLeague.end_date ? formatFinnishDate(upcomingLeague.end_date) : "Ei määritetty"}</Text></View></View>
           <Pressable disabled style={[styles.joinButton, styles.joinButtonUpcoming, isMobile && styles.joinButtonMobile]}><Text style={[styles.joinText, styles.joinTextUpcoming]}>{upcomingLeague.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(upcomingLeague.registration_opens_at)}` : "Ilmoittautuminen avautuu pian"}</Text></Pressable>
         </View></> : <><View style={styles.leagueHeading} /><View style={styles.empty}><Text style={styles.emptyTitle}>Avoimia sarjoja ei ole juuri nyt.</Text><Text style={styles.emptyCopy}>Uudet sarjat näkyvät tässä, kun ilmoittautuminen avataan.</Text></View></>}
@@ -388,7 +394,7 @@ export default function WebHomeScreen() {
           <Text style={styles.modalTitle}>{infoModal ? infoModalTitles[infoModal] : ""}</Text>
           <Pressable onPress={() => setInfoModal(null)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.modalClose}>×</Text></Pressable>
         </View>
-        {infoModal === "about" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><AllAboutContent onContactPress={() => setInfoModal("vision")} /></ScrollView> : infoModal === "league" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><LeagueRulesContent /></ScrollView> : infoModal === "vision" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><ContactContent /></ScrollView> : <Text style={styles.placeholderCopy}>Sisältö tulossa pian.</Text>}
+        {infoModal === "about" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><AllAboutContent onContactPress={() => setInfoModal("vision")} /></ScrollView> : infoModal === "league" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><LeagueRulesContent /></ScrollView> : infoModal === "vision" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><ContactContent /></ScrollView> : infoModal === "leagueIntro" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><LeagueIntroContent /></ScrollView> : <Text style={styles.placeholderCopy}>Sisältö tulossa pian.</Text>}
       </Pressable>
     </Pressable>
   </Modal>
@@ -402,7 +408,8 @@ function AllAboutContent({ onContactPress }: { onContactPress: () => void }) {
       <Text style={styles.modalHeading}>Mikä on Tähtiliiga?</Text>
       <Text style={styles.modalText}>Tähtiliigan perimmäinen ajatus on yksinkertainen: haluamme mahdollistaa mahdollisimman monelle kaupungin pelaajalle tasaisia, mielekkäitä ja sopivan kilpailullisen vivahteen omaavia matseja arkeen. Meidän tavoite on tehdä mukaan ilmoittautumiseen mahdollisimman pieni kynnys, jos siis epäröit suuresti, olemme epäonnistuneet!</Text>
       <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Sinun ei siis todellakaan tarvitse olla kilpapelaaja osallistuaksesi tähtiliigaan. Riittää, että haluat pelata, kehittyä ja saada tavallisiin padelpeleihin hieman enemmän panosta. Tähtiliigan konsepti on hiottu niin, että jokainen joukkue pelaa omalla tasollaan oman tasoisia vastaan.</Text>
-      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Lisäksi pidämme huolen, että meiltä löytyy Suomen parhaat ja runsaimmat palkinnot, kannustimet ja yhteistyöt liigan ympäriltä.</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Liiga ei ole sidonnainen mihinkään alueen padeltoimijaan tai ei toimi minkään yksittäisen padelyrityksen alla. Tähtiliigaa on oma yrityksensä jota pyörittää oma tiimi. Näin ollen saadaan käyttöön kaupungin kaikki padelkentät (jotka täyttävät laadultaan vaatimustason), parannettua kaupungin padelyhteisöä sekä yhteistyötä ja tarjottua kaikille padeltoimijoille hyötyä liigan olemassa olosta. 🤩</Text>
+      <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Pidämme myös huolen siitä, että meiltä löytyy Suomen parhaat ja runsaimmat palkinnot, kannustimet ja yhteistyöt liigan ympäriltä.</Text>
       <Text style={[styles.modalText, styles.modalParagraphSpacing]}>Tähtiliiga on kaikille, tervetuloa mukaan!</Text>
     </View>
     <View style={styles.modalSection}>
@@ -593,13 +600,166 @@ function ContactContent() {
       <Text style={styles.modalSubheading}>Yhteyshenkilö</Text>
       <Text style={styles.modalText}>Eetu Rissanen</Text>
       <Pressable onPress={() => { if (typeof window !== "undefined") window.location.href = "tel:+358442081638"; }}><Text style={[styles.contactLink, styles.modalParagraphSpacing]}>📞 044 208 1638</Text></Pressable>
-      <Pressable onPress={() => { if (typeof window !== "undefined") window.location.href = "mailto:ede.rissanen@gmail.com"; }}><Text style={styles.contactLink}>✉️ ede.rissanen@gmail.com</Text></Pressable>
+      <Pressable onPress={() => { if (typeof window !== "undefined") window.location.href = "mailto:eetu@tähtiliiga.fi"; }}><Text style={styles.contactLink}>✉️ eetu@tähtiliiga.fi</Text></Pressable>
     </View>
     <View style={styles.modalSection}>
       <Text style={styles.modalText}>Olet sitten pelaaja, kapteeni, padeltoimija tai yhteistyöstä kiinnostunut yritys, laita rohkeasti viestiä.</Text>
       <Text style={[styles.modalFootnote, styles.modalParagraphSpacing]}>Tähtiliigaa rakennetaan yhdessä pelaajien kanssa.</Text>
     </View>
   </View>;
+}
+
+const LEAGUE_INTRO_TEXT = `⭐*JYVÄSKYLÄN TÄHTILIIGA*⭐️
+
+Suomen kirkkain padel-liiga eli tähtiliiga starttaa matkansa Jyväskylästä! Liiga on jatkumoa Jyväskylän kesäliiga 2026 by kuntomaailma:lle
+
+Tähtiliiga on kaiken tasoisille pelaajille suunniteltu kilpailullinen padel-liiga, jossa joukkueet taistelevat kierros kierrokselta sijoituksista, nousuista ja palkinnoista.
+
+Liigan idea on yksinkertainen: aloitat omalta tasoltasi ja kilpailet oman tasoisiasi vastaan. Tähtiliigassa jokainen kierros merkitsee. Lohkot elävät jatkuvasti, joten vastustajat vaihtuvat ja kilpailu säilyy kiinnostavana koko kauden ajan.
+
+Liiga ei ole sidonnainen mihinkään alueen padeltoimijaan tai ei toimi minkään yksittäisen padelyrityksen alla. Tähtiliigaa on oma yrityksensä jota pyörittää oma tiimi. Näin ollen saadaan pelaajille avattua alueen kaikki fasiliteetit, parannettua kaupungin padelyhteisöä sekä yhteistyötä, tarjottua kaikille padeltoimijoille hyötyä liigan olemassa olosta ja neuvoteltua parhaimmat yhteistyöt. 🤩
+
+❕Jokaiselle kesäliigassa mukana olleelle alennus osallistumismaksusta!
+
+⭐️ *Miten liiga toimii?*
+
+- Liiga pelataan 4 joukkueen lohkoissa.
+- Jokaisella kierroksella kohtaatte lohkonne muut joukkueet eli kierroksen aikana pelataan 3 ottelua.
+- Yksi kierros on aina vakiona 26päivää eli 3 kokonaista viikkoa + 1 arkiviikko.
+
+Kierroksen jälkeen:
+- Lohkon voittaja nousee suoraan ylempään lohkoon
+- Lohkon toinen pelaa karsintaottelun ylemmän lohkon kolmosta vastaan
+- Lohkon viimeinen putoaa alempaan lohkoon
+
+Näin lohkot elävät kierros kierrokselta laajasti ja jatkuvasti pääset pelaamaan uusia mutta oman tasoisiaan vastustajia vastaan.
+
+⭐️ *LIIGA ELÄÄ TULOSTEN MUKANA*
+
+- Ensimmäiset lohkot muodostetaan pelaajien ilmoittaman pelitason perusteella.
+- Tämän jälkeen sijoitukset määräytyvät pelkästään tulosten perusteella.
+- Jokaisen kierroksen jälkeen joukkue voi nousta, säilyttää paikkansa tai pudota.
+- Tämä tekee Tähtiliigan konseptista erittäin mielenkiintoisen
+
+⭐️ *JOUKKUEET*
+
+- Joukkueessa voi olla 2–3 pelaajaa.
+- Kokoonpanoa voi vaihtaa ottelukohtaisesti, joten kaikki pelit eivät vaadi samoja pelaajia.
+- Jokaisen joukkueen pelaajan tulee kuitenkin osallistua vähintään neljään otteluun liigakauden aikana.
+- Kerää siis kaverit kasaan, keksikää joukkueelle nimi ja lähtekää tavoittelemaan Tähtiliigan mestaruutta. Ilmoittautuminen on helppoa kuin heinän teko!
+
+⭐️ *SARJAT*
+
+- Avoin sarja: miesjoukkueet & naisjoukkueet
+- Mixty: Mixty joukkueet, kentällä aina mies–nainen -pari.
+
+⭐️ *OTTELUT*
+
+- Jokainen joukkue valitsee kapteenin ilmottautumisen yhteydessä. (Tätä voi muuttaa myöhemmin.
+- Ottelut sovitaan oman lohkon joukkueiden kesken, joten pelaaminen on joustavaa.
+- Tähtiliigasovellus luo automaattisesti kierroksen alkaessa teidän lohkollenne oman chätin sovelluksen sisälle jossa voitte jutella. Vastustajien nimet ja joukkueet tulevat keskustelussa näkyviin näppärästi.
+- Myös kapteenien yhteistiedot on helposti nähtävissä joten whatsapin käyttö pelien sopimiseen on halutessaan mahdollista!
+
+Te päätätte milloin pelaattte ja missä, kunhan kaikki kierroksen ottelut pelataan annetun aikarajan sisällä.
+
+⭐️ *MATSIEN SÄÄNNÖT JA PISTEYTYS*
+
+- 3 erää / ottelu
+- Golden Point käytössä
+
+Jokaisesta ottelusta on jaossa yhteensä 6 pistettä.
+
+* Erävoitto = 1 piste
+* Otteluvoitto = +2 pistettä
+* Häviäjä saa pelatusta ottelusta +1 pisteen
+
+Lisäksi kierroksen sijoituksista saa extrapisteitä:
+
+* Suora nousu = +2 pistettä
+* Karsintaottelun voitto = +1 piste
+
+Näin myös tiukasti taistellut tappio voi olla tärkeä pisteiden kannalta.
+
+Otteluiden kenttävuorot maksetaan normaalisti.
+
+⭐️ *KIERROKSET*
+
+Liiga koostuu kolmesta varsinaisesta kierroksesta.
+
+Jokainen kierros sisältää:
+- 3 lohko-ottelua
+- Kierrosten välissä pelataan tarvittaessa karsintaottelut ylemmän ja alemman lohkon välillä.
+
+⭐️ *FINAALIVIIKONLOPPU*
+
+Tähtiliigan kausi huipentuu aina suureen finaaliviikonloppuun.
+
+Kaikki liigan joukkueet kokoontuvat yhteen ratkaisemaan lopulliset lohkokohtaiset sijoitukset ja mestaruudet.
+
+Finaaliviikonlopun aikana luvassa on:
+- Mestaruuksien ratkaisut
+- Palkintoja lohkojen menestyjille
+- Kauden parhaiden palkitseminen
+- Yhteisöllinen päätöstapahtuma
+
+Tarkoituksena on tehdä finaaliviikonlopusta kauden kohokohta ei vain viimeisiä otteluita.
+
+⭐️ *PALKINNOT*
+
+Tähtiliigassa palkitaan menestyjiä läpi kauden. Tavoitteemme on pitää tähtiliigan palkinnot koko suomen mittakaavalla kaikkein runsaimpina.
+
+Rahapalkintojen lisäksi mukana on yhteistyökumppaneiden tarjoamia palkintoja, etuja ja kannustimia.
+
+Palkintoja jaetaan sekä sarjojen kärkeen että kauden aikana eri lohkoissa menestyville joukkueille.
+
+⭐️ *OSALLISTUMISMAKSU*
+
+Osallistumismaksu: 30€/ pelaaja per sarja
+
+Osallistumismaksu sisältää:
+
+✓ Koko liigakauden
+✓ Kaikki kolme kierrosta
+✓ Mahdollisuuden kaikkiin palkintoihin
+✓ Finaaliviikonlopun
+
+Kenttävuorot maksetaan erikseen. (jokaiseen kesäliigapeliin alennus)
+
+Voit siis osallistua myös molempiin sarjoihin, jolloin osallistumismaksu maksetaan molemmista sarjoista.
+
+⭐ *MIKSI TÄHTILIIGA?*
+
+Kilpailun vivahde. Uudet vastustajat. Paikallinen padelyhteisö. Nousut ja putoamiset. Palkinnot.
+
+Tähtiliigan tarkoitus on tehdä lliigasta kilpailu, johon on helppo tulla mukaan pienellä kynnyksellä ja jossa jokaisella ottelulla on merkitystä.
+
+Olit sitten vasta aloittamassa padelmatkaasi tai kokeneempi kilpailija, TÄHTILIIGASSA on teidän joukkueelle paikka.
+
+Kerää joukkue. Luokaa tähtiliiga profiilit. Ilmoittautukaa liigaan!⭐
+
+Talvi ja tähdet odottaa. Lets Go!`;
+
+function renderFormattedSpans(text: string, keyPrefix: string) {
+  const segments = text.split(/(\*[^*]+\*)/g).filter((segment) => segment.length > 0);
+  return segments.map((segment, index) => segment.startsWith("*") && segment.endsWith("*") && segment.length > 1
+    ? <Text key={`${keyPrefix}-b-${index}`} style={styles.modalBold}>{segment.slice(1, -1)}</Text>
+    : <Text key={`${keyPrefix}-t-${index}`}>{segment}</Text>);
+}
+
+function LeagueIntroContent() {
+  const nodes: ReactElement[] = [];
+  let pendingSpacing = false;
+  LEAGUE_INTRO_TEXT.split("\n").forEach((rawLine, index) => {
+    const line = rawLine.trim();
+    if (!line) { pendingSpacing = nodes.length > 0; return; }
+    const isHeading = /^⭐/.test(line);
+    const bulletMatch = !isHeading ? line.match(/^[-*•]\s+(.*)$/) : null;
+    const content = isHeading ? line.replace(/^[⭐️\s]+/, "").replace(/[⭐️\s]+$/, "") : bulletMatch ? `• ${bulletMatch[1]}` : line;
+    const baseStyle = isHeading ? styles.modalHeading : bulletMatch ? styles.modalBullet : styles.modalText;
+    nodes.push(<Text key={index} style={[baseStyle, pendingSpacing && styles.modalParagraphSpacing]}>{renderFormattedSpans(content, String(index))}</Text>);
+    pendingSpacing = false;
+  });
+  return <View>{nodes}</View>;
 }
 
 const styles = StyleSheet.create({
@@ -612,12 +772,12 @@ const styles = StyleSheet.create({
   inviteActions: { flexDirection: "row", gap: 10, marginTop: 16 }, inviteAccept: { flex: 1, backgroundColor: colors.green, borderRadius: 8, paddingVertical: 14, alignItems: "center" }, inviteAcceptText: { color: colors.surface, fontWeight: "900", fontSize: 13 }, inviteDecline: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 8, paddingVertical: 14, alignItems: "center" }, inviteDeclineText: { color: colors.coral, fontWeight: "900", fontSize: 13 }, inviteLoading: { marginTop: 16 }, inviteError: { color: colors.coral, fontSize: 12, lineHeight: 18, marginTop: 12 },
   hero: { alignItems: "center", paddingTop: 40, paddingBottom: 70 }, heroMobile: { paddingTop: 8, paddingBottom: 14, paddingHorizontal: 18 }, heroLogo: { width: 104, height: 104 }, heroLogoMobile: { width: 68, height: 68 }, heroTitle: { color: colors.ink, fontSize: 48, fontWeight: "900", fontFamily: "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Helvetica, Arial, sans-serif", marginTop: 17 }, heroTitleMobile: { fontSize: 22, marginTop: 8, textAlign: "center" },
   mainGrid: { maxWidth: 1180, width: "100%", alignSelf: "center", paddingHorizontal: 34, flexDirection: "row", alignItems: "stretch", gap: 56 }, mainGridMobile: { flexDirection: "column", paddingHorizontal: 16, gap: 0 }, leagueColumn: { flex: 2, minWidth: 0 }, leagueColumnMobile: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%" }, leagueHeading: { height: 38, justifyContent: "flex-start" }, currentLeagueLinkButton: { alignSelf: "flex-start" }, teamsColumn: { flex: 1, minWidth: 260 }, teamsColumnMobile: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%", minWidth: 0, marginTop: 24 }, teamsHeading: { height: 38, justifyContent: "center" }, kicker: { color: colors.greenBright, fontSize: 10, fontWeight: "900", letterSpacing: 1.5 }, sectionTitle: { color: colors.ink, fontSize: 28, fontWeight: "900" }, sectionTitleMobile: { fontSize: 22 },
-  leagueFeature: { backgroundColor: colors.green, borderRadius: 6, padding: 30 }, leagueFeatureMobile: { padding: 14 }, leagueFeatureActive: { backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.green }, leagueName: { color: colors.surface, fontSize: 31, fontWeight: "900" }, leagueNameActive: { color: colors.ink }, leagueNameMobile: { fontSize: 18 }, signupTitle: { color: colors.surface, fontSize: 24, fontWeight: "900" }, signupTitleMobile: { fontSize: 17 }, leagueDescription: { color: "#3A2E12", fontSize: 15, lineHeight: 23, maxWidth: 620, marginTop: 10 }, leagueDescriptionActive: { color: colors.muted }, categoryText: { color: "#3A2E12", fontSize: 13, fontWeight: "800", marginTop: 8 }, categoryTextActive: { color: colors.greenBright }, categoryTextUpcoming: { color: colors.greenBright, fontSize: 13, fontWeight: "800", marginTop: 8 }, descriptionMobile: { fontSize: 12, lineHeight: 17, marginTop: 6 }, inviteLinkBox: { backgroundColor: "rgba(0,0,0,0.14)", borderRadius: 6, paddingVertical: 12, paddingHorizontal: 14, marginTop: 20 }, inviteLinkBoxMobile: { paddingVertical: 8, paddingHorizontal: 10, marginTop: 10 }, inviteLinkText: { color: "#3A2E12", fontSize: 13, fontWeight: "700" }, leagueFeatureUpcoming: { backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.green }, leagueNameUpcoming: { color: colors.ink }, detailsRow: { flexDirection: "row", gap: 42, borderTopWidth: 1, borderTopColor: "#B8933A", marginTop: 27, paddingTop: 19 }, detailsRowActive: { borderTopColor: colors.line }, detailsRowUpcoming: { borderTopColor: colors.line }, detailsRowMobile: { flexWrap: "wrap", gap: 20, rowGap: 10, marginTop: 12, paddingTop: 10 }, detailLabel: { color: "#5C4A1E", fontSize: 9, fontWeight: "900", letterSpacing: 1 }, detailLabelActive: { color: colors.muted }, detailLabelUpcoming: { color: colors.muted }, detailValue: { color: colors.surface, fontSize: 14, fontWeight: "800", marginTop: 6 }, detailValueActive: { color: colors.ink }, detailValueUpcoming: { color: colors.ink }, joinButton: { backgroundColor: colors.lime, borderRadius: 5, paddingHorizontal: 17, paddingVertical: 15, marginTop: 28, flexDirection: "row", alignItems: "center", alignSelf: "flex-start", minWidth: 210 }, joinButtonMobile: { paddingVertical: 11, paddingHorizontal: 14, marginTop: 12, minWidth: 0 }, joinRow: { flexDirection: "row", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }, joinButtonInRow: { alignSelf: "flex-end" }, joinButtonActive: { backgroundColor: colors.green }, joinButtonRegistered: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.line }, joinButtonSide: { marginTop: 0, alignSelf: "flex-end", flexShrink: 0 }, joinButtonSideMobile: { alignSelf: "flex-start" }, joinTextRegistered: { color: colors.muted }, joinButtonUpcoming: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.line, alignSelf: "stretch", justifyContent: "center" }, joinText: { color: colors.green, fontWeight: "900" }, joinTextActive: { color: colors.surface }, joinTextUpcoming: { color: colors.muted }, joinArrow: { color: colors.green, fontSize: 21, marginLeft: "auto" }, joinArrowActive: { color: colors.surface }, loading: { height: 220, alignItems: "center", justifyContent: "center" }, empty: { backgroundColor: colors.surface, borderRadius: 6, padding: 26 }, emptyTitle: { color: colors.ink, fontWeight: "900", fontSize: 17 }, emptyCopy: { color: colors.muted, lineHeight: 21, marginTop: 8 },
+  leagueFeature: { backgroundColor: colors.green, borderRadius: 6, padding: 30 }, leagueFeatureMobile: { padding: 14 }, leagueFeatureActive: { backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.green }, leagueName: { color: colors.surface, fontSize: 31, fontWeight: "900" }, leagueNameActive: { color: colors.ink }, leagueNameMobile: { fontSize: 18 }, signupTitle: { color: colors.surface, fontSize: 24, fontWeight: "900" }, signupTitleMobile: { fontSize: 17 }, leagueDescription: { color: "#3A2E12", fontSize: 15, lineHeight: 23, maxWidth: 620, marginTop: 10 }, leagueDescriptionActive: { color: colors.muted }, categoryText: { color: "#3A2E12", fontSize: 13, fontWeight: "800", marginTop: 8 }, categoryTextActive: { color: colors.greenBright }, categoryTextUpcoming: { color: colors.greenBright, fontSize: 13, fontWeight: "800", marginTop: 8 }, categoryRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }, categoryTextInRow: { marginTop: 0 }, categoryInfoButton: { width: 18, height: 18, borderRadius: 9, borderWidth: 1, borderColor: colors.greenBright, alignItems: "center", justifyContent: "center" }, categoryInfoButtonText: { color: colors.greenBright, fontSize: 11, fontWeight: "900" }, descriptionMobile: { fontSize: 12, lineHeight: 17, marginTop: 6 }, inviteLinkBox: { backgroundColor: "rgba(0,0,0,0.14)", borderRadius: 6, paddingVertical: 12, paddingHorizontal: 14, marginTop: 20 }, inviteLinkBoxMobile: { paddingVertical: 8, paddingHorizontal: 10, marginTop: 10 }, inviteLinkText: { color: "#3A2E12", fontSize: 13, fontWeight: "700" }, leagueFeatureUpcoming: { backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.green }, leagueNameUpcoming: { color: colors.ink }, detailsRow: { flexDirection: "row", gap: 42, borderTopWidth: 1, borderTopColor: "#B8933A", marginTop: 27, paddingTop: 19 }, detailsRowActive: { borderTopColor: colors.line }, detailsRowUpcoming: { borderTopColor: colors.line }, detailsRowMobile: { flexWrap: "wrap", gap: 20, rowGap: 10, marginTop: 12, paddingTop: 10 }, detailLabel: { color: "#5C4A1E", fontSize: 9, fontWeight: "900", letterSpacing: 1 }, detailLabelActive: { color: colors.muted }, detailLabelUpcoming: { color: colors.muted }, detailValue: { color: colors.surface, fontSize: 14, fontWeight: "800", marginTop: 6 }, detailValueActive: { color: colors.ink }, detailValueUpcoming: { color: colors.ink }, joinButton: { backgroundColor: colors.lime, borderRadius: 5, paddingHorizontal: 17, paddingVertical: 15, marginTop: 28, flexDirection: "row", alignItems: "center", alignSelf: "flex-start", minWidth: 210 }, joinButtonMobile: { paddingVertical: 11, paddingHorizontal: 14, marginTop: 12, minWidth: 0 }, joinRow: { flexDirection: "row", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }, joinButtonInRow: { alignSelf: "flex-end" }, joinButtonActive: { backgroundColor: colors.green }, joinButtonRegistered: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.line }, joinButtonSide: { marginTop: 0, alignSelf: "flex-end", flexShrink: 0 }, joinButtonSideMobile: { alignSelf: "flex-start" }, joinTextRegistered: { color: colors.muted }, joinButtonUpcoming: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.line, alignSelf: "stretch", justifyContent: "center" }, joinText: { color: colors.green, fontWeight: "900" }, joinTextActive: { color: colors.surface }, joinTextUpcoming: { color: colors.muted }, joinArrow: { color: colors.green, fontSize: 21, marginLeft: "auto" }, joinArrowActive: { color: colors.surface }, loading: { height: 220, alignItems: "center", justifyContent: "center" }, empty: { backgroundColor: colors.surface, borderRadius: 6, padding: 26 }, emptyTitle: { color: colors.ink, fontWeight: "900", fontSize: 17 }, emptyCopy: { color: colors.muted, lineHeight: 21, marginTop: 8 },
   teamList: { backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.green, borderRadius: 6, paddingLeft: 22, paddingRight: 6 }, teamListFill: { height: 420 }, teamListScrollFill: { flex: 1, minHeight: 0 }, teamListScrollMobile: { height: 290 }, teamListTitle: { color: colors.green, fontSize: 15, fontWeight: "900", letterSpacing: 0.3, paddingTop: 16, paddingRight: 16 }, categorySwitch: { flexDirection: "row", gap: 8, paddingTop: 12, paddingRight: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.line }, categoryButton: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 6, paddingVertical: 10, alignItems: "center" }, categoryButtonSelected: { backgroundColor: colors.green, borderColor: colors.green }, categoryButtonText: { color: colors.ink, fontSize: 12, fontWeight: "800" }, categoryButtonTextSelected: { color: colors.surface }, teamRow: { flexDirection: "row", alignItems: "center", paddingVertical: 18, paddingRight: 16, borderBottomWidth: 1, borderBottomColor: colors.line }, myTeamBox: { borderTopWidth: 1, borderTopColor: colors.line, marginTop: 27, paddingTop: 19 }, myTeamRow: { flexDirection: "row", gap: 24 }, myTeamRowMobile: { flexDirection: "column", gap: 14 }, myTeamCard: { flex: 1 }, myTeamName: { color: colors.ink, fontSize: 16, fontWeight: "900", marginTop: 6 }, myTeamPlayers: { marginTop: 4 }, myTeamPlayerRow: { color: colors.ink, fontSize: 13, fontWeight: "700", marginTop: 3 }, myTeamPlayerPaid: { color: colors.greenBright, fontWeight: "700" }, myTeamPlayerUnpaid: { color: colors.muted, fontWeight: "600" }, paidBadge: { backgroundColor: "rgba(52,199,89,0.12)", borderRadius: 6, paddingVertical: 8, paddingHorizontal: 10, marginTop: 10, alignSelf: "flex-start" }, paidBadgeText: { color: colors.greenBright, fontWeight: "800", fontSize: 12 }, payButton: { backgroundColor: colors.green, borderRadius: 6, paddingVertical: 10, paddingHorizontal: 14, marginTop: 10, alignSelf: "flex-start" }, payButtonText: { color: colors.surface, fontWeight: "800", fontSize: 12 }, payErrorText: { color: colors.coral, fontSize: 12, marginTop: 10 },
   teamRowLast: { borderBottomWidth: 0 }, teamNumber: { color: colors.green, fontSize: 14, fontWeight: "900", width: 22 }, teamName: { color: colors.ink, fontSize: 15, fontWeight: "900" }, teamPlayers: { color: colors.muted, fontSize: 12, marginTop: 3 },
   footerInfo: { maxWidth: 1180, width: "100%", alignSelf: "center", marginTop: 56, paddingHorizontal: 34, paddingTop: 30, borderTopWidth: 1, borderTopColor: colors.line }, footerInfoMobile: { marginTop: 8, paddingHorizontal: 18, paddingTop: 10 }, footerInfoMobileTeams: { marginTop: 18 },
   footerButtons: { flexDirection: "row", gap: 16 }, footerButtonsMobile: { gap: 8 }, footerButton: { flex: 1, minHeight: 108, alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 22, paddingHorizontal: 10, borderRadius: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line }, footerButtonIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.mint, alignItems: "center", justifyContent: "center" }, footerButtonIconText: { color: colors.green, fontSize: 18, fontWeight: "900" }, footerButtonLogo: { width: 26, height: 26 }, footerButtonLabel: { color: colors.ink, fontSize: 13, fontWeight: "800", textAlign: "center" }, messageIcon: { width: 19, height: 15, borderWidth: 2, borderColor: colors.green, borderRadius: 4, position: "relative" }, messageIconTail: { position: "absolute", bottom: -5, left: 3, width: 6, height: 6, borderLeftWidth: 2, borderBottomWidth: 2, borderColor: colors.green, backgroundColor: colors.mint, transform: [{ rotate: "-45deg" }] },
   placeholderCopy: { color: colors.muted, fontSize: 14, lineHeight: 21, marginTop: 12 },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", alignItems: "center", justifyContent: "center", padding: 20 }, modalBox: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 26, width: "100%", maxWidth: 480, maxHeight: "90%" }, modalScroll: { flexGrow: 0 }, modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }, modalTitle: { color: colors.ink, fontSize: 20, fontWeight: "900", flex: 1 }, modalClose: { color: colors.muted, fontSize: 26, fontWeight: "600", lineHeight: 26, paddingLeft: 12 }, modalFooter: { color: colors.muted, textAlign: "center", marginTop: 20, fontSize: 13 }, modalFooterLink: { color: colors.greenBright, fontWeight: "800" },
-  modalSection: { marginBottom: 18 }, modalHeading: { color: colors.green, fontSize: 14, fontWeight: "900", marginBottom: 8 }, modalText: { color: colors.ink, fontSize: 13, lineHeight: 19 }, modalFootnote: { color: colors.muted, fontSize: 12, lineHeight: 18, fontStyle: "italic" }, modalParagraphSpacing: { marginTop: 10 }, modalSubheading: { color: colors.ink, fontSize: 13, fontWeight: "900", marginBottom: 6 }, modalBullet: { color: colors.ink, fontSize: 13, lineHeight: 19, marginTop: 4 }, contactLink: { color: colors.greenBright, fontSize: 14, fontWeight: "800", marginTop: 6 }, footnoteLink: { color: colors.greenBright, fontWeight: "800", textDecorationLine: "underline" },
+  modalSection: { marginBottom: 18 }, modalHeading: { color: colors.green, fontSize: 14, fontWeight: "900", marginBottom: 8 }, modalText: { color: colors.ink, fontSize: 13, lineHeight: 19 }, modalFootnote: { color: colors.muted, fontSize: 12, lineHeight: 18, fontStyle: "italic" }, modalParagraphSpacing: { marginTop: 10 }, modalSubheading: { color: colors.ink, fontSize: 13, fontWeight: "900", marginBottom: 6 }, modalBullet: { color: colors.ink, fontSize: 13, lineHeight: 19, marginTop: 4 }, modalBold: { fontWeight: "900" }, contactLink: { color: colors.greenBright, fontSize: 14, fontWeight: "800", marginTop: 6 }, footnoteLink: { color: colors.greenBright, fontWeight: "800", textDecorationLine: "underline" },
 });

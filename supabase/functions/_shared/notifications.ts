@@ -49,9 +49,11 @@ export async function resolveRecipientIds(target: NotificationTarget, excludeUse
 }
 
 export async function sendExpoPush(userIds: string[], notification: { title: string; body: string; data?: Record<string, unknown> }): Promise<number> {
-  if (userIds.length === 0) return 0;
-  const { data: tokenRows } = await supabaseAdmin.from("push_tokens").select("expo_push_token").in("user_id", userIds);
+  if (userIds.length === 0) { console.log("[push] no recipient user ids"); return 0; }
+  const { data: tokenRows, error: tokenError } = await supabaseAdmin.from("push_tokens").select("expo_push_token").in("user_id", userIds);
+  if (tokenError) console.warn("[push] push_tokens query failed:", tokenError);
   const tokens = Array.from(new Set((tokenRows ?? []).map((row) => row.expo_push_token as string)));
+  console.log(`[push] ${userIds.length} recipient(s), ${tokens.length} token(s)`);
   if (tokens.length === 0) return 0;
 
   const messages = tokens.map((to) => ({ to, title: notification.title, body: notification.body, data: notification.data ?? {}, sound: "default" }));
@@ -63,7 +65,11 @@ export async function sendExpoPush(userIds: string[], notification: { title: str
       headers: { "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify(chunk),
     });
-    if (response.ok) sent += chunk.length;
+    const result = await response.json().catch(() => null);
+    console.log("[push] expo response:", JSON.stringify(result));
+    const tickets = Array.isArray(result?.data) ? result.data : [];
+    sent += tickets.filter((ticket: { status?: string }) => ticket?.status === "ok").length;
   }
+  console.log(`[push] total sent: ${sent}`);
   return sent;
 }

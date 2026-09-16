@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
   const excerpt = message.length > 120 ? `${message.slice(0, 117)}...` : message;
 
   const recipients = await resolveRecipientIds({ type: "group", groupId }, senderId);
-  const sent = await sendExpoPush(recipients, { title, body: excerpt, data: { path: `/group/${groupId}/chat`, messageId } });
+  const sent = await sendExpoPush(recipients, { title, body: excerpt, data: { path: `/chat?groupId=${groupId}`, messageId } });
 
   return new Response(JSON.stringify({ sent }), { status: 200, headers: { "content-type": "application/json" } });
 });
