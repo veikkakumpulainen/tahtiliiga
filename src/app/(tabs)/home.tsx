@@ -192,6 +192,9 @@ export default function HomeScreen() {
   const currentLeagueTeams = targetLeagueId ? teams.filter((team) => team.leagueId === targetLeagueId).sort((left, right) => Number(left.category === "mixty") - Number(right.category === "mixty")) : [];
   const primary = currentLeagueTeams[0];
   const showCategoryToggle = primary?.leagueStatus === "ongoing" && currentLeagueTeams.length > 1;
+  const myTeamCategories = [...new Set(currentLeagueTeams.map((team) => team.category))];
+  const categoryHeaderText = primary?.leagueStatus !== "ongoing" ? "Padel - Avoin ja Mixty" : myTeamCategories.length === 2 ? "Padel - Avoin ja Mixty" : myTeamCategories.includes("mixty") ? "Padel - Mixty" : "Padel - Avoin";
+  const showTeamCategoryLabel = !(primary?.leagueStatus === "ongoing" && myTeamCategories.length === 1);
   const visibleLeagueTeams = showCategoryToggle
     ? currentLeagueTeams.filter((team) => team.category === (selectedTeamCategory ?? primary.category))
     : currentLeagueTeams;
@@ -263,7 +266,7 @@ export default function HomeScreen() {
       </> : <Text style={styles.emptyCopy}>Uudet liigat ilmestyvät tähän, kun ilmoittautuminen avataan.</Text>}
     </View> : !primary ? null : <View style={styles.leagueCard}>
       <View style={styles.categoryRow}>
-        <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
+        <Text style={styles.categoryText}>{categoryHeaderText}</Text>
         <View style={styles.infoButtonsInline}>
           <Pressable onPress={() => setShowLeagueIntro(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable>
           <Pressable onPress={() => setShowRoundSchedule(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
@@ -286,10 +289,10 @@ export default function HomeScreen() {
             <Text style={styles.cardLabel}>JOUKKUE</Text>
             <Text style={styles.teamName}>{team.name}</Text>
           </View>
-          <View style={styles.teamHeaderRight}>
+          {showTeamCategoryLabel ? <View style={styles.teamHeaderRight}>
             <Text style={styles.cardLabel}>SARJA</Text>
             <Text style={styles.season}>{categoryLabels[team.category] ?? team.category}</Text>
-          </View>
+          </View> : null}
         </View>}
         <View style={styles.rosterList}>
           {teamPlayers.map((player) => <Text key={player.player_id} style={styles.rosterRow}>
