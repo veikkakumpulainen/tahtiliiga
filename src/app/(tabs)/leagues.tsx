@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
   rank: { flex: 0.6 },
   team: { flex: 2.3, textAlign: "left" },
   points: { color: colors.greenBright, fontWeight: "900" },
-  empty: { backgroundColor: colors.mint, borderRadius: 18, padding: 20, marginTop: 20, ...shadow },
+  empty: { backgroundColor: colors.mint, borderRadius: 18, padding: 20, ...shadow },
   emptyTitle: { color: colors.green, fontWeight: "700", fontSize: 13, lineHeight: 19 },
   emptyText: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 7 },
   homeButton: { backgroundColor: colors.green, borderRadius: 13, padding: 15, marginTop: 16, alignItems: "center" },
