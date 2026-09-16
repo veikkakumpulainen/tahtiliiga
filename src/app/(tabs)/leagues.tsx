@@ -185,14 +185,15 @@ export default function LeaguesScreen() {
         </View>
         <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.scrollBody}>
-          {league.status !== "ongoing" ? (
-            loadingRoster ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <View style={styles.empty}>
+          {league.status !== "ongoing" ? (<>
+            <Text style={styles.registeredTitle}>Ilmoittautuneet joukkueet</Text>
+            {loadingRoster ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <View style={styles.empty}>
               <Text style={styles.emptyTitle}>Joukkueita ei voitu ladata.</Text>
               <Text style={styles.emptyText}>{error}</Text>
             </View> : categoryTeams.length === 0 ? <View style={styles.empty}>
               <Text style={styles.emptyTitle}>Ei vielä ilmoittautuneita joukkueita.</Text>
-            </View> : <TeamRosterList teams={categoryTeams} ownTeamId={ownTeamId} />
-          ) : loadingStandings ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <View style={styles.empty}>
+            </View> : <TeamRosterList teams={categoryTeams} ownTeamId={ownTeamId} />}
+          </>) : loadingStandings ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Tuloksia ei voitu ladata.</Text>
             <Text style={styles.emptyText}>{error}</Text>
           </View> : standingsView === "groups" && qualificationRoundActive ? <View style={styles.empty}>
@@ -259,6 +260,7 @@ const styles = StyleSheet.create({
   loading: { marginTop: 30 },
   groupSection: { marginTop: 20 },
   groupName: { color: colors.green, fontSize: 15, fontWeight: "900", marginBottom: 8 },
+  registeredTitle: { color: colors.green, fontSize: 15, fontWeight: "900" },
   table: { backgroundColor: colors.surface, borderRadius: 18, overflow: "hidden", ...shadow },
   header: { backgroundColor: colors.green, flexDirection: "row", paddingVertical: 14, paddingHorizontal: 10 },
   row: { flexDirection: "row", paddingVertical: 17, paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: colors.line, alignItems: "center" },
