@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
   lohkoTopRow: { flexDirection: "row", alignItems: "center", paddingRight: 18 },
   selectorScrollInline: { flex: 1, height: 62 },
   membersInlineButton: { paddingHorizontal: 4 },
-  selector: { paddingHorizontal: 18, gap: 8, paddingTop: 12, alignItems: "center" },
+  selector: { paddingHorizontal: 22, gap: 8, paddingTop: 12, alignItems: "center" },
   selectorButton: { minHeight: 38, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, justifyContent: "center" },
   selectorSelected: { backgroundColor: colors.green, borderColor: colors.green },
   selectorText: { color: colors.ink, fontSize: 12, fontWeight: "800" },
