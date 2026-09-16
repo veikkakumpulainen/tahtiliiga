@@ -191,7 +191,6 @@ export default function LeaguesScreen() {
               <Text style={styles.emptyText}>{error}</Text>
             </View> : categoryTeams.length === 0 ? <View style={styles.empty}>
               <Text style={styles.emptyTitle}>Ei vielä ilmoittautuneita joukkueita.</Text>
-              <Text style={styles.emptyText}>Lohkojako ja tulostaulukko julkaistaan, kun järjestäjä käynnistää liigan.</Text>
             </View> : <TeamRosterList teams={categoryTeams} />
           ) : loadingStandings ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Tuloksia ei voitu ladata.</Text>
