@@ -3,10 +3,12 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import RegisterForm from "../../components/RegisterForm";
 import ScreenHeader from "../../components/ScreenHeader";
+import { useAuth } from "../../hooks/useAuth";
 import { colors } from "../../theme";
 
 export default function RegisterScreen() {
   const { redirect } = useLocalSearchParams<{ redirect?: string }>();
+  const { session } = useAuth();
   const [result, setResult] = useState<"session" | "pending" | null>(null);
 
   return <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -15,7 +17,7 @@ export default function RegisterScreen() {
       <View style={styles.body}>
         <RegisterForm onResultChange={setResult} />
         {!result ? <>
-          <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/home")} style={styles.cancel}><Text style={styles.cancelText}>Peruuta</Text></Pressable>
+          <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace(session ? "/(tabs)/home" : "/(auth)/login")} style={styles.cancel}><Text style={styles.cancelText}>Peruuta</Text></Pressable>
           <Text style={styles.footer}>Onko sinulla jo tili? <Text onPress={() => router.replace({ pathname: "/(auth)/login", params: redirect ? { redirect } : undefined } as never)} style={styles.link}>Kirjaudu sisään</Text></Text>
         </> : null}
       </View>
