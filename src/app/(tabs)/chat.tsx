@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
   segmentRow: { flexDirection: "row", gap: 8, paddingHorizontal: 22, paddingTop: 27 },
   segment: { flex: 1, borderRadius: 12, paddingVertical: 11, alignItems: "center", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
   segmentActive: { backgroundColor: colors.green, borderColor: colors.green },
-  segmentText: { color: colors.ink, fontSize: 13, fontWeight: "800" },
+  segmentText: { color: colors.ink, fontSize: 12, fontWeight: "800" },
   segmentTextActive: { color: colors.lime },
   segmentDot: { position: "absolute", top: 6, right: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.coral, borderWidth: 1.5, borderColor: colors.surface },
   selectorScroll: { flexGrow: 0, flexShrink: 0, height: 62 },
