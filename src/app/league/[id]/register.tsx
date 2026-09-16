@@ -1,6 +1,6 @@
-import { Link, router, useLocalSearchParams } from "expo-router";
+import { Link, Redirect, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import ScreenHeader from "../../../components/ScreenHeader";
 import { useAuth } from "../../../hooks/useAuth";
 import { supabase } from "../../../lib/supabase";
@@ -107,6 +107,9 @@ export default function TeamRegistrationScreen() {
   };
 
   const captainChoices = [{ id: session?.user.id ?? "", name: "Minä" }, ...selectedPlayers.map((player) => ({ id: player.id, name: `${player.first_name} ${player.last_name}` }))];
+
+  // Web has its own landing page (index.web.tsx) with its own team registration modal.
+  if (Platform.OS === "web") return <Redirect href="/" />;
 
   if (authLoading) return <View style={styles.loading}><ActivityIndicator color={colors.green} /></View>;
 

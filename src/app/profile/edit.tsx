@@ -1,5 +1,5 @@
 import { Redirect, router } from "expo-router";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import ProfileForm from "../../components/ProfileForm";
 import ScreenHeader from "../../components/ScreenHeader";
 import { useAuth } from "../../hooks/useAuth";
@@ -8,6 +8,8 @@ import { colors } from "../../theme";
 export default function EditProfileScreen() {
   const { session, loading: loadingSession } = useAuth();
 
+  // Web has its own landing page (index.web.tsx) with its own profile modal.
+  if (Platform.OS === "web") return <Redirect href="/" />;
   if (loadingSession) return <View style={styles.loading}><ActivityIndicator color={colors.lime} /></View>;
   if (!session) return <Redirect href="/(auth)/login" />;
 
