@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSelectedLeague } from "../context/SelectedLeagueContext";
 import { colors } from "../theme";
@@ -12,6 +12,7 @@ export default function ScreenHeader() {
   const { selectedLeague } = useSelectedLeague();
   const title = selectedLeague?.name || "Tähtiliiga";
   const [showLeagueIntro, setShowLeagueIntro] = useState(false);
+  const { height: windowHeight } = useWindowDimensions();
 
   return <>
     <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
@@ -26,7 +27,7 @@ export default function ScreenHeader() {
             <Text style={styles.modalTitle}>Jyväskylän Tähtiliiga</Text>
             <Pressable onPress={() => setShowLeagueIntro(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.modalClose}>×</Text></Pressable>
           </View>
-          <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><LeagueIntroContent /></ScrollView>
+          <ScrollView style={[styles.modalScroll, { maxHeight: Math.round(windowHeight * 0.6) }]} showsVerticalScrollIndicator={false} nestedScrollEnabled><LeagueIntroContent /></ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
