@@ -220,7 +220,6 @@ export default function HomeScreen() {
           <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(openLeague.end_date)}</Text></View>
           {openLeague.registration_deadline ? <View><Text style={styles.cardLabel}>ILMOITTAUTUMISEN DEADLINE</Text><Text style={styles.season}>{formatFinnishDate(openLeague.registration_deadline)}</Text></View> : null}
         </View>
-        <LeagueRoundSchedule leagueId={openLeague.id} label="Kierrosaikataulu" />
         {openLeague.status === "registration_open" ? (
           <Pressable style={styles.browseButton} onPress={() => router.push(`/league/${openLeague.id}/register` as never)}><Text style={styles.browseText}>Ilmoittaudu joukkueella</Text><Text style={styles.arrow}>→</Text></Pressable>
         ) : <Text style={styles.cardNote}>{openLeague.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(openLeague.registration_opens_at)}.` : "Ilmoittautuminen avautuu pian."}</Text>}
@@ -233,7 +232,6 @@ export default function HomeScreen() {
       {canRegisterOtherCategory && openLeague ? <View style={styles.dateRow}>
         <View><Text style={styles.cardLabel}>ILMOITTAUTUMISEN DEADLINE</Text><Text style={styles.season}>{formatFinnishDate(openLeague.registration_deadline)}</Text></View>
       </View> : null}
-      <LeagueRoundSchedule leagueId={primary.leagueId} label="Kierrosaikataulu" />
       {visibleLeagueTeams.map((team) => { const teamPlayers = rosterRows.filter((player) => player.team_id === team.id); const allPaid = team.leagueStatus === "ongoing" && teamPlayers.length > 0 && teamPlayers.every((player) => paymentStatuses[`${team.id}:${player.player_id}`] === "paid"); return <View key={team.id} style={styles.teamBox}>
         {showCategoryToggle ? <>
           <Text style={styles.cardLabel}>JOUKKUE</Text>

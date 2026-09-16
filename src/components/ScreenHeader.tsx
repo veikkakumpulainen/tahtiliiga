@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSelectedLeague } from "../context/SelectedLeagueContext";
 import { colors } from "../theme";
 import LeagueIntroContent from "./LeagueIntroContent";
+import LeagueRoundSchedule from "./LeagueRoundSchedule";
 
 const logo = require("../../assets/images/tahtiliigalogo.png");
 
@@ -12,12 +13,16 @@ export default function ScreenHeader() {
   const { selectedLeague } = useSelectedLeague();
   const title = selectedLeague?.name || "Tähtiliiga";
   const [showLeagueIntro, setShowLeagueIntro] = useState(false);
+  const [showRoundSchedule, setShowRoundSchedule] = useState(false);
 
   return <>
     <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
       <Image source={logo} style={styles.logo} resizeMode="cover" />
       <Text style={styles.brand} numberOfLines={1}>{title}</Text>
-      <Pressable onPress={() => setShowLeagueIntro(true)} accessibilityRole="button" accessibilityLabel="Lisätietoa Tähtiliigasta" style={styles.infoButton}><Text style={styles.infoButtonText}>i</Text></Pressable>
+      <View style={styles.headerActions}>
+        <Pressable onPress={() => setShowLeagueIntro(true)} accessibilityRole="button" accessibilityLabel="Lisätietoa Tähtiliigasta" style={styles.infoButton}><Text style={styles.infoButtonText}>i</Text></Pressable>
+        {selectedLeague ? <Pressable onPress={() => setShowRoundSchedule(true)} accessibilityRole="button" accessibilityLabel="Kierrosaikataulu" style={styles.infoButton}><Text style={styles.infoButtonText}>📅</Text></Pressable> : null}
+      </View>
     </View>
     <Modal visible={showLeagueIntro} transparent animationType="fade" onRequestClose={() => setShowLeagueIntro(false)}>
       <Pressable style={styles.modalBackdrop} onPress={() => setShowLeagueIntro(false)}>
@@ -30,13 +35,15 @@ export default function ScreenHeader() {
         </Pressable>
       </Pressable>
     </Modal>
+    {selectedLeague ? <LeagueRoundSchedule leagueId={selectedLeague.id} visible={showRoundSchedule} onClose={() => setShowRoundSchedule(false)} /> : null}
   </>;
 }
 
 const styles = StyleSheet.create({
   header: { backgroundColor: colors.green, paddingHorizontal: 22, paddingBottom: 16, flexDirection: "row", alignItems: "center", gap: 10 },
   logo: { width: 30, height: 30, borderRadius: 15 },
-  brand: { color: colors.surface, fontSize: 16, fontWeight: "800", flexShrink: 1 },
+  brand: { color: colors.surface, fontSize: 16, fontWeight: "800", flex: 1 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
   infoButton: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: colors.surface, alignItems: "center", justifyContent: "center" },
   infoButtonText: { color: colors.surface, fontSize: 12, fontWeight: "900" },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", alignItems: "center", justifyContent: "center", padding: 20 },

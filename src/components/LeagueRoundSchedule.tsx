@@ -6,8 +6,17 @@ import { colors } from "../theme";
 
 type LeagueRound = { id: string; name: string; start_date: string; end_date: string };
 
-export default function LeagueRoundSchedule({ leagueId, label = "Näytä kierrosten aikataulu" }: { leagueId: string; label?: string }) {
-  const [visible, setVisible] = useState(false);
+type Props = { leagueId: string } & ({ visible?: undefined; onClose?: undefined } | { visible: boolean; onClose: () => void });
+
+// Normally renders its own trigger button + modal. Pass `visible`/`onClose`
+// to control the modal externally instead (e.g. from a button that lives
+// elsewhere, like ScreenHeader's calendar icon) - in that mode the internal
+// trigger button is skipped.
+export default function LeagueRoundSchedule({ leagueId, visible: controlledVisible, onClose }: Props) {
+  const isControlled = controlledVisible !== undefined;
+  const [internalVisible, setInternalVisible] = useState(false);
+  const visible = isControlled ? controlledVisible : internalVisible;
+  const close = () => { if (isControlled) onClose(); else setInternalVisible(false); };
   const [rounds, setRounds] = useState<LeagueRound[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -29,16 +38,16 @@ export default function LeagueRoundSchedule({ leagueId, label = "Näytä kierros
   }, [leagueId, visible]);
 
   return <>
-    <Pressable onPress={() => setVisible(true)} style={styles.button} accessibilityRole="button">
-      <Text style={styles.buttonText}>{label}</Text>
+    {!isControlled ? <Pressable onPress={() => setInternalVisible(true)} style={styles.button} accessibilityRole="button">
+      <Text style={styles.buttonText}>Näytä kierrosten aikataulu</Text>
       <Text style={styles.arrow}>→</Text>
-    </Pressable>
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={() => setVisible(false)}>
-      <Pressable style={styles.backdrop} onPress={() => setVisible(false)}>
+    </Pressable> : null}
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
+      <Pressable style={styles.backdrop} onPress={close}>
         <Pressable style={styles.modal} onPress={(event) => event.stopPropagation()}>
           <View style={styles.header}>
             <View><Text style={styles.eyebrow}>LIIGAN AIKATAULU</Text><Text style={styles.title}>Kierrokset</Text></View>
-            <Pressable onPress={() => setVisible(false)} accessibilityRole="button" accessibilityLabel="Sulje aikataulu"><Text style={styles.close}>×</Text></Pressable>
+            <Pressable onPress={close} accessibilityRole="button" accessibilityLabel="Sulje aikataulu"><Text style={styles.close}>×</Text></Pressable>
           </View>
           {loading ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <Text style={styles.error}>Aikataulua ei voitu ladata: {error}</Text> : rounds.length === 0 ? <Text style={styles.empty}>Kierrosten aikataulua ei ole vielä julkaistu.</Text> : rounds.map((round, index) => <View key={round.id} style={styles.round}>
             <Text style={styles.roundNumber}>KIERROS {index + 1}</Text>
