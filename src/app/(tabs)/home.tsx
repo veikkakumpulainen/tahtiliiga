@@ -213,7 +213,6 @@ export default function HomeScreen() {
     </View> : null}
     {teams.length === 0 && invitations.length === 0 ? <View style={styles.openLeagueCard}>
       {openLeague ? <>
-        <Text style={styles.openLeagueName}>{openLeague.name}</Text>
         <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
         <View style={styles.dateRow}>
           <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(openLeague.start_date)}</Text></View>
@@ -225,6 +224,7 @@ export default function HomeScreen() {
         ) : <Text style={styles.cardNote}>{openLeague.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(openLeague.registration_opens_at)}.` : "Ilmoittautuminen avautuu pian."}</Text>}
       </> : <Text style={styles.emptyCopy}>Uudet liigat ilmestyvät tähän, kun ilmoittautuminen avataan.</Text>}
     </View> : !primary ? null : <View style={styles.leagueCard}>
+      <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
       {primary.leagueStatus !== "ongoing" ? <View style={styles.dateRow}>
         <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(primary.startDate)}</Text></View>
         <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(primary.endDate)}</Text></View>
@@ -297,7 +297,6 @@ const styles = StyleSheet.create({
   browseButton: { backgroundColor: colors.green, borderRadius: 13, padding: 15, marginTop: 19, flexDirection: "row", alignItems: "center" },
   browseText: { color: colors.surface, fontWeight: "800" },
   openLeagueCard: { marginTop: 4 },
-  openLeagueName: { color: colors.ink, fontSize: 19, fontWeight: "800", marginTop: 10 },
   categoryText: { color: colors.greenBright, fontSize: 13, fontWeight: "800", marginTop: 8 },
   leagueCard: { marginTop: 4, marginBottom: 12 },
   cardLabel: { color: colors.muted, fontSize: 9, letterSpacing: 1.1, fontWeight: "900", marginTop: 15 },
