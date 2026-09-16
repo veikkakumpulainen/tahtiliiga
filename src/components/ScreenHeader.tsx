@@ -21,7 +21,13 @@ export default function ScreenHeader() {
       <Text style={styles.brand} numberOfLines={1}>{title}</Text>
       <View style={styles.headerActions}>
         <Pressable onPress={() => setShowLeagueIntro(true)} accessibilityRole="button" accessibilityLabel="Lisätietoa Tähtiliigasta" style={styles.infoButton}><Text style={styles.infoButtonText}>i</Text></Pressable>
-        {selectedLeague ? <Pressable onPress={() => setShowRoundSchedule(true)} accessibilityRole="button" accessibilityLabel="Kierrosaikataulu" style={styles.infoButton}><Text style={styles.infoButtonText}>📅</Text></Pressable> : null}
+        {selectedLeague ? <Pressable onPress={() => setShowRoundSchedule(true)} accessibilityRole="button" accessibilityLabel="Kierrosaikataulu" style={styles.infoButton}>
+          <View style={styles.calendarGlyph}>
+            <View style={styles.calendarGlyphBar} />
+            <View style={styles.calendarGlyphRingLeft} />
+            <View style={styles.calendarGlyphRingRight} />
+          </View>
+        </Pressable> : null}
       </View>
     </View>
     <Modal visible={showLeagueIntro} transparent animationType="fade" onRequestClose={() => setShowLeagueIntro(false)}>
@@ -46,6 +52,10 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
   infoButton: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: colors.surface, alignItems: "center", justifyContent: "center" },
   infoButtonText: { color: colors.surface, fontSize: 12, fontWeight: "900" },
+  calendarGlyph: { width: 11, height: 9, borderWidth: 1.3, borderColor: colors.surface, borderRadius: 2 },
+  calendarGlyphBar: { height: 2.5, backgroundColor: colors.surface, marginTop: 1.5 },
+  calendarGlyphRingLeft: { position: "absolute", top: -2.5, left: 1.5, width: 1.5, height: 3, borderRadius: 1, backgroundColor: colors.surface },
+  calendarGlyphRingRight: { position: "absolute", top: -2.5, right: 1.5, width: 1.5, height: 3, borderRadius: 1, backgroundColor: colors.surface },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", alignItems: "center", justifyContent: "center", padding: 20 },
   modalBox: { backgroundColor: colors.surface, borderRadius: 16, padding: 22, width: "100%", maxWidth: 480, maxHeight: "85%" },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 4 },
