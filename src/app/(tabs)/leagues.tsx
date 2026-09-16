@@ -123,7 +123,7 @@ export default function LeaguesScreen() {
   // separately from loadStandings since it depends on the user's team, not
   // the standings rows (which don't carry membership info).
   useEffect(() => {
-    if (!supabase || !session?.user.id || !league || league.status !== "ongoing") { setOwnGroupId(null); setOwnTeamId(null); return; }
+    if (!supabase || !session?.user.id || !league) { setOwnGroupId(null); setOwnTeamId(null); return; }
     const client = supabase;
     const leagueId = league.id;
     void client.from("team_members").select("teams(id, league_id, category)").eq("user_id", session.user.id).eq("status", "active").then(({ data }) => {
@@ -191,7 +191,7 @@ export default function LeaguesScreen() {
               <Text style={styles.emptyText}>{error}</Text>
             </View> : categoryTeams.length === 0 ? <View style={styles.empty}>
               <Text style={styles.emptyTitle}>Ei vielä ilmoittautuneita joukkueita.</Text>
-            </View> : <TeamRosterList teams={categoryTeams} />
+            </View> : <TeamRosterList teams={categoryTeams} ownTeamId={ownTeamId} />
           ) : loadingStandings ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Tuloksia ei voitu ladata.</Text>
             <Text style={styles.emptyText}>{error}</Text>

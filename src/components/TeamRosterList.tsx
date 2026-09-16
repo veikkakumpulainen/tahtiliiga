@@ -9,23 +9,25 @@ export function groupRosterByTeam(rows: TeamRosterRow[]): RosterTeam[] {
   return teamIds.map((teamId) => ({ id: teamId, name: rows.find((row) => row.team_id === teamId)?.team_name ?? "", players: rows.filter((row) => row.team_id === teamId) }));
 }
 
-export default function TeamRosterList({ teams }: { teams: RosterTeam[] }) {
-  return <>{teams.map((team, teamIndex) => <View key={team.id} style={styles.card}>
+export default function TeamRosterList({ teams, ownTeamId }: { teams: RosterTeam[]; ownTeamId?: string | null }) {
+  return <>{teams.map((team, teamIndex) => { const isOwnTeam = team.id === ownTeamId; return <View key={team.id} style={[styles.card, isOwnTeam && styles.ownCard]}>
     <View style={styles.teamRow}>
       <Text style={styles.teamNumber}>{teamIndex + 1}</Text>
-      <Text style={styles.teamName}>{team.name}</Text>
+      <Text style={[styles.teamName, isOwnTeam && styles.ownTeamName]}>{team.name}</Text>
     </View>
     <Text style={styles.players}>{team.players.map((player, index) => <Text key={player.player_id} style={player.status === "pending" ? styles.pendingPlayer : undefined}>
       {index > 0 ? ", " : ""}{player.first_name} {player.last_name}{player.is_captain ? " (C)" : ""}{player.status === "pending" ? " (kutsu lähetetty)" : ""}
     </Text>)}</Text>
-  </View>)}</>;
+  </View>; })}</>;
 }
 
 const styles = StyleSheet.create({
   card: { backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginTop: 12 },
+  ownCard: { backgroundColor: "rgba(211,175,55,0.14)", borderWidth: 1, borderColor: colors.green },
   teamRow: { flexDirection: "row", alignItems: "center", gap: 9 },
   teamNumber: { color: colors.greenBright, fontSize: 13, fontWeight: "900" },
   teamName: { color: colors.ink, fontSize: 16, fontWeight: "800" },
+  ownTeamName: { color: colors.greenBright },
   players: { color: colors.muted, fontSize: 13, marginTop: 6, lineHeight: 19 },
   pendingPlayer: { color: colors.muted, fontStyle: "italic", opacity: 0.6 },
 });
