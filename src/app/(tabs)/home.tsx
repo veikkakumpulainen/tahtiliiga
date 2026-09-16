@@ -265,8 +265,8 @@ export default function HomeScreen() {
         ) : <Text style={styles.cardNote}>{openLeague.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(openLeague.registration_opens_at)}.` : "Ilmoittautuminen avautuu pian."}</Text>}
       </> : <Text style={styles.emptyCopy}>Uudet liigat ilmestyvät tähän, kun ilmoittautuminen avataan.</Text>}
     </View> : !primary ? null : <View style={styles.leagueCard}>
-      <View style={styles.categoryRow}>
-        <Text style={styles.categoryText}>{categoryHeaderText}</Text>
+      <View style={[styles.categoryRow, showCategoryToggle && styles.categoryRowButtonsOnly]}>
+        {showCategoryToggle ? null : <Text style={styles.categoryText}>{categoryHeaderText}</Text>}
         <View style={styles.infoButtonsInline}>
           <Pressable onPress={() => setShowLeagueIntro(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable>
           <Pressable onPress={() => setShowRoundSchedule(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
@@ -346,6 +346,7 @@ const styles = StyleSheet.create({
   browseText: { color: colors.surface, fontWeight: "800" },
   openLeagueCard: { marginTop: 4 },
   categoryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8, gap: 8 },
+  categoryRowButtonsOnly: { justifyContent: "flex-end" },
   categoryText: { color: colors.greenBright, fontSize: 13, fontWeight: "800" },
   playerCountTextRow: { color: colors.coral, fontSize: 11, fontWeight: "900", letterSpacing: 0.3, marginTop: 8 },
   infoButtonsInline: { flexDirection: "row", gap: 8 },
