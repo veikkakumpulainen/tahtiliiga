@@ -22,7 +22,7 @@ export default function ScreenHeader() {
     </View>
     <Modal visible={showLeagueIntro} transparent animationType="fade" onRequestClose={() => setShowLeagueIntro(false)}>
       <Pressable style={styles.modalBackdrop} onPress={() => setShowLeagueIntro(false)}>
-        <View style={styles.modalBox} onStartShouldSetResponder={() => true}>
+        <View style={styles.modalBox}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Jyväskylän Tähtiliiga</Text>
             <Pressable onPress={() => setShowLeagueIntro(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.modalClose}>×</Text></Pressable>
