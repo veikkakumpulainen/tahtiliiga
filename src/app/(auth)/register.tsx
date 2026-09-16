@@ -27,7 +27,7 @@ const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
   scroll: { flex: 1 },
   content: { paddingBottom: 40 },
-  body: { paddingHorizontal: 24 },
+  body: { paddingHorizontal: 24, paddingTop: 20 },
   cancel: { alignItems: "center", padding: 16, marginTop: 6 },
   cancelText: { color: colors.muted, fontWeight: "800" },
   footer: { color: colors.muted, textAlign: "center", fontSize: 13 },
