@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import GroupMatches from "../../components/GroupMatches";
+import LeagueIntroContent from "../../components/LeagueIntroContent";
 import LeagueRoundSchedule from "../../components/LeagueRoundSchedule";
 import ScreenHeader from "../../components/ScreenHeader";
 import { useSelectedLeague } from "../../context/SelectedLeagueContext";
@@ -49,6 +50,8 @@ export default function HomeScreen() {
   const [payError, setPayError] = useState("");
   const [selectedTeamCategory, setSelectedTeamCategory] = useState<string | null>(null);
   const [leaguePlayerCount, setLeaguePlayerCount] = useState<number | null>(null);
+  const [showLeagueIntro, setShowLeagueIntro] = useState(false);
+  const [showRoundSchedule, setShowRoundSchedule] = useState(false);
 
   const loadOpenLeague = useCallback(async () => {
     if (!supabase) return;
@@ -185,6 +188,7 @@ export default function HomeScreen() {
   const missingCategory = myCategoriesInOpenLeague.has("avoin") ? "mixty" : myCategoriesInOpenLeague.has("mixty") ? "avoin" : undefined;
   const registerMissingLabel = missingCategory === "avoin" ? "Ilmoittaudu avoimeen" : missingCategory === "mixty" ? "Ilmoittaudu mixtyyn" : "Ilmoittaudu toiseen sarjaan";
   const targetLeagueId = selectedLeague?.id ?? teams[0]?.leagueId;
+  const activeLeagueId = teams.length === 0 && invitations.length === 0 ? openLeague?.id : targetLeagueId;
   const currentLeagueTeams = targetLeagueId ? teams.filter((team) => team.leagueId === targetLeagueId).sort((left, right) => Number(left.category === "mixty") - Number(right.category === "mixty")) : [];
   const primary = currentLeagueTeams[0];
   const showCategoryToggle = primary?.leagueStatus === "ongoing" && currentLeagueTeams.length > 1;
@@ -203,6 +207,18 @@ export default function HomeScreen() {
         </View>
       </View>
     </Modal>
+    <Modal visible={showLeagueIntro} transparent animationType="slide" onRequestClose={() => setShowLeagueIntro(false)}>
+      <Pressable style={styles.infoModalBackdrop} onPress={() => setShowLeagueIntro(false)}>
+        <View style={styles.infoModalBox}>
+          <Pressable style={styles.infoModalHeader} onPress={(event) => event.stopPropagation()}>
+            <Text style={styles.infoModalTitle}>Jyväskylän Tähtiliiga</Text>
+            <Pressable onPress={() => setShowLeagueIntro(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.infoModalClose}>×</Text></Pressable>
+          </Pressable>
+          <ScrollView style={styles.infoModalContent} contentContainerStyle={styles.infoModalContentInner} showsVerticalScrollIndicator={false}><LeagueIntroContent /></ScrollView>
+        </View>
+      </Pressable>
+    </Modal>
+    {activeLeagueId ? <LeagueRoundSchedule leagueId={activeLeagueId} visible={showRoundSchedule} onClose={() => setShowRoundSchedule(false)} /> : null}
     {showCategoryToggle ? <View style={styles.fixedHeader}>
       <View style={styles.categoryToggle}>
         {currentLeagueTeams.map((team) => <Pressable key={team.id} onPress={() => setSelectedTeamCategory(team.category)} style={[styles.categoryToggleButton, (selectedTeamCategory ?? primary.category) === team.category && styles.categoryToggleButtonSelected]}>
@@ -231,6 +247,10 @@ export default function HomeScreen() {
           <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
           {leaguePlayerCount !== null ? <Text style={styles.playerCountText}>PELAAJIA LIIGASSA {leaguePlayerCount}</Text> : null}
         </View>
+        <View style={styles.infoButtonsRow}>
+          <Pressable onPress={() => setShowLeagueIntro(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable>
+          <Pressable onPress={() => setShowRoundSchedule(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
+        </View>
         <View style={styles.dateRow}>
           <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(openLeague.start_date)}</Text></View>
           <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(openLeague.end_date)}</Text></View>
@@ -244,6 +264,10 @@ export default function HomeScreen() {
       <View style={styles.categoryRow}>
         <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
         {leaguePlayerCount !== null ? <Text style={styles.playerCountText}>PELAAJIA LIIGASSA {leaguePlayerCount}</Text> : null}
+      </View>
+      <View style={styles.infoButtonsRow}>
+        <Pressable onPress={() => setShowLeagueIntro(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable>
+        <Pressable onPress={() => setShowRoundSchedule(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
       </View>
       {primary.leagueStatus !== "ongoing" || (canRegisterOtherCategory && openLeague) ? <View style={styles.dateRow}>
         {primary.leagueStatus !== "ongoing" ? <>
@@ -320,6 +344,16 @@ const styles = StyleSheet.create({
   categoryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8, gap: 8 },
   categoryText: { color: colors.greenBright, fontSize: 13, fontWeight: "800" },
   playerCountText: { color: colors.coral, fontSize: 11, fontWeight: "900", letterSpacing: 0.3 },
+  infoButtonsRow: { flexDirection: "row", gap: 8, marginTop: 10 },
+  infoTextButton: { borderWidth: 1, borderColor: colors.green, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 12, alignItems: "center" },
+  infoTextButtonLabel: { color: colors.green, fontSize: 12, fontWeight: "800" },
+  infoModalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", justifyContent: "flex-end" },
+  infoModalBox: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "85%" },
+  infoModalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 22, paddingTop: 22, paddingBottom: 8 },
+  infoModalTitle: { color: colors.green, fontSize: 18, fontWeight: "800", flex: 1 },
+  infoModalClose: { color: colors.muted, fontSize: 24, fontWeight: "600", lineHeight: 24 },
+  infoModalContent: { flexGrow: 0 },
+  infoModalContentInner: { paddingHorizontal: 22, paddingBottom: 34 },
   leagueCard: { marginTop: 4, marginBottom: 12 },
   cardLabel: { color: colors.muted, fontSize: 9, letterSpacing: 1.1, fontWeight: "900", marginTop: 15 },
   teamBox: { backgroundColor: colors.canvas, borderRadius: 14, borderWidth: 1, borderColor: colors.line, padding: 16, marginTop: 16 },
