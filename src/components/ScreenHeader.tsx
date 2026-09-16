@@ -20,8 +20,8 @@ export default function ScreenHeader() {
       <Image source={logo} style={styles.logo} resizeMode="cover" />
       <Text style={styles.brand} numberOfLines={1}>{title}</Text>
       <View style={styles.headerActions}>
-        <Pressable onPress={() => setShowLeagueIntro(true)} accessibilityRole="button" accessibilityLabel="Lisätietoa Tähtiliigasta" style={styles.infoButton}><Text style={styles.infoButtonText}>i</Text></Pressable>
-        {selectedLeague ? <Pressable onPress={() => setShowRoundSchedule(true)} accessibilityRole="button" accessibilityLabel="Kierrosaikataulu" style={styles.infoButton}>
+        <Pressable onPress={() => setShowLeagueIntro(true)} accessibilityRole="button" accessibilityLabel="Lisätietoa Tähtiliigasta" hitSlop={6} style={styles.infoButton}><Text style={styles.infoButtonText}>i</Text></Pressable>
+        {selectedLeague ? <Pressable onPress={() => setShowRoundSchedule(true)} accessibilityRole="button" accessibilityLabel="Kierrosaikataulu" hitSlop={6} style={styles.infoButton}>
           <View style={styles.calendarGlyph}>
             <View style={styles.calendarGlyphBar} />
             <View style={styles.calendarGlyphRingLeft} />
@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
   header: { backgroundColor: colors.green, paddingHorizontal: 22, paddingBottom: 16, flexDirection: "row", alignItems: "center", gap: 10 },
   logo: { width: 30, height: 30, borderRadius: 15 },
   brand: { color: colors.surface, fontSize: 16, fontWeight: "800", flex: 1 },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 20 },
   infoButton: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: colors.surface, alignItems: "center", justifyContent: "center" },
   infoButtonText: { color: colors.surface, fontSize: 12, fontWeight: "900" },
   calendarGlyph: { width: 11, height: 9, borderWidth: 1.3, borderColor: colors.surface, borderRadius: 2 },
