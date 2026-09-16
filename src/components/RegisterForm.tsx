@@ -83,6 +83,7 @@ export default function RegisterForm({ onRegistered, onResultChange }: { onRegis
   };
 
   return <View>
+    <Text style={styles.requiredHint}>* Pakollinen kenttä</Text>
     <View style={[styles.nameRow, isMobile && styles.nameRowMobile]}>
       <View style={styles.nameField}><Text style={styles.label}>ETUNIMI *</Text><TextInput value={form.firstName} onChangeText={(value) => update("firstName", value)} placeholder="Matti" placeholderTextColor={colors.muted} style={styles.input} /></View>
       <View style={styles.nameField}><Text style={styles.label}>SUKUNIMI *</Text><TextInput value={form.lastName} onChangeText={(value) => update("lastName", value)} placeholder="Meikäläinen" placeholderTextColor={colors.muted} style={styles.input} /></View>
@@ -162,6 +163,7 @@ export default function RegisterForm({ onRegistered, onResultChange }: { onRegis
 }
 
 const styles = StyleSheet.create({
+  requiredHint: { color: colors.muted, fontSize: 12 },
   nameRow: { flexDirection: "row", gap: 14 }, nameRowMobile: { flexDirection: "column", gap: 0 }, nameField: { flex: 1 },
   label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 13, marginBottom: 7 },
   input: { backgroundColor: colors.canvas, borderWidth: 1, borderColor: colors.line, borderRadius: 10, color: colors.ink, fontSize: 15, padding: 14 },
