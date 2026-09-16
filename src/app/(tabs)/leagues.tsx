@@ -172,8 +172,8 @@ export default function LeaguesScreen() {
         </View>
       </View> : <>
         <View style={styles.fixedHeader}>
-          {selectedLeague?.id === league.id ? null : <Text style={styles.leagueName}>{league.name}</Text>}
-          <View style={[styles.categoryRow, selectedLeague?.id === league.id && styles.categoryRowNoLeagueName]}>
+          {!session || selectedLeague?.id === league.id ? null : <Text style={styles.leagueName}>{league.name}</Text>}
+          <View style={[styles.categoryRow, (!session || selectedLeague?.id === league.id) && styles.categoryRowNoLeagueName]}>
             {categories.map(([value, label]) => <Pressable key={value} onPress={() => { setCategory(value); if (standingsView === "groups") requestOwnGroupScroll(); else scrollRef.current?.scrollTo({ y: 0, animated: true }); }} style={[styles.categoryButton, category === value && styles.categoryButtonSelected]}>
               <Text style={[styles.categoryText, category === value && styles.categoryTextSelected]}>{label}</Text>
             </Pressable>)}
