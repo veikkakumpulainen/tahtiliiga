@@ -208,15 +208,16 @@ export default function HomeScreen() {
       </View>
     </Modal>
     <Modal visible={showLeagueIntro} transparent animationType="slide" onRequestClose={() => setShowLeagueIntro(false)}>
-      <Pressable style={styles.infoModalBackdrop} onPress={() => setShowLeagueIntro(false)}>
+      <View style={styles.infoModalBackdrop}>
+        <Pressable style={styles.infoModalBackdropTap} onPress={() => setShowLeagueIntro(false)} />
         <View style={styles.infoModalBox}>
-          <Pressable style={styles.infoModalHeader} onPress={(event) => event.stopPropagation()}>
+          <View style={styles.infoModalHeader}>
             <Text style={styles.infoModalTitle}>Jyväskylän Tähtiliiga</Text>
             <Pressable onPress={() => setShowLeagueIntro(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.infoModalClose}>×</Text></Pressable>
-          </Pressable>
+          </View>
           <ScrollView style={styles.infoModalContent} contentContainerStyle={styles.infoModalContentInner} showsVerticalScrollIndicator={false}><LeagueIntroContent /></ScrollView>
         </View>
-      </Pressable>
+      </View>
     </Modal>
     {activeLeagueId ? <LeagueRoundSchedule leagueId={activeLeagueId} visible={showRoundSchedule} onClose={() => setShowRoundSchedule(false)} /> : null}
     {showCategoryToggle ? <View style={styles.fixedHeader}>
@@ -347,7 +348,8 @@ const styles = StyleSheet.create({
   infoButtonsRow: { flexDirection: "row", gap: 8, marginTop: 10 },
   infoTextButton: { borderWidth: 1, borderColor: colors.green, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 12, alignItems: "center" },
   infoTextButtonLabel: { color: colors.green, fontSize: 12, fontWeight: "800" },
-  infoModalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", justifyContent: "flex-end" },
+  infoModalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)" },
+  infoModalBackdropTap: { flex: 1 },
   infoModalBox: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "85%" },
   infoModalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 22, paddingTop: 22, paddingBottom: 8 },
   infoModalTitle: { color: colors.green, fontSize: 18, fontWeight: "800", flex: 1 },
