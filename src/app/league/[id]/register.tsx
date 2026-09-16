@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import ScreenHeader from "../../../components/ScreenHeader";
 import { useAuth } from "../../../hooks/useAuth";
-import { supabase } from "../../../lib/supabase";
+import { isProductionSupabase, supabase } from "../../../lib/supabase";
 import { colors } from "../../../theme";
 
 const levels = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
@@ -108,8 +108,9 @@ export default function TeamRegistrationScreen() {
 
   const captainChoices = [{ id: session?.user.id ?? "", name: "Minä" }, ...selectedPlayers.map((player) => ({ id: player.id, name: `${player.first_name} ${player.last_name}` }))];
 
-  // Web has its own landing page (index.web.tsx) with its own team registration modal.
-  if (Platform.OS === "web") return <Redirect href="/" />;
+  // Production web has its own landing page (index.web.tsx) with its own
+  // team registration modal. Dev/preview builds still allow it, for testing.
+  if (Platform.OS === "web" && isProductionSupabase) return <Redirect href="/" />;
 
   if (authLoading) return <View style={styles.loading}><ActivityIndicator color={colors.green} /></View>;
 

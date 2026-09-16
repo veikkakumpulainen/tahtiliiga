@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, tabBarHeight } from "../../theme";
 import { useAuth } from "../../hooks/useAuth";
 import { useUnreadChat } from "../../hooks/useUnreadChat";
+import { isProductionSupabase } from "../../lib/supabase";
 
 const tabs = [["home", "Koti", "⌂"], ["leagues", "Liiga", "▥"], ["chat", "Chat", "💬"], ["info", "Info", "i"]] as const;
 
@@ -11,9 +12,11 @@ export default function TabLayout() {
   const { loading } = useAuth();
   const hasUnreadChat = useUnreadChat();
   const insets = useSafeAreaInsets();
-  // Web has its own landing page (index.web.tsx) with its own login/register
-  // modals - the native tab app isn't meant to be reachable there.
-  if (Platform.OS === "web") return <Redirect href="/" />;
+  // Production web has its own landing page (index.web.tsx) with its own
+  // login/register modals - the native tab app isn't meant to be reachable
+  // there. Dev/preview builds (pointed at the dev Supabase project) still
+  // allow it, for testing.
+  if (Platform.OS === "web" && isProductionSupabase) return <Redirect href="/" />;
   if (loading) return <View style={{ flex: 1, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={colors.lime} /></View>;
   // Android's edge-to-edge display (default since SDK 54+) means the tab bar's
   // declared height alone doesn't clear the device's own bottom inset (gesture
