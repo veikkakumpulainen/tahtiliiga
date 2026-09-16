@@ -11,11 +11,16 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const canGoBack = router.canGoBack();
-  // This is the app's very first screen when nobody's logged in - there's
-  // nowhere to "cancel" back to. Android can exit the app outright; iOS
+  // router.canGoBack() isn't a reliable signal here: after logging out
+  // (router.replace("/(auth)/login") from deep in the (tabs) group) it can
+  // still report true and hand "back" a route inside the tab navigator,
+  // walking the user straight back into the app without a session. Only
+  // trust "back" when we were sent here *with* a redirect param (e.g. from
+  // a public "kirjaudu jatkaaksesi" link) - that's the one case where going
+  // back is actually safe. Otherwise: Android can exit the app outright; iOS
   // doesn't allow apps to quit themselves, so there's nothing useful the
   // button could do there and it's hidden instead (see render below).
+  const canGoBack = Boolean(redirect) && router.canGoBack();
   const cancel = () => {
     if (canGoBack) { router.back(); return; }
     if (Platform.OS === "android") BackHandler.exitApp();
