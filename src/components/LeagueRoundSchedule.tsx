@@ -49,8 +49,7 @@ export default function LeagueRoundSchedule({ leagueId, visible: controlledVisib
             <View><Text style={styles.eyebrow}>LIIGAN AIKATAULU</Text><Text style={styles.title}>Kierrokset</Text></View>
             <Pressable onPress={close} accessibilityRole="button" accessibilityLabel="Sulje aikataulu"><Text style={styles.close}>×</Text></Pressable>
           </View>
-          {loading ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <Text style={styles.error}>Aikataulua ei voitu ladata: {error}</Text> : rounds.length === 0 ? <Text style={styles.empty}>Kierrosten aikataulua ei ole vielä julkaistu.</Text> : rounds.map((round, index) => <View key={round.id} style={styles.round}>
-            <Text style={styles.roundNumber}>KIERROS {index + 1}</Text>
+          {loading ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <Text style={styles.error}>Aikataulua ei voitu ladata: {error}</Text> : rounds.length === 0 ? <Text style={styles.empty}>Kierrosten aikataulua ei ole vielä julkaistu.</Text> : rounds.map((round) => <View key={round.id} style={styles.round}>
             <Text style={styles.roundName}>{round.name}</Text>
             <Text style={styles.dates}>{formatFinnishDate(round.start_date)} - {formatFinnishDate(round.end_date)}</Text>
           </View>)}
@@ -74,7 +73,6 @@ const styles = StyleSheet.create({
   empty: { color: colors.muted, fontSize: 14, lineHeight: 21, paddingVertical: 14 },
   error: { color: colors.coral, fontSize: 13, lineHeight: 20, paddingVertical: 14 },
   round: { borderTopWidth: 1, borderTopColor: colors.line, paddingVertical: 15 },
-  roundNumber: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900" },
-  roundName: { color: colors.ink, fontSize: 16, fontWeight: "800", marginTop: 5 },
+  roundName: { color: colors.ink, fontSize: 16, fontWeight: "800" },
   dates: { color: colors.green, fontSize: 13, fontWeight: "700", marginTop: 6 },
 });
