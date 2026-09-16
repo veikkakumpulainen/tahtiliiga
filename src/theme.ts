@@ -1,6 +1,6 @@
 export const colors = {
   ink: "#F2EFE6", muted: "#A39D8E", canvas: "#171717", surface: "#1F1F1F",
-  line: "#2E2B24", green: "#D3AF37", greenBright: "#E8CE7A", mint: "#141414",
+  line: "#2E2B24", green: "#D3AF37", greenBright: "#E8CE7A", mint: "#2E2A20",
   lime: "#171310", coral: "#E0724B", darkSurface: "#141414",
 };
 
