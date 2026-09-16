@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import GroupMatches from "../../components/GroupMatches";
+import LeagueIntroContent from "../../components/LeagueIntroContent";
 import LeagueRoundSchedule from "../../components/LeagueRoundSchedule";
 import ScreenHeader from "../../components/ScreenHeader";
 import { useSelectedLeague } from "../../context/SelectedLeagueContext";
@@ -48,6 +49,7 @@ export default function HomeScreen() {
   const [payingTeamId, setPayingTeamId] = useState<string | null>(null);
   const [payError, setPayError] = useState("");
   const [selectedTeamCategory, setSelectedTeamCategory] = useState<string | null>(null);
+  const [showLeagueIntro, setShowLeagueIntro] = useState(false);
 
   const loadOpenLeague = useCallback(async () => {
     if (!supabase) return;
@@ -189,6 +191,17 @@ export default function HomeScreen() {
         </View>
       </View>
     </Modal>
+    <Modal visible={showLeagueIntro} transparent animationType="fade" onRequestClose={() => setShowLeagueIntro(false)}>
+      <Pressable style={styles.modalBackdrop} onPress={() => setShowLeagueIntro(false)}>
+        <Pressable style={styles.modalBox} onPress={(event) => event.stopPropagation()}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Jyväskylän Tähtiliiga</Text>
+            <Pressable onPress={() => setShowLeagueIntro(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.modalClose}>×</Text></Pressable>
+          </View>
+          <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><LeagueIntroContent /></ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
     {showCategoryToggle ? <View style={styles.fixedHeader}>
       <View style={styles.categoryToggle}>
         {currentLeagueTeams.map((team) => <Pressable key={team.id} onPress={() => setSelectedTeamCategory(team.category)} style={[styles.categoryToggleButton, (selectedTeamCategory ?? primary.category) === team.category && styles.categoryToggleButtonSelected]}>
@@ -214,7 +227,10 @@ export default function HomeScreen() {
     {teams.length === 0 && invitations.length === 0 ? <View style={styles.openLeagueCard}>
       {openLeague ? <>
         <Text style={styles.openLeagueName}>{openLeague.name}</Text>
-        <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
+        <View style={styles.categoryRow}>
+          <Text style={[styles.categoryText, styles.categoryTextInRow]}>Padel - Avoin ja Mixty</Text>
+          <Pressable onPress={() => setShowLeagueIntro(true)} accessibilityRole="button" accessibilityLabel="Lisätietoa Tähtiliigasta" style={styles.categoryInfoButton}><Text style={styles.categoryInfoButtonText}>i</Text></Pressable>
+        </View>
         <View style={styles.dateRow}>
           <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(openLeague.start_date)}</Text></View>
           <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(openLeague.end_date)}</Text></View>
@@ -301,6 +317,16 @@ const styles = StyleSheet.create({
   openLeagueCard: { marginTop: 4 },
   openLeagueName: { color: colors.ink, fontSize: 19, fontWeight: "800", marginTop: 10 },
   categoryText: { color: colors.greenBright, fontSize: 13, fontWeight: "800", marginTop: 8 },
+  categoryRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
+  categoryTextInRow: { marginTop: 0 },
+  categoryInfoButton: { width: 18, height: 18, borderRadius: 9, borderWidth: 1, borderColor: colors.greenBright, alignItems: "center", justifyContent: "center" },
+  categoryInfoButtonText: { color: colors.greenBright, fontSize: 11, fontWeight: "900" },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", alignItems: "center", justifyContent: "center", padding: 20 },
+  modalBox: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 26, width: "100%", maxWidth: 480, maxHeight: "85%" },
+  modalScroll: { flexGrow: 0 },
+  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
+  modalTitle: { color: colors.ink, fontSize: 18, fontWeight: "900", flex: 1 },
+  modalClose: { color: colors.muted, fontSize: 26, fontWeight: "600", lineHeight: 26, paddingLeft: 12 },
   leagueCard: { marginTop: 4, marginBottom: 12 },
   cardLabel: { color: colors.muted, fontSize: 9, letterSpacing: 1.1, fontWeight: "900", marginTop: 15 },
   teamBox: { backgroundColor: colors.canvas, borderRadius: 14, borderWidth: 1, borderColor: colors.line, padding: 16, marginTop: 16 },
