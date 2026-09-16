@@ -84,17 +84,17 @@ export default function RegisterForm({ onRegistered, onResultChange }: { onRegis
 
   return <View>
     <View style={[styles.nameRow, isMobile && styles.nameRowMobile]}>
-      <View style={styles.nameField}><Text style={styles.label}>ETUNIMI</Text><TextInput value={form.firstName} onChangeText={(value) => update("firstName", value)} placeholder="Matti" placeholderTextColor={colors.muted} style={styles.input} /></View>
-      <View style={styles.nameField}><Text style={styles.label}>SUKUNIMI</Text><TextInput value={form.lastName} onChangeText={(value) => update("lastName", value)} placeholder="Meikäläinen" placeholderTextColor={colors.muted} style={styles.input} /></View>
+      <View style={styles.nameField}><Text style={styles.label}>ETUNIMI *</Text><TextInput value={form.firstName} onChangeText={(value) => update("firstName", value)} placeholder="Matti" placeholderTextColor={colors.muted} style={styles.input} /></View>
+      <View style={styles.nameField}><Text style={styles.label}>SUKUNIMI *</Text><TextInput value={form.lastName} onChangeText={(value) => update("lastName", value)} placeholder="Meikäläinen" placeholderTextColor={colors.muted} style={styles.input} /></View>
     </View>
 
-    <Text style={styles.label}>SÄHKÖPOSTI</Text>
+    <Text style={styles.label}>SÄHKÖPOSTI *</Text>
     <TextInput value={form.email} onChangeText={(value) => update("email", value)} autoCapitalize="none" keyboardType="email-address" placeholder="sinä@esimerkki.fi" placeholderTextColor={colors.muted} style={styles.input} />
 
-    <Text style={styles.label}>PUHELIN</Text>
+    <Text style={styles.label}>PUHELIN *</Text>
     <TextInput value={form.phone} onChangeText={(value) => update("phone", value)} keyboardType="phone-pad" placeholder="+358 40 123 4567" placeholderTextColor={colors.muted} style={styles.input} />
 
-    <Text style={styles.label}>TAITOTASO (SUUNTAA ANTAVA)</Text>
+    <Text style={styles.label}>TAITOTASO (SUUNTAA ANTAVA) *</Text>
     <View style={styles.options}>
       {skillCategories.map(([value, label]) => <Pressable key={value} onPress={() => setForm((current) => ({ ...current, skillCategory: current.skillCategory === value ? "" : value, skillLevel: "" }))} style={[styles.option, form.skillCategory === value && styles.optionSelected]}>
         <Text style={[styles.optionText, form.skillCategory === value && styles.optionTextSelected]}>{label}</Text>
@@ -110,10 +110,10 @@ export default function RegisterForm({ onRegistered, onResultChange }: { onRegis
       })}
     </View> : null}
 
-    <Text style={styles.label}>SALASANA</Text>
+    <Text style={styles.label}>SALASANA *</Text>
     <TextInput value={form.password} onChangeText={(value) => update("password", value)} secureTextEntry placeholder="Vähintään 8 merkkiä" placeholderTextColor={colors.muted} style={styles.input} />
 
-    <Text style={styles.label}>VAHVISTA SALASANA</Text>
+    <Text style={styles.label}>VAHVISTA SALASANA *</Text>
     <TextInput value={form.confirmation} onChangeText={(value) => update("confirmation", value)} secureTextEntry placeholder="Kirjoita salasana uudelleen" placeholderTextColor={colors.muted} style={styles.input} />
 
     <Pressable style={styles.checkboxRow} onPress={() => update("termsPrivacyAccepted", !form.termsPrivacyAccepted)}>
