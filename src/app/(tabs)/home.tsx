@@ -246,12 +246,12 @@ export default function HomeScreen() {
       {openLeague ? <>
         <View style={styles.categoryRow}>
           <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
-          {leaguePlayerCount !== null ? <Text style={styles.playerCountText}>PELAAJIA LIIGASSA {leaguePlayerCount}</Text> : null}
+          <View style={styles.infoButtonsInline}>
+            <Pressable onPress={() => setShowLeagueIntro(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable>
+            <Pressable onPress={() => setShowRoundSchedule(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
+          </View>
         </View>
-        <View style={styles.infoButtonsRow}>
-          <Pressable onPress={() => setShowLeagueIntro(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable>
-          <Pressable onPress={() => setShowRoundSchedule(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
-        </View>
+        {leaguePlayerCount !== null ? <Text style={styles.playerCountTextRow}>PELAAJIA LIIGASSA {leaguePlayerCount}</Text> : null}
         <View style={styles.dateRow}>
           <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(openLeague.start_date)}</Text></View>
           <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(openLeague.end_date)}</Text></View>
@@ -264,12 +264,12 @@ export default function HomeScreen() {
     </View> : !primary ? null : <View style={styles.leagueCard}>
       <View style={styles.categoryRow}>
         <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
-        {leaguePlayerCount !== null ? <Text style={styles.playerCountText}>PELAAJIA LIIGASSA {leaguePlayerCount}</Text> : null}
+        <View style={styles.infoButtonsInline}>
+          <Pressable onPress={() => setShowLeagueIntro(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable>
+          <Pressable onPress={() => setShowRoundSchedule(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
+        </View>
       </View>
-      <View style={styles.infoButtonsRow}>
-        <Pressable onPress={() => setShowLeagueIntro(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable>
-        <Pressable onPress={() => setShowRoundSchedule(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
-      </View>
+      {leaguePlayerCount !== null ? <Text style={styles.playerCountTextRow}>PELAAJIA LIIGASSA {leaguePlayerCount}</Text> : null}
       {primary.leagueStatus !== "ongoing" || (canRegisterOtherCategory && openLeague) ? <View style={styles.dateRow}>
         {primary.leagueStatus !== "ongoing" ? <>
           <View><Text style={styles.cardLabel}>LIIGA ALKAA</Text><Text style={styles.season}>{formatFinnishDate(primary.startDate)}</Text></View>
@@ -344,8 +344,8 @@ const styles = StyleSheet.create({
   openLeagueCard: { marginTop: 4 },
   categoryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8, gap: 8 },
   categoryText: { color: colors.greenBright, fontSize: 13, fontWeight: "800" },
-  playerCountText: { color: colors.coral, fontSize: 11, fontWeight: "900", letterSpacing: 0.3 },
-  infoButtonsRow: { flexDirection: "row", gap: 8, marginTop: 10 },
+  playerCountTextRow: { color: colors.coral, fontSize: 11, fontWeight: "900", letterSpacing: 0.3, marginTop: 8 },
+  infoButtonsInline: { flexDirection: "row", gap: 8 },
   infoTextButton: { borderWidth: 1, borderColor: colors.green, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 12, alignItems: "center" },
   infoTextButtonLabel: { color: colors.green, fontSize: 12, fontWeight: "800" },
   infoModalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)" },
