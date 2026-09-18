@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors } from "../theme";
 
-const LEAGUE_INTRO_TEXT = `Suomen kirkkain padel-liiga eli tähtiliiga starttaa matkansa Jyväskylästä! Liiga on jatkumoa Jyväskylän kesäliiga 2026 by kuntomaailma:lle
+const LEAGUE_INTRO_TEXT = `Suomen kirkkain padel-liiga eli tähtiliiga starttaa matkansa Jyväskylästä! Liiga on jatkumoa Jyväskylän kesäliiga 2026 by Kuntomaailma:lle
 
 Tähtiliiga on kaiken tasoisille pelaajille suunniteltu kilpailullinen padel-liiga, jossa joukkueet taistelevat kierros kierrokselta sijoituksista, nousuista ja palkinnoista.
 
