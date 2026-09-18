@@ -154,7 +154,7 @@ export default function TeamRegistrationScreen() {
       <Text style={styles.label}>KAPTEENI</Text>
       <View style={styles.captains}>{captainChoices.map((choice) => <Pressable key={choice.id} onPress={() => setCaptainId(choice.id)} style={[styles.captain, captainId === choice.id && styles.captainSelected]}><Text style={[styles.captainText, captainId === choice.id && styles.captainTextSelected]}>{choice.name}</Text></Pressable>)}</View>
 
-      <Text style={styles.label}>JOUKKUEEN TAITOTASO</Text>
+      <Text style={styles.label}>ARVIOITU JOUKKUEENNE TAITOTASO</Text>
       <View style={styles.levels}>{levels.map((level) => <Pressable key={level} onPress={() => setSkillLevel(level)} style={[styles.level, level === "Aloittelija" && styles.levelWide, skillLevel === level && styles.levelSelected]}><Text style={[styles.levelText, level === "Aloittelija" && styles.levelTextSmall, skillLevel === level && styles.levelTextSelected]}>{level}</Text></Pressable>)}</View>
 
       <Text style={styles.label}>LISÄTIETOA TAITOTASOSTA (valinnainen)</Text>
