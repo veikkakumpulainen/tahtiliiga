@@ -312,14 +312,14 @@ export default function HomeScreen() {
         <View style={styles.rosterList}>
           {teamPlayers.map((player) => <Text key={player.player_id} style={styles.rosterRow}>
             {player.first_name} {player.last_name}{player.is_captain ? " (C)" : ""}
-            {allPaid ? null : <>{" "}<Text style={paymentStatuses[`${team.id}:${player.player_id}`] === "paid" ? styles.rosterPaid : styles.rosterUnpaid}>
-              {paymentStatuses[`${team.id}:${player.player_id}`] === "paid" ? "(osallistuminen maksettu)" : "(osallistuminen maksamatta)"}
-            </Text></>}
           </Text>)}
         </View>
-        {allPaid ? null : paymentStatuses[`${team.id}:${session?.user.id}`] === "paid" ? <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>✓ Osallistumismaksu maksettu</Text></View> : <Pressable style={styles.payButton} onPress={() => void payOwnFee(team)} disabled={payingTeamId === team.id}>
-          {payingTeamId === team.id ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.payButtonText}>Maksa osallistuminen ({PARTICIPATION_FEE} €)</Text>}
-        </Pressable>}
+        {allPaid ? null : paymentStatuses[`${team.id}:${session?.user.id}`] === "paid" ? <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>✓ Osallistumismaksu maksettu</Text></View> : <>
+          <Pressable style={styles.payButton} onPress={() => void payOwnFee(team)} disabled={payingTeamId === team.id}>
+            {payingTeamId === team.id ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.payButtonText}>Maksa osallistuminen ({PARTICIPATION_FEE} €)</Text>}
+          </Pressable>
+          <Text style={styles.payNoteText}>Osallistumismaksu tulee maksaa ennen liigan alkua</Text>
+        </>}
         {team.leagueStatus === "ongoing" && team.groupId ? <GroupMatches teamId={team.id} teamName={team.name} ownGroupName={team.groupName} /> : null}
       </View>; })}
       {payError ? <Text style={styles.payErrorText}>{payError}</Text> : null}
@@ -391,11 +391,10 @@ const styles = StyleSheet.create({
   arrow: { color: colors.lime, fontSize: 20, marginLeft: "auto" },
   rosterList: { marginTop: 6 },
   rosterRow: { color: colors.ink, fontSize: 13, fontWeight: "700", marginTop: 3 },
-  rosterPaid: { color: colors.greenBright, fontWeight: "700" },
-  rosterUnpaid: { color: colors.muted, fontWeight: "600" },
   paidBadge: { backgroundColor: colors.mint, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, marginTop: 12, alignItems: "center" },
   paidBadgeText: { color: colors.greenBright, fontWeight: "800", fontSize: 13 },
   payButton: { backgroundColor: colors.green, borderRadius: 13, padding: 15, marginTop: 12, alignItems: "center" },
   payButtonText: { color: colors.surface, fontWeight: "800", fontSize: 14 },
+  payNoteText: { color: colors.muted, fontSize: 12, marginTop: 8, textAlign: "center" },
   payErrorText: { color: colors.coral, fontSize: 12, marginTop: 8 },
 });
