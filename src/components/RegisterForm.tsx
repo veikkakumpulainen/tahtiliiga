@@ -124,7 +124,10 @@ export default function RegisterForm({ onRegistered, onResultChange }: { onRegis
 
     <Pressable style={styles.checkboxRow} onPress={() => update("marketingAccepted", !form.marketingAccepted)}>
       <View style={[styles.checkbox, form.marketingAccepted && styles.checkboxChecked]}>{form.marketingAccepted ? <Text style={styles.checkmark}>✓</Text> : null}</View>
-      <Text style={styles.checkboxLabel}>Hyväksyn markkinointiviestit</Text>
+      <View style={styles.checkboxTextColumn}>
+        <Text style={styles.checkboxLabel}>Hyväksyn markkinointiviestit</Text>
+        <Text style={styles.marketingHint}>Ei turhaa pommitusta, vain Tähtiliigan nykyisten ja tulevien liigojen infoja</Text>
+      </View>
     </Pressable>
 
     {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -177,7 +180,9 @@ const styles = StyleSheet.create({
   checkbox: { width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: colors.line, backgroundColor: colors.canvas, alignItems: "center", justifyContent: "center", marginTop: 2 },
   checkboxChecked: { backgroundColor: colors.green, borderColor: colors.green },
   checkmark: { color: colors.surface, fontWeight: "900", fontSize: 12 },
+  checkboxTextColumn: { flex: 1 },
   checkboxLabel: { color: colors.ink, fontSize: 14, flex: 1, lineHeight: 20 },
+  marketingHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 },
   link: { color: colors.green, fontWeight: "900", textDecorationLine: "underline" },
   error: { color: colors.coral, fontSize: 12, marginTop: 14, lineHeight: 18 },
   button: { backgroundColor: colors.green, borderRadius: 8, padding: 16, alignItems: "center", marginTop: 22 },
