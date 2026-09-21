@@ -143,7 +143,7 @@ export default function TeamRegistrationScreen() {
       <View style={styles.categories}>{categories.map(([value, label]) => <Pressable key={value} onPress={() => setCategory(value)} style={[styles.category, category === value && styles.categorySelected]}><Text style={[styles.categoryText, category === value && styles.categoryTextSelected]}>{label}</Text></Pressable>)}</View>
 
       <Text style={styles.label}>PELAAJIEN HAKU</Text>
-      <Text style={styles.hint}>Lisätyt pelaajat ovat heti mukana joukkueessa.</Text>
+      <Text style={styles.hint}>Lisää pelikaverisi (Tähtiliigaprofiili vaaditaan)</Text>
       <View style={styles.searchRow}><TextInput value={searchQuery} onChangeText={setSearchQuery} placeholder="Hae nimellä" placeholderTextColor={colors.muted} style={[styles.input, styles.searchInput]} />{searching ? <ActivityIndicator color={colors.green} /> : null}</View>
       {searchResults.map((player) => <Pressable key={player.id} onPress={() => selectPlayer(player)} disabled={selectedPlayers.length >= 2} style={styles.result}><Text style={styles.resultText}>{player.first_name} {player.last_name} · #{player.player_code}</Text><Text style={styles.resultAdd}>Lisää</Text></Pressable>)}
 

@@ -15,6 +15,16 @@ import { colors } from "../theme";
 
 const logo = require("../../assets/images/tahtiliigalogo.png");
 
+const SOCIAL_ICON_COLOR = colors.green;
+const instagramIconUri = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${SOCIAL_ICON_COLOR}" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.3" cy="6.7" r="0.9" fill="${SOCIAL_ICON_COLOR}" stroke="none"/></svg>`)}`;
+const facebookIconUri = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="${SOCIAL_ICON_COLOR}" d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06C2 17.08 5.66 21.23 10.44 22v-7.03H7.9v-2.9h2.53V9.85c0-2.5 1.49-3.89 3.77-3.89 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56v1.88h2.78l-.44 2.9h-2.34V22C18.34 21.23 22 17.08 22 12.06Z"/></svg>`)}`;
+const tiktokIconUri = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"><path d="M14 3v10.5a3.5 3.5 0 1 1-2.5-3.35" stroke="${SOCIAL_ICON_COLOR}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 3c.3 2.2 2 3.9 4.2 4.2" stroke="${SOCIAL_ICON_COLOR}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.2 7.2V10a6.6 6.6 0 0 1-4.2-1.5" stroke="${SOCIAL_ICON_COLOR}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`)}`;
+const socialLinks = [
+  { key: "instagram", label: "Instagram", url: "https://www.instagram.com/tahtiliiga/", icon: instagramIconUri },
+  { key: "facebook", label: "Facebook", url: "https://www.instagram.com/tahtiliiga/", icon: facebookIconUri },
+  { key: "tiktok", label: "TikTok", url: "https://www.tiktok.com/@tahtiliiga", icon: tiktokIconUri },
+] as const;
+
 const MOBILE_BREAKPOINT = 760;
 
 type League = { id: string; name: string; start_date: string; end_date: string | null; registration_deadline: string | null };
@@ -312,7 +322,7 @@ export default function WebHomeScreen() {
           <View style={[styles.teamList, !isMobile && styles.teamListFill]}>
             {(() => {
               const categoryTeams = teams.filter((team) => team.category === selectedCategory);
-              const leaguePlayerCount = teams.reduce((total, team) => total + team.players.length, 0);
+              const leaguePlayerCount = new Set(teams.flatMap((team) => team.players.map((player) => player.id))).size;
               return <>
                 <Text style={styles.teamListTitle}>{`Pelaajia liigassa (${leaguePlayerCount})`}</Text>
                 <View style={styles.categorySwitch}>
@@ -356,6 +366,11 @@ export default function WebHomeScreen() {
           <View style={styles.footerButtonIcon}><View style={styles.messageIcon}><View style={styles.messageIconTail} /></View></View>
           <Text style={styles.footerButtonLabel}>Yhteyttä</Text>
         </Pressable>
+      </View>
+      <View style={[styles.socialRow, isMobile && styles.socialRowMobile]}>
+        {socialLinks.map((social) => <Pressable key={social.key} onPress={() => { if (typeof window !== "undefined") window.open(social.url, "_blank"); }} style={styles.socialIcon} accessibilityRole="link" accessibilityLabel={social.label}>
+          <Image source={{ uri: social.icon }} style={styles.socialIconImage} />
+        </Pressable>)}
       </View>
     </View>
   </ScrollView>
@@ -670,6 +685,7 @@ const styles = StyleSheet.create({
   teamRowLast: { borderBottomWidth: 0 }, teamNumber: { color: colors.green, fontSize: 14, fontWeight: "900", width: 22 }, teamInfo: { flex: 1, minWidth: 0 }, teamName: { color: colors.ink, fontSize: 15, fontWeight: "900" }, teamPlayers: { color: colors.muted, fontSize: 12, marginTop: 3 },
   footerInfo: { maxWidth: 1180, width: "100%", alignSelf: "center", marginTop: 56, paddingHorizontal: 34, paddingTop: 30, borderTopWidth: 1, borderTopColor: colors.line }, footerInfoMobile: { marginTop: 20, paddingHorizontal: 18, paddingTop: 16 }, footerInfoMobileTeams: { marginTop: 32 },
   footerButtons: { flexDirection: "row", gap: 16 }, footerButtonsMobile: { gap: 8 }, footerButton: { flex: 1, minHeight: 108, alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 22, paddingHorizontal: 10, borderRadius: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line }, footerButtonIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.mint, alignItems: "center", justifyContent: "center" }, footerButtonIconText: { color: colors.green, fontSize: 18, fontWeight: "900" }, footerButtonLogo: { width: 26, height: 26 }, footerButtonLabel: { color: colors.ink, fontSize: 13, fontWeight: "800", textAlign: "center" }, messageIcon: { width: 19, height: 15, borderWidth: 2, borderColor: colors.green, borderRadius: 4, position: "relative" }, messageIconTail: { position: "absolute", bottom: -5, left: 3, width: 6, height: 6, borderLeftWidth: 2, borderBottomWidth: 2, borderColor: colors.green, backgroundColor: colors.mint, transform: [{ rotate: "-45deg" }] },
+  socialRow: { flexDirection: "row", justifyContent: "center", gap: 16, marginTop: 30, paddingTop: 30, borderTopWidth: 1, borderTopColor: colors.line, paddingBottom: 30 }, socialRowMobile: { marginTop: 20, paddingTop: 20, paddingBottom: 20, gap: 12 }, socialIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.mint, alignItems: "center", justifyContent: "center" }, socialIconImage: { width: 22, height: 22 },
   placeholderCopy: { color: colors.muted, fontSize: 14, lineHeight: 21, marginTop: 12 },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", alignItems: "center", justifyContent: "center", padding: 20 }, modalBox: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 26, width: "100%", maxWidth: 480, maxHeight: "90%" }, modalBoxWide: { maxWidth: 680 }, modalScroll: { flexGrow: 0 }, modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }, modalTitle: { color: colors.ink, fontSize: 20, fontWeight: "900", flex: 1 }, modalTitleGold: { color: colors.green }, modalClose: { color: colors.muted, fontSize: 26, fontWeight: "600", lineHeight: 26, paddingLeft: 12 }, modalFooter: { color: colors.muted, textAlign: "center", marginTop: 20, fontSize: 13 }, modalFooterLink: { color: colors.greenBright, fontWeight: "800" },
   modalSection: { marginBottom: 18 }, modalHeading: { color: colors.green, fontSize: 14, fontWeight: "900", marginBottom: 8 }, modalText: { color: colors.ink, fontSize: 13, lineHeight: 19 }, modalFootnote: { color: colors.muted, fontSize: 12, lineHeight: 18, fontStyle: "italic" }, modalParagraphSpacing: { marginTop: 10 }, modalSubheading: { color: colors.ink, fontSize: 13, fontWeight: "900", marginBottom: 6 }, modalBullet: { color: colors.ink, fontSize: 13, lineHeight: 19, marginTop: 4 }, contactLink: { color: colors.greenBright, fontSize: 14, fontWeight: "800", marginTop: 6 }, footnoteLink: { color: colors.greenBright, fontWeight: "800", textDecorationLine: "underline" },

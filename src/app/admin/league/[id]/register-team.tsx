@@ -109,7 +109,7 @@ export default function AdminTeamRegistrationScreen() {
       <Text style={styles.label}>TAITOTASO</Text>
       <View style={styles.levels}>{skillLevels.map((level) => <Pressable key={level} onPress={() => setSkillLevel(level)} style={[styles.level, level === "Aloittelija" && styles.levelWide, skillLevel === level && styles.levelSelected]}><Text style={[styles.levelText, level === "Aloittelija" && styles.levelTextSmall, skillLevel === level && styles.levelTextSelected]}>{level}</Text></Pressable>)}</View>
       <Text style={styles.label}>PELAAJIEN HAKU</Text>
-      <Text style={styles.hint}>Lisätyt pelaajat ovat heti mukana joukkueessa.</Text>
+      <Text style={styles.hint}>Lisää pelikaverisi (Tähtiliigaprofiili vaaditaan)</Text>
       <View style={styles.searchRow}><TextInput value={searchQuery} onChangeText={setSearchQuery} placeholder="Hae nimellä" placeholderTextColor={colors.muted} style={[styles.input, styles.searchInput]} />{searching ? <ActivityIndicator color={colors.green} /> : null}</View>
       {searchResults.map((player) => <Pressable key={player.id} onPress={() => selectPlayer(player)} disabled={selectedPlayers.length >= 3} style={styles.result}><Text style={styles.resultText}>{player.first_name} {player.last_name} · #{player.player_code}</Text><Text style={styles.resultAdd}>Lisää</Text></Pressable>)}
       <Text style={styles.label}>JOUKKUEEN PELAAJAT</Text>
