@@ -4,7 +4,26 @@ import { formatFinnishDate } from "../lib/dates";
 import { supabase } from "../lib/supabase";
 import { colors } from "../theme";
 
-type LeagueRound = { id: string; name: string; start_date: string; end_date: string };
+type LeagueRound = { id: string; name: string; start_date: string; end_date: string; round_type: "regular" | "qualification" };
+
+// Qualification rounds are shown nested under the regular round that precedes
+// them (smaller, indented) so the normal rounds stand out. Any qualification
+// rounds before the first regular round form a leading group with no parent.
+type RoundGroup = { parent: LeagueRound | null; qualifiers: LeagueRound[] };
+
+function groupRounds(rounds: LeagueRound[]): RoundGroup[] {
+  const groups: RoundGroup[] = [];
+  for (const round of rounds) {
+    if (round.round_type === "qualification") {
+      const current = groups[groups.length - 1];
+      if (current) current.qualifiers.push(round);
+      else groups.push({ parent: null, qualifiers: [round] });
+    } else {
+      groups.push({ parent: round, qualifiers: [] });
+    }
+  }
+  return groups;
+}
 
 type Props = { leagueId: string } & ({ visible?: undefined; onClose?: undefined } | { visible: boolean; onClose: () => void });
 
@@ -27,7 +46,7 @@ export default function LeagueRoundSchedule({ leagueId, visible: controlledVisib
     setError("");
     void supabase
       .from("league_rounds")
-      .select("id,name,start_date,end_date")
+      .select("id,name,start_date,end_date,round_type")
       .eq("league_id", leagueId)
       .order("start_date")
       .then(({ data, error: loadError }) => {
@@ -49,9 +68,15 @@ export default function LeagueRoundSchedule({ leagueId, visible: controlledVisib
             <View><Text style={styles.eyebrow}>LIIGAN AIKATAULU</Text><Text style={styles.title}>Kierrokset</Text></View>
             <Pressable onPress={close} accessibilityRole="button" accessibilityLabel="Sulje aikataulu"><Text style={styles.close}>×</Text></Pressable>
           </View>
-          {loading ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <Text style={styles.error}>Aikataulua ei voitu ladata: {error}</Text> : rounds.length === 0 ? <Text style={styles.empty}>Kierrosten aikataulua ei ole vielä julkaistu.</Text> : rounds.map((round) => <View key={round.id} style={styles.round}>
-            <Text style={styles.roundName}>{round.name}</Text>
-            <Text style={styles.dates}>{formatFinnishDate(round.start_date)} - {formatFinnishDate(round.end_date)}</Text>
+          {loading ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <Text style={styles.error}>Aikataulua ei voitu ladata: {error}</Text> : rounds.length === 0 ? <Text style={styles.empty}>Kierrosten aikataulua ei ole vielä julkaistu.</Text> : groupRounds(rounds).map((group, index) => <View key={group.parent?.id ?? `qualifiers-${index}`} style={styles.round}>
+            {group.parent ? <>
+              <Text style={styles.roundName}>{group.parent.name}</Text>
+              <Text style={styles.dates}>{formatFinnishDate(group.parent.start_date)} - {formatFinnishDate(group.parent.end_date)}</Text>
+            </> : null}
+            {group.qualifiers.map((round) => <View key={round.id} style={styles.qualifierRound}>
+              <Text style={styles.qualifierName}>{round.name}</Text>
+              <Text style={styles.qualifierDates}>{formatFinnishDate(round.start_date)} - {formatFinnishDate(round.end_date)}</Text>
+            </View>)}
           </View>)}
         </Pressable>
       </Pressable>
@@ -75,4 +100,7 @@ const styles = StyleSheet.create({
   round: { borderTopWidth: 1, borderTopColor: colors.line, paddingVertical: 15 },
   roundName: { color: colors.ink, fontSize: 16, fontWeight: "800" },
   dates: { color: colors.green, fontSize: 13, fontWeight: "700", marginTop: 6 },
+  qualifierRound: { marginTop: 10, marginLeft: 14, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: colors.line },
+  qualifierName: { color: colors.muted, fontSize: 13, fontWeight: "700" },
+  qualifierDates: { color: colors.muted, fontSize: 11, fontWeight: "600", marginTop: 2 },
 });

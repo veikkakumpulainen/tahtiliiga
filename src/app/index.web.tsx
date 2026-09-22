@@ -35,7 +35,26 @@ type RosterRow = { team_id: string; team_name: string; category: string; player_
 const categories = [["avoin", "Avoin"], ["mixty", "Mixty"]] as const;
 type InfoModal = "about" | "league" | "vision" | "leagueIntro";
 type Invitation = { team_id: string; team_name: string; league_id: string; league_name: string; captain_name: string | null; league_start_date: string; league_end_date: string | null };
-type LeagueRound = { id: string; name: string; start_date: string; end_date: string };
+type LeagueRound = { id: string; name: string; start_date: string; end_date: string; round_type: "regular" | "qualification" };
+
+// Qualification rounds are shown nested under the regular round that precedes
+// them (smaller, indented) so the normal rounds stand out. Any qualification
+// rounds before the first regular round form a leading group with no parent.
+type RoundGroup = { parent: LeagueRound | null; qualifiers: LeagueRound[] };
+
+function groupRounds(rounds: LeagueRound[]): RoundGroup[] {
+  const groups: RoundGroup[] = [];
+  for (const round of rounds) {
+    if (round.round_type === "qualification") {
+      const current = groups[groups.length - 1];
+      if (current) current.qualifiers.push(round);
+      else groups.push({ parent: null, qualifiers: [round] });
+    } else {
+      groups.push({ parent: round, qualifiers: [] });
+    }
+  }
+  return groups;
+}
 
 const infoModalTitles: Record<InfoModal, string> = { about: "Kaikki tähtiliigasta", league: "Liigakonsepti + säännöt", vision: "Yhteyttä", leagueIntro: "Jyväskylän Tähtiliiga" };
 
@@ -151,7 +170,7 @@ export default function WebHomeScreen() {
     if (!supabase || !showRoundSchedule || !scheduleLeagueId) return;
     setRoundScheduleLoading(true);
     setRoundScheduleError("");
-    void supabase.from("league_rounds").select("id,name,start_date,end_date").eq("league_id", scheduleLeagueId).order("start_date").then(({ data, error }) => {
+    void supabase.from("league_rounds").select("id,name,start_date,end_date,round_type").eq("league_id", scheduleLeagueId).order("start_date").then(({ data, error }) => {
       setRoundScheduleRows((data ?? []) as LeagueRound[]);
       setRoundScheduleError(error?.message ?? "");
       setRoundScheduleLoading(false);
@@ -451,9 +470,15 @@ export default function WebHomeScreen() {
           <Pressable onPress={() => setShowRoundSchedule(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.modalClose}>×</Text></Pressable>
         </View>
         <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
-          {roundScheduleLoading ? <ActivityIndicator color={colors.green} style={styles.roundScheduleLoading} /> : roundScheduleError ? <Text style={styles.roundScheduleError}>Aikataulua ei voitu ladata: {roundScheduleError}</Text> : roundScheduleRows.length === 0 ? <Text style={styles.placeholderCopy}>Kierrosten aikataulua ei ole vielä julkaistu.</Text> : roundScheduleRows.map((round) => <View key={round.id} style={styles.roundScheduleRow}>
-            <Text style={styles.roundScheduleName}>{round.name}</Text>
-            <Text style={styles.roundScheduleDates}>{formatFinnishDate(round.start_date)} - {formatFinnishDate(round.end_date)}</Text>
+          {roundScheduleLoading ? <ActivityIndicator color={colors.green} style={styles.roundScheduleLoading} /> : roundScheduleError ? <Text style={styles.roundScheduleError}>Aikataulua ei voitu ladata: {roundScheduleError}</Text> : roundScheduleRows.length === 0 ? <Text style={styles.placeholderCopy}>Kierrosten aikataulua ei ole vielä julkaistu.</Text> : groupRounds(roundScheduleRows).map((group, index) => <View key={group.parent?.id ?? `qualifiers-${index}`} style={styles.roundScheduleRow}>
+            {group.parent ? <>
+              <Text style={styles.roundScheduleName}>{group.parent.name}</Text>
+              <Text style={styles.roundScheduleDates}>{formatFinnishDate(group.parent.start_date)} - {formatFinnishDate(group.parent.end_date)}</Text>
+            </> : null}
+            {group.qualifiers.map((round) => <View key={round.id} style={styles.roundScheduleQualifier}>
+              <Text style={styles.roundScheduleQualifierName}>{round.name}</Text>
+              <Text style={styles.roundScheduleQualifierDates}>{formatFinnishDate(round.start_date)} - {formatFinnishDate(round.end_date)}</Text>
+            </View>)}
           </View>)}
         </ScrollView>
       </Pressable>
@@ -690,4 +715,5 @@ const styles = StyleSheet.create({
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", alignItems: "center", justifyContent: "center", padding: 20 }, modalBox: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 26, width: "100%", maxWidth: 480, maxHeight: "90%" }, modalBoxWide: { maxWidth: 680 }, modalScroll: { flexGrow: 0 }, modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }, modalTitle: { color: colors.ink, fontSize: 20, fontWeight: "900", flex: 1 }, modalTitleGold: { color: colors.green }, modalClose: { color: colors.muted, fontSize: 26, fontWeight: "600", lineHeight: 26, paddingLeft: 12 }, modalFooter: { color: colors.muted, textAlign: "center", marginTop: 20, fontSize: 13 }, modalFooterLink: { color: colors.greenBright, fontWeight: "800" },
   modalSection: { marginBottom: 18 }, modalHeading: { color: colors.green, fontSize: 14, fontWeight: "900", marginBottom: 8 }, modalText: { color: colors.ink, fontSize: 13, lineHeight: 19 }, modalFootnote: { color: colors.muted, fontSize: 12, lineHeight: 18, fontStyle: "italic" }, modalParagraphSpacing: { marginTop: 10 }, modalSubheading: { color: colors.ink, fontSize: 13, fontWeight: "900", marginBottom: 6 }, modalBullet: { color: colors.ink, fontSize: 13, lineHeight: 19, marginTop: 4 }, contactLink: { color: colors.greenBright, fontSize: 14, fontWeight: "800", marginTop: 6 }, footnoteLink: { color: colors.greenBright, fontWeight: "800", textDecorationLine: "underline" },
   roundScheduleLoading: { marginVertical: 24 }, roundScheduleError: { color: colors.coral, fontSize: 13, lineHeight: 19 }, roundScheduleRow: { borderTopWidth: 1, borderTopColor: colors.line, paddingVertical: 15 }, roundScheduleName: { color: colors.ink, fontSize: 16, fontWeight: "800" }, roundScheduleDates: { color: colors.green, fontSize: 13, fontWeight: "700", marginTop: 6 },
+  roundScheduleQualifier: { marginTop: 10, marginLeft: 14, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: colors.line }, roundScheduleQualifierName: { color: colors.muted, fontSize: 13, fontWeight: "700" }, roundScheduleQualifierDates: { color: colors.muted, fontSize: 11, fontWeight: "600", marginTop: 2 },
 });
