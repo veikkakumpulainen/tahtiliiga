@@ -1,9 +1,9 @@
-import { Link, Redirect, router, useLocalSearchParams } from "expo-router";
+import { Link, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import ScreenHeader from "../../../components/ScreenHeader";
 import { useAuth } from "../../../hooks/useAuth";
-import { isProductionSupabase, supabase } from "../../../lib/supabase";
+import { supabase } from "../../../lib/supabase";
 import { colors } from "../../../theme";
 
 const levels = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
@@ -110,7 +110,6 @@ export default function TeamRegistrationScreen() {
 
   // Production web has its own landing page (index.web.tsx) with its own
   // team registration modal. Dev/preview builds still allow it, for testing.
-  if (Platform.OS === "web" && isProductionSupabase) return <Redirect href="/" />;
 
   if (authLoading) return <View style={styles.loading}><ActivityIndicator color={colors.green} /></View>;
 

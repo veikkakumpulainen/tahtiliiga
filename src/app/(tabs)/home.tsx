@@ -1,6 +1,6 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, AppState, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import GroupMatches from "../../components/GroupMatches";
 import LeagueIntroContent from "../../components/LeagueIntroContent";
@@ -46,6 +46,7 @@ export default function HomeScreen() {
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState("");
   const [openLeague, setOpenLeague] = useState<OpenLeague | null>(null);
+  const [ongoingLeague, setOngoingLeague] = useState<OpenLeague | null>(null);
   const [payingTeamId, setPayingTeamId] = useState<string | null>(null);
   const [payError, setPayError] = useState("");
   const [selectedTeamCategory, setSelectedTeamCategory] = useState<string | null>(null);
@@ -57,10 +58,11 @@ export default function HomeScreen() {
   const loadOpenLeague = useCallback(async () => {
     if (!supabase) return;
     const today = new Date().toISOString().slice(0, 10);
-    const { data } = await supabase.from("leagues").select("id, name, start_date, end_date, registration_deadline, registration_opens_at, status").in("status", ["registration_open", "upcoming"]).order("start_date", { ascending: true });
+    const { data } = await supabase.from("leagues").select("id, name, start_date, end_date, registration_deadline, registration_opens_at, status").in("status", ["registration_open", "upcoming", "ongoing"]).order("start_date", { ascending: true });
     const rows = (data ?? []) as OpenLeague[];
     const openRow = rows.filter((row) => row.status === "registration_open").find((row) => !row.registration_deadline || row.registration_deadline >= today) ?? rows.find((row) => row.status === "upcoming") ?? null;
     setOpenLeague(openRow);
+    setOngoingLeague(rows.find((row) => row.status === "ongoing") ?? null);
   }, []);
 
   useFocusEffect(useCallback(() => { void loadOpenLeague(); }, [loadOpenLeague]));
@@ -114,6 +116,14 @@ export default function HomeScreen() {
   }, [session?.user.id, refreshMyLeagues]);
 
   useFocusEffect(useCallback(() => { void loadHome(); }, [loadHome]));
+
+  // On Android openBrowserAsync resolves as soon as the Custom Tab opens, so
+  // the reload in payOwnFee runs before payment. Returning from the browser
+  // does not refocus the tab either, so reload when the app becomes active.
+  useFocusEffect(useCallback(() => {
+    const subscription = AppState.addEventListener("change", (state) => { if (state === "active") void loadHome(); });
+    return () => subscription.remove();
+  }, [loadHome]));
 
   const respondToInvitation = async (teamId: string, accept: boolean) => {
     if (!supabase) return;
@@ -261,7 +271,19 @@ export default function HomeScreen() {
       </View>)}
     </View> : null}
     {teams.length === 0 && invitations.length === 0 ? <View style={styles.openLeagueCard}>
-      {openLeague ? <>
+      {ongoingLeague && openLeague?.status !== "registration_open" ? <>
+        <View style={styles.categoryRow}>
+          <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
+          <View style={styles.infoButtonsInline}>
+            <Pressable onPress={() => setShowLeagueIntro(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable>
+          </View>
+        </View>
+        <View style={styles.dateRow}>
+          <View><Text style={styles.cardLabel}>LIIGA ALKOI</Text><Text style={styles.season}>{formatFinnishDate(ongoingLeague.start_date)}</Text></View>
+          <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(ongoingLeague.end_date)}</Text></View>
+        </View>
+        <Text style={styles.cardNote}>{openLeague ? `Nykyinen liiga on jo käynnissä. Seuraavan liigan ilmoittautuminen aukeaa ${openLeague.registration_opens_at ? formatFinnishDate(openLeague.registration_opens_at) : "pian"}.` : "Nykyinen liiga on jo käynnissä. Seuraavan liigan ilmoittautuminen aukeaa tähän myöhemmin."}</Text>
+      </> : openLeague ? <>
         <View style={styles.categoryRow}>
           <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
           <View style={styles.infoButtonsInline}>
@@ -295,7 +317,7 @@ export default function HomeScreen() {
         </> : null}
         {canRegisterOtherCategory && openLeague ? <View><Text style={styles.cardLabel}>ILMOITTAUTUMISEN DEADLINE</Text><Text style={styles.season}>{formatFinnishDate(openLeague.registration_deadline)}</Text></View> : null}
       </View> : null}
-      {visibleLeagueTeams.map((team) => { const teamPlayers = rosterRows.filter((player) => player.team_id === team.id); const allPaid = team.leagueStatus === "ongoing" && teamPlayers.length > 0 && teamPlayers.every((player) => paymentStatuses[`${team.id}:${player.player_id}`] === "paid"); return <View key={team.id} style={styles.teamBox}>
+      {visibleLeagueTeams.map((team) => { const teamPlayers = rosterRows.filter((player) => player.team_id === team.id); const ownPaid = paymentStatuses[`${team.id}:${session?.user.id}`] === "paid"; return <View key={team.id} style={styles.teamBox}>
         {showCategoryToggle ? <>
           <Text style={styles.cardLabel}>JOUKKUE</Text>
           <Text style={styles.teamName}>{team.name}</Text>
@@ -314,7 +336,7 @@ export default function HomeScreen() {
             {player.first_name} {player.last_name}{player.is_captain ? " (C)" : ""}
           </Text>)}
         </View>
-        {allPaid ? null : paymentStatuses[`${team.id}:${session?.user.id}`] === "paid" ? <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>✓ Osallistumismaksu maksettu</Text></View> : <>
+        {ownPaid && team.leagueStatus === "ongoing" ? null : ownPaid ? <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>✓ Osallistumismaksu maksettu</Text></View> : <>
           <Pressable style={styles.payButton} onPress={() => void payOwnFee(team)} disabled={payingTeamId === team.id}>
             {payingTeamId === team.id ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.payButtonText}>Maksa osallistuminen ({PARTICIPATION_FEE} €)</Text>}
           </Pressable>

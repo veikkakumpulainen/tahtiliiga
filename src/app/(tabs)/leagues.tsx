@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useFocusEffect } from "expo-router";
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import ScreenHeader from "../../components/ScreenHeader";
@@ -12,6 +12,33 @@ import { colors, shadow } from "../../theme";
 type League = { id: string; name: string; status: string };
 type Standing = { group_id: string; group_name: string; team_id: string; team_name: string; played: number; wins: number; losses: number; points: number; rank_position?: number };
 const categories = [["avoin", "Avoin"], ["mixty", "Mixty"]] as const;
+
+type Movement = "promoted" | "relegated" | "qualifies" | null;
+
+const groupNumberOf = (groupName: string | undefined) => {
+  const match = groupName?.match(/^Lohko ([0-9]+)$/);
+  return match ? Number(match[1]) : null;
+};
+
+// Mirrors complete_league_round / start_qualification_round: a lower group's
+// winner swaps with the upper group's last team, and the upper group's third
+// plays a qualification match against the lower group's second.
+function movementOf(rank: number, lastRank: number, groupNumber: number | null, topGroupNumber: number | null, bottomGroupNumber: number | null): Movement {
+  if (groupNumber === null) return null;
+  const hasUpperGroup = groupNumber !== topGroupNumber;
+  const hasLowerGroup = groupNumber !== bottomGroupNumber;
+  if (rank === 1 && hasUpperGroup) return "promoted";
+  if (rank === lastRank && hasLowerGroup) return "relegated";
+  if ((rank === 3 && hasLowerGroup) || (rank === 2 && hasUpperGroup)) return "qualifies";
+  return null;
+}
+
+function movementMarker(movement: Movement) {
+  if (movement === "promoted") return <Text style={styles.promoted}> ▲</Text>;
+  if (movement === "relegated") return <Text style={styles.relegated}> ▼</Text>;
+  if (movement === "qualifies") return <Text style={styles.qualifies}> ⇅</Text>;
+  return null;
+}
 
 export default function LeaguesScreen() {
   const { session } = useAuth();
@@ -69,12 +96,15 @@ export default function LeaguesScreen() {
   useFocusEffect(useCallback(() => { void loadLeague(); }, [loadLeague]));
 
   const loadRoster = useCallback(async () => {
-    if (!supabase || !league || league.status === "ongoing") { setRosterRows([]); return; }
-    setLoadingRoster(true);
-    setError("");
+    if (!supabase || !league) { setRosterRows([]); return; }
+    // Ongoing leagues only use the roster for the tap-to-show-players rows
+    // in the standings, so a failure there shouldn't replace the standings
+    // with an error card.
+    const ongoing = league.status === "ongoing";
+    if (!ongoing) { setLoadingRoster(true); setError(""); }
     const { data, error: rosterError } = await supabase.rpc("get_league_team_rosters", { target_league_id: league.id });
-    setLoadingRoster(false);
-    if (rosterError) { setError(`Joukkueiden lataus epäonnistui: ${rosterError.message}`); setRosterRows([]); return; }
+    if (!ongoing) setLoadingRoster(false);
+    if (rosterError) { if (!ongoing) setError(`Joukkueiden lataus epäonnistui: ${rosterError.message}`); setRosterRows([]); return; }
     setRosterRows((data ?? []) as (TeamRosterRow & { category: string })[]);
   }, [league]);
 
@@ -105,19 +135,21 @@ export default function LeaguesScreen() {
     setLoadingStandings(false);
   }, [league, category, standingsView]);
 
-  useEffect(() => { void loadStandings(); }, [loadStandings]);
-
-  useEffect(() => {
+  const loadRoundState = useCallback(async () => {
     if (!supabase || !league || league.status !== "ongoing") { setQualificationRoundActive(false); setNextRoundStartDate(null); return; }
     const client = supabase;
     const leagueId = league.id;
-    void client.from("league_rounds").select("id, end_date").eq("league_id", leagueId).eq("round_type", "qualification").eq("status", "active").maybeSingle().then(async ({ data }) => {
-      setQualificationRoundActive(Boolean(data));
-      if (!data) { setNextRoundStartDate(null); return; }
-      const { data: nextRound } = await client.from("league_rounds").select("start_date").eq("league_id", leagueId).eq("status", "draft").gte("start_date", data.end_date).order("start_date", { ascending: true }).limit(1).maybeSingle();
-      setNextRoundStartDate(nextRound?.start_date ?? null);
-    });
-  }, [league?.id, league?.status]);
+    const { data } = await client.from("league_rounds").select("id, end_date").eq("league_id", leagueId).eq("round_type", "qualification").eq("status", "active").maybeSingle();
+    setQualificationRoundActive(Boolean(data));
+    if (!data) { setNextRoundStartDate(null); return; }
+    const { data: nextRound } = await client.from("league_rounds").select("start_date").eq("league_id", leagueId).eq("status", "draft").gte("start_date", data.end_date).order("start_date", { ascending: true }).limit(1).maybeSingle();
+    setNextRoundStartDate(nextRound?.start_date ?? null);
+  }, [league]);
+
+  // Rounds change while the app stays open (admin completes one, starts the
+  // next), so refetch standings and the round state every time the tab is
+  // opened - not only when the selected league changes.
+  useFocusEffect(useCallback(() => { void loadStandings(); void loadRoundState(); }, [loadStandings, loadRoundState]));
 
   // Own-group lookup for the "scroll to my lohko" behavior below - resolved
   // separately from loadStandings since it depends on the user's team, not
@@ -160,6 +192,24 @@ export default function LeaguesScreen() {
     setPendingScrollGroupId(ownGroupId);
   }, [wantsOwnGroupScroll, standingsView, ownGroupId, groupIds.join(",")]);
   const categoryTeams = groupRosterByTeam(rosterRows.filter((row) => row.category === category));
+  const groupNumbers = standings.map((standing) => groupNumberOf(standing.group_name)).filter((value): value is number => value !== null);
+  const topGroupNumber = groupNumbers.length ? Math.min(...groupNumbers) : null;
+  const bottomGroupNumber = groupNumbers.length ? Math.max(...groupNumbers) : null;
+
+  // Tapping a standings row toggles that team's player names below it.
+  const [expandedRowKey, setExpandedRowKey] = useState<string | null>(null);
+  const playersByTeam = new Map(groupRosterByTeam(rosterRows.filter((row) => row.status === "active")).map((team) => [team.id, team.players]));
+  const renderStandingRow = (rowKey: string, row: Standing, rank: number, marker: ReactNode) => {
+    const isOwn = row.team_id === ownTeamId;
+    const players = playersByTeam.get(row.team_id) ?? [];
+    const expanded = expandedRowKey === rowKey;
+    return <Pressable key={rowKey} onPress={() => setExpandedRowKey(expanded ? null : rowKey)} style={[styles.rowWrap, isOwn && styles.ownRow]}>
+      <View style={styles.row}>
+        <Text style={[styles.cell, styles.rank]}>{rank}</Text><Text style={[styles.cell, styles.team, isOwn && styles.ownTeamText]}>{row.team_name}{marker}</Text><Text style={styles.cell}>{row.played}</Text><Text style={styles.cell}>{row.wins}</Text><Text style={styles.cell}>{row.losses}</Text><Text style={[styles.cell, styles.points]}>{row.points}</Text>
+      </View>
+      {expanded ? <Text style={styles.playerNames}>{players.length ? players.map((player) => `${player.first_name} ${player.last_name}${player.is_captain ? " (C)" : ""}`).join(", ") : "Pelaajatietoja ei saatavilla."}</Text> : null}
+    </Pressable>;
+  };
 
   return (
     <View style={[styles.page, Platform.OS === "web" && styles.pageWeb]}>
@@ -187,18 +237,15 @@ export default function LeaguesScreen() {
         <View style={styles.scrollBody}>
           {league.status !== "ongoing" ? (<>
             <Text style={styles.registeredTitle}>Ilmoittautuneet joukkueet</Text>
-            {loadingRoster ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <View style={styles.empty}>
+            {loadingRoster ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <View style={[styles.empty, styles.registeredEmpty]}>
               <Text style={styles.emptyTitle}>Joukkueita ei voitu ladata.</Text>
               <Text style={styles.emptyText}>{error}</Text>
-            </View> : categoryTeams.length === 0 ? <View style={styles.empty}>
+            </View> : categoryTeams.length === 0 ? <View style={[styles.empty, styles.registeredEmpty]}>
               <Text style={styles.emptyTitle}>Ei vielä ilmoittautuneita joukkueita.</Text>
             </View> : <TeamRosterList teams={categoryTeams} ownTeamId={ownTeamId} />}
           </>) : loadingStandings ? <ActivityIndicator color={colors.green} style={styles.loading} /> : error ? <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Tuloksia ei voitu ladata.</Text>
             <Text style={styles.emptyText}>{error}</Text>
-          </View> : standingsView === "groups" && qualificationRoundActive ? <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>Karsintakierros käynnissä.</Text>
-            <Text style={styles.emptyText}>Uudet lohkot julkaistaan{nextRoundStartDate ? ` ${formatFinnishDate(nextRoundStartDate)}` : ""} kun karsintakierros päättyy.</Text>
           </View> : (standingsView === "groups" ? groupIds.length === 0 : standings.length === 0) ? <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Tulostaulukoita ei ole vielä saatavilla.</Text>
             <Text style={styles.emptyText}>Lohkojen joukkueet ja ottelut näkyvät tässä, kun järjestäjä on julkaissut ne.</Text>
@@ -207,12 +254,20 @@ export default function LeaguesScreen() {
               <View style={styles.header}>
                 <Text style={[styles.headCell, styles.rank]}>SIJA</Text><Text style={[styles.headCell, styles.team]}>JOUKKUE</Text><Text style={styles.headCell}>O</Text><Text style={styles.headCell}>V</Text><Text style={styles.headCell}>H</Text><Text style={styles.headCell}>P</Text>
               </View>
-              {[...standings].sort((left, right) => right.points - left.points || right.wins - left.wins || left.team_name.localeCompare(right.team_name)).map((row, index) => <View key={`total-${row.team_id}-${index}`} style={[styles.row, row.team_id === ownTeamId && styles.ownRow]}>
-                <Text style={[styles.cell, styles.rank]}>{index + 1}</Text><Text style={[styles.cell, styles.team, row.team_id === ownTeamId && styles.ownTeamText]}>{row.team_name}</Text><Text style={styles.cell}>{row.played}</Text><Text style={styles.cell}>{row.wins}</Text><Text style={styles.cell}>{row.losses}</Text><Text style={[styles.cell, styles.points]}>{row.points}</Text>
-              </View>)}
+              {[...standings].sort((left, right) => right.points - left.points || right.wins - left.wins || left.team_name.localeCompare(right.team_name)).map((row, index) => renderStandingRow(`total-${row.team_id}-${index}`, row, index + 1, null))}
             </View>
-          </View> : groupIds.map((groupId, groupIndex) => {
+          </View> : <>{qualificationRoundActive ? <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>Karsintakierros käynnissä.</Text>
+            <Text style={styles.emptyText}>Alla edellisen kierroksen lopputilanne. Uudet lohkot julkaistaan{nextRoundStartDate ? ` ${formatFinnishDate(nextRoundStartDate)}` : ""} kun karsintakierros päättyy.</Text>
+            <View style={styles.legend}>
+              <Text style={styles.legendItem}><Text style={styles.promoted}>▲</Text> Nousee ylempään lohkoon</Text>
+              <Text style={styles.legendItem}><Text style={styles.relegated}>▼</Text> Putoaa alempaan lohkoon</Text>
+              <Text style={styles.legendItem}><Text style={styles.qualifies}>⇅</Text> Pelaa karsintaottelun</Text>
+            </View>
+          </View> : null}{groupIds.map((groupId, groupIndex) => {
             const groupStandings = standings.filter((standing) => standing.group_id === groupId).sort((left, right) => (left.rank_position ?? Number.MAX_SAFE_INTEGER) - (right.rank_position ?? Number.MAX_SAFE_INTEGER));
+            const groupNumber = groupNumberOf(groupStandings[0]?.group_name);
+            const lastRank = Math.max(...groupStandings.map((row, index) => row.rank_position ?? index + 1));
             return <View key={`group-${groupId}-${groupIndex}-${wantsOwnGroupScroll}`} style={styles.groupSection} onLayout={(event) => {
               if (pendingScrollGroupId === groupId) {
                 scrollRef.current?.scrollTo({ y: Math.max(0, event.nativeEvent.layout.y - 12), animated: true });
@@ -224,12 +279,10 @@ export default function LeaguesScreen() {
                 <View style={styles.header}>
                   <Text style={[styles.headCell, styles.rank]}>SIJA</Text><Text style={[styles.headCell, styles.team]}>JOUKKUE</Text><Text style={styles.headCell}>O</Text><Text style={styles.headCell}>V</Text><Text style={styles.headCell}>H</Text><Text style={styles.headCell}>P</Text>
                 </View>
-                {groupStandings.map((row, index) => <View key={`group-${groupId}-team-${row.team_id}-${index}`} style={[styles.row, row.team_id === ownTeamId && styles.ownRow]}>
-                  <Text style={[styles.cell, styles.rank]}>{row.rank_position ?? index + 1}</Text><Text style={[styles.cell, styles.team, row.team_id === ownTeamId && styles.ownTeamText]}>{row.team_name}</Text><Text style={styles.cell}>{row.played}</Text><Text style={styles.cell}>{row.wins}</Text><Text style={styles.cell}>{row.losses}</Text><Text style={[styles.cell, styles.points]}>{row.points}</Text>
-                </View>)}
+                {groupStandings.map((row, index) => renderStandingRow(`group-${groupId}-team-${row.team_id}-${index}`, row, row.rank_position ?? index + 1, qualificationRoundActive ? movementMarker(movementOf(row.rank_position ?? index + 1, lastRank, groupNumber, topGroupNumber, bottomGroupNumber)) : null))}
               </View>
             </View>;
-          })}
+          })}</>}
         </View>
         </ScrollView>
       </>}
@@ -263,7 +316,9 @@ const styles = StyleSheet.create({
   registeredTitle: { color: colors.green, fontSize: 15, fontWeight: "900" },
   table: { backgroundColor: colors.surface, borderRadius: 18, overflow: "hidden", ...shadow },
   header: { backgroundColor: colors.green, flexDirection: "row", paddingVertical: 14, paddingHorizontal: 10 },
-  row: { flexDirection: "row", paddingVertical: 17, paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: colors.line, alignItems: "center" },
+  rowWrap: { borderBottomWidth: 1, borderBottomColor: colors.line },
+  row: { flexDirection: "row", paddingVertical: 17, paddingHorizontal: 10, alignItems: "center" },
+  playerNames: { color: colors.muted, fontSize: 12, lineHeight: 18, paddingHorizontal: 16, paddingBottom: 14, marginTop: -6 },
   ownRow: { backgroundColor: "rgba(211,175,55,0.14)", borderLeftWidth: 3, borderLeftColor: colors.green },
   ownTeamText: { color: colors.greenBright, fontWeight: "900" },
   headCell: { color: colors.lime, fontSize: 10, fontWeight: "900", textAlign: "center", flex: 1 },
@@ -272,6 +327,12 @@ const styles = StyleSheet.create({
   team: { flex: 2.3, textAlign: "left" },
   points: { color: colors.greenBright, fontWeight: "900" },
   empty: { backgroundColor: colors.mint, borderRadius: 18, padding: 20, ...shadow },
+  registeredEmpty: { marginTop: 12 },
+  legend: { marginTop: 12, gap: 4 },
+  legendItem: { color: colors.muted, fontSize: 12, fontWeight: "700" },
+  promoted: { color: "#4CAF50", fontWeight: "900" },
+  relegated: { color: colors.coral, fontWeight: "900" },
+  qualifies: { color: colors.green, fontWeight: "900" },
   emptyTitle: { color: colors.green, fontWeight: "700", fontSize: 13, lineHeight: 19 },
   emptyText: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 7 },
   homeButton: { backgroundColor: colors.green, borderRadius: 13, padding: 15, marginTop: 16, alignItems: "center" },

@@ -3,17 +3,14 @@ import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, V
 import ProfileForm from "../../components/ProfileForm";
 import ScreenHeader from "../../components/ScreenHeader";
 import { useAuth } from "../../hooks/useAuth";
-import { isProductionSupabase } from "../../lib/supabase";
 import { colors } from "../../theme";
 
 export default function EditProfileScreen() {
   const { session, loading: loadingSession } = useAuth();
 
-  // Production web has its own landing page (index.web.tsx) with its own
-  // profile modal. Dev/preview builds still allow it, for testing.
-  if (Platform.OS === "web" && isProductionSupabase) return <Redirect href="/" />;
   if (loadingSession) return <View style={styles.loading}><ActivityIndicator color={colors.lime} /></View>;
-  if (!session) return <Redirect href="/(auth)/login" />;
+  // Signed-out web visitors log in from the landing page (index.web.tsx).
+  if (!session) return <Redirect href={Platform.OS === "web" ? "/" : "/(auth)/login"} />;
 
   return <View style={styles.page}>
     <ScreenHeader />

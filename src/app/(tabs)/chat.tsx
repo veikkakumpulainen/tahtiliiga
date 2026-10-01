@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import ScreenHeader from "../../components/ScreenHeader";
 import TeamRosterList, { groupRosterByTeam, type TeamRosterRow } from "../../components/TeamRosterList";
 import { useChatNotify } from "../../context/ChatNotifyContext";
@@ -17,6 +18,8 @@ type AdminGroup = { id: string; leagueId: string; leagueName: string; name: stri
 type Message = { id: string; name: string; sub: string; body: string; time: string; own: boolean };
 type GroupMessageRow = { id: string; message: string; created_at: string; user_id: string; sender_first_name: string; sender_last_name: string; team_name: string };
 type CommunityMessageRow = { id: string; message: string; created_at: string; user_id: string; sender_first_name: string; sender_last_name: string };
+type ThreadType = "group" | "qualification" | "community";
+const messageTables: Record<ThreadType, string> = { group: "group_messages", qualification: "qualification_messages", community: "community_messages" };
 
 function toMessage(id: string, name: string, sub: string, body: string, createdAt: string, own: boolean): Message {
   return { id, name, sub, body, time: new Date(createdAt).toLocaleTimeString("fi-FI", { hour: "2-digit", minute: "2-digit" }), own };
@@ -24,7 +27,7 @@ function toMessage(id: string, name: string, sub: string, body: string, createdA
 
 export default function ChatTabScreen() {
   const { session } = useAuth();
-  const { lastNotify, unreadGroupIds, unreadLeagueIds, unreadQualificationMatchIds, markGroupRead, markLeagueRead, markQualificationMatchRead } = useChatNotify();
+  const { lastNotify, lastDeleted, unreadGroupIds, unreadLeagueIds, unreadQualificationMatchIds, markGroupRead, markLeagueRead, markQualificationMatchRead } = useChatNotify();
   const [view, setView] = useState<"lohko" | "yhteiso">("lohko");
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
@@ -37,6 +40,7 @@ export default function ChatTabScreen() {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const [showMembers, setShowMembers] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const [groupMembers, setGroupMembers] = useState<TeamRosterRow[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [scrollTargetId, setScrollTargetId] = useState<string | null>(null);
@@ -255,8 +259,19 @@ export default function ChatTabScreen() {
     markLeagueRead(leagueId);
   }, [session?.user.id, markLeagueRead]);
 
+  // Tab screens stay mounted in the background, so loading a thread (which
+  // marks it read) must only happen while this tab is actually open -
+  // otherwise a message arriving while the user is on another tab would be
+  // marked read at once and the unread dot would never show.
+  const [isFocused, setIsFocused] = useState(false);
+  useFocusEffect(useCallback(() => { setIsFocused(true); return () => setIsFocused(false); }, []));
+  const loadedThreadKey = useRef<string | null>(null);
+
   useEffect(() => {
-    setMessages([]);
+    if (!isFocused) return;
+    const threadKey = `${view}:${activeGroupId}:${communityLeagueId}:${qualificationMatch?.matchId}`;
+    // Refocusing the same thread just refetches; only a thread switch clears the list.
+    if (loadedThreadKey.current !== threadKey) { setMessages([]); loadedThreadKey.current = threadKey; }
     setError("");
     if (view === "lohko") {
       if (useQualificationChat && qualificationMatch) void loadQualificationMessages(qualificationMatch.matchId);
@@ -264,7 +279,7 @@ export default function ChatTabScreen() {
     } else if (communityLeagueId) {
       void loadCommunityMessages(communityLeagueId);
     }
-  }, [view, lohkoAvailable, activeGroupId, communityLeagueId, qualificationRoundActive, useQualificationChat, qualificationMatch, loadLohkoMessages, loadCommunityMessages, loadQualificationMessages]);
+  }, [isFocused, view, lohkoAvailable, activeGroupId, communityLeagueId, qualificationRoundActive, useQualificationChat, qualificationMatch, loadLohkoMessages, loadCommunityMessages, loadQualificationMessages]);
 
   // A DB trigger broadcasts a ping (see ChatNotifyContext) whenever someone
   // else posts in a group/league this user belongs to - see that file for why
@@ -272,15 +287,51 @@ export default function ChatTabScreen() {
   // open thread needs to actually refetch; other pings just feed the unread
   // badge (useUnreadChat) via the same shared subscription.
   useEffect(() => {
-    if (!lastNotify) return;
+    if (!lastNotify || !isFocused) return;
     if (view === "lohko" && useQualificationChat && qualificationMatch && lastNotify.match_id === qualificationMatch.matchId) void loadQualificationMessages(qualificationMatch.matchId);
     else if (view === "lohko" && activeGroupId && lastNotify.group_id === activeGroupId) void loadLohkoMessages(activeGroupId);
     else if (view === "yhteiso" && communityLeagueId && lastNotify.league_id === communityLeagueId) void loadCommunityMessages(communityLeagueId);
-  }, [lastNotify, view, activeGroupId, communityLeagueId, useQualificationChat, qualificationMatch, loadLohkoMessages, loadCommunityMessages, loadQualificationMessages]);
+  }, [lastNotify, isFocused, view, activeGroupId, communityLeagueId, useQualificationChat, qualificationMatch, loadLohkoMessages, loadCommunityMessages, loadQualificationMessages]);
+
+  // Someone deleted messages: drop them from the open list in place, so the
+  // scroll position stays where the reader left it.
+  useEffect(() => {
+    if (!lastDeleted?.messageIds.length) return;
+    const deletedIds = new Set(lastDeleted.messageIds);
+    setMessages((current) => current.some((message) => deletedIds.has(message.id)) ? current.filter((message) => !deletedIds.has(message.id)) : current);  }, [lastDeleted]);
 
   // Admins browsing a lohko they aren't a team member of can only read — the
   // group_messages insert policy requires actual team membership in the group.
   const canCompose = view === "lohko" ? (useQualificationChat || (lohkoAvailable && !useAdminLohko && !qualificationRoundActive)) : isAdmin;
+
+  const reloadActiveThread = async () => {
+    if (view === "lohko" && useQualificationChat && qualificationMatch) await loadQualificationMessages(qualificationMatch.matchId);
+    else if (view === "lohko" && activeGroupId) await loadLohkoMessages(activeGroupId);
+    else if (view === "yhteiso" && communityLeagueId) await loadCommunityMessages(communityLeagueId);
+  };
+
+  // Long-press (touch) or right-click (web) on an own message opens a small
+  // sheet for deleting it.
+  const activeThreadType: ThreadType = view === "yhteiso" ? "community" : useQualificationChat ? "qualification" : "group";
+  const [actionMessage, setActionMessage] = useState<Message | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [actionError, setActionError] = useState("");
+
+  const openMessageActions = (message: Message) => {
+    if (!message.own) return;
+    setActionMessage(message); setConfirmDelete(false); setActionError("");
+  };
+
+  const deleteMessage = async () => {
+    if (!supabase || !actionMessage) return;
+    setDeleting(true);
+    const { error: deleteError, count } = await supabase.from(messageTables[activeThreadType]).delete({ count: "exact" }).eq("id", actionMessage.id);
+    setDeleting(false);
+    if (deleteError || count === 0) { setActionError("Viestin poisto epäonnistui. Yritä uudelleen."); return; }
+    setActionMessage(null);
+    await reloadActiveThread();
+  };
 
   const sendMessage = async () => {
     const value = draft.trim();
@@ -297,9 +348,7 @@ export default function ChatTabScreen() {
     if (insertResult.error) { setError("Viestin lähetys epäonnistui. Yritä uudelleen."); return; }
     // The DB trigger that pings other members skips the sender, so refetch
     // directly here instead of waiting on a notify event that won't arrive.
-    if (view === "lohko" && useQualificationChat && qualificationMatch) await loadQualificationMessages(qualificationMatch.matchId);
-    else if (view === "lohko" && activeGroupId) await loadLohkoMessages(activeGroupId);
-    else if (view === "yhteiso" && communityLeagueId) await loadCommunityMessages(communityLeagueId);
+    await reloadActiveThread();
     // The unread-scroll logic above never targets the sender's own message,
     // so explicitly reveal it now that it's been appended.
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
@@ -312,6 +361,14 @@ export default function ChatTabScreen() {
       <Pressable onPress={() => setView("lohko")} style={[styles.segment, view === "lohko" && styles.segmentActive]}><Text style={[styles.segmentText, view === "lohko" && styles.segmentTextActive]}>{lohkoTabLabel}</Text>{unreadGroupIds.size > 0 || unreadQualificationMatchIds.size > 0 ? <View style={styles.segmentDot} /> : null}</Pressable>
       <Pressable onPress={() => setView("yhteiso")} style={[styles.segment, view === "yhteiso" && styles.segmentActive]}><Text style={[styles.segmentText, view === "yhteiso" && styles.segmentTextActive]}>Tiedotteet</Text>{unreadLeagueIds.size > 0 ? <View style={styles.segmentDot} /> : null}</Pressable>
     </View>
+    <View style={styles.infoRow}>
+      {view === "lohko" && useQualificationChat && qualificationMatch ? <Pressable onPress={() => void openQualificationOpponent()} style={styles.membersInlineButton}>
+        <Text style={styles.membersRowText} numberOfLines={1}>vs {qualificationMatch.opponentName}</Text>
+      </Pressable> : view === "lohko" && lohkoAvailable && !qualificationRoundActive ? <Pressable onPress={() => void openMembers()} style={styles.membersInlineButton}>
+        <Text style={styles.membersRowText}>Lohkon jäsenet</Text>
+      </Pressable> : null}
+      <Pressable onPress={() => setShowInfo(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Tietoa chatista" style={styles.infoIcon}><Text style={styles.infoIconText}>i</Text></Pressable>
+    </View>
     {view === "lohko" && showCategorySelector ? <View style={styles.lohkoTopRow}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectorScrollInline} contentContainerStyle={styles.selector}>
         {teams.map((team) => <Pressable key={team.id} onPress={() => setSelectedTeamId(team.id)} style={[styles.selectorButton, selectedTeam?.id === team.id && styles.selectorSelected]}>
@@ -319,19 +376,9 @@ export default function ChatTabScreen() {
           {(team.groupId && unreadGroupIds.has(team.groupId)) || (qualificationMatchByTeamId[team.id] && unreadQualificationMatchIds.has(qualificationMatchByTeamId[team.id].matchId)) ? <View style={styles.selectorDot} /> : null}
         </Pressable>)}
       </ScrollView>
-      {useQualificationChat && qualificationMatch ? <Pressable onPress={() => void openQualificationOpponent()} style={styles.membersInlineButton}>
-        <Text style={styles.membersRowText} numberOfLines={1}>vs {qualificationMatch.opponentName}</Text>
-      </Pressable> : lohkoAvailable && !qualificationRoundActive ? <Pressable onPress={() => void openMembers()} style={styles.membersInlineButton}>
-        <Text style={styles.membersRowText}>Lohkon jäsenet</Text>
-      </Pressable> : null}
     </View> : null}
     {view === "lohko" && useAdminLohko && selectedAdminGroup ? <Pressable onPress={() => setSelectedAdminGroupId(null)} style={styles.backRow}>
       <Text style={styles.backText}>‹ Kaikki lohkot</Text>
-    </Pressable> : null}
-    {view === "lohko" && !showCategorySelector && useQualificationChat && qualificationMatch ? <Pressable onPress={() => void openQualificationOpponent()} style={styles.membersRow}>
-      <Text style={styles.membersRowText} numberOfLines={1}>vs {qualificationMatch.opponentName}</Text>
-    </Pressable> : view === "lohko" && !showCategorySelector && lohkoAvailable && !qualificationRoundActive ? <Pressable onPress={() => void openMembers()} style={styles.membersRow}>
-      <Text style={styles.membersRowText}>Lohkon jäsenet</Text>
     </Pressable> : null}
     {view === "yhteiso" && communityLeagueOptions.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectorScroll} contentContainerStyle={styles.selector}>
       {communityLeagueOptions.map((league) => <Pressable key={league.id} onPress={() => setSelectedCommunityLeagueId(league.id)} style={[styles.selectorButton, communityLeagueId === league.id && styles.selectorSelected]}>
@@ -353,24 +400,32 @@ export default function ChatTabScreen() {
       : view === "lohko" && qualificationClosed ? <View style={styles.emptyState}><Text style={styles.emptyText}>Karsintakierros käynnissä. Lohkochat aukeaa seuraavalla kierroksella.</Text></View>
       : view === "yhteiso" && !communityLeagueId ? <View style={styles.emptyState}><Text style={styles.emptyText}>{isAdmin ? "Liigoja ei löytynyt." : "Liity liigaan nähdäksesi tiedotteet."}</Text></View>
       : <ScrollView ref={scrollRef} contentContainerStyle={styles.messages} showsVerticalScrollIndicator={false}>
-        {view === "yhteiso" && !isAdmin ? <Text style={styles.readOnlyNote}>Vain ylläpito voi lähettää tiedotteita.</Text> : null}
         {view === "lohko" && useAdminLohko ? <Text style={styles.readOnlyNote}>Ylläpito näkee lohkon viestit, mutta ei ole sen jäsen.</Text> : null}
-        {messages.map((message) => <View key={message.id} style={[styles.message, message.own && styles.ownMessage]} onLayout={(event) => {
+        {messages.map((message) => <Pressable key={message.id} disabled={!message.own} onLongPress={() => openMessageActions(message)} delayLongPress={400} style={[styles.message, message.own && styles.ownMessage]} onLayout={(event) => {
           if (scrollTargetId !== message.id) return;
           scrollRef.current?.scrollTo({ y: Math.max(0, event.nativeEvent.layout.y - 12), animated: false });
           setScrollTargetId(null);
-        }}>
+        }} {...(Platform.OS === "web" && message.own ? { onContextMenu: (event: { preventDefault: () => void }) => { event.preventDefault(); openMessageActions(message); } } : {})}>
           <Text style={styles.sender}>{message.name} <Text style={styles.team}>· {message.sub}</Text></Text>
           <Text style={styles.body}>{message.body}<Text style={styles.time}>  {message.time}</Text></Text>
-        </View>)}
+        </Pressable>)}
       </ScrollView>}
 
     {canCompose ? <View style={styles.composer}>
       <View style={styles.inputWrap}>
-        <TextInput value={draft} onChangeText={setDraft} placeholder="Kirjoita viesti..." placeholderTextColor="#8A978F" multiline maxLength={view === "lohko" ? 1000 : 2000} style={styles.input} />
-        <Text style={styles.counter}>{draft.length}/{view === "lohko" ? 1000 : 2000}</Text>
+        <TextInput value={draft} onChangeText={setDraft} onKeyPress={(event) => {
+          // Web with a physical keyboard: Enter sends, Shift+Enter adds a new
+          // line. Phone browsers keep Enter as a newline like the native app.
+          if (Platform.OS !== "web" || !window.matchMedia?.("(hover: hover) and (pointer: fine)").matches) return;
+          const nativeEvent = event.nativeEvent as { key: string; shiftKey?: boolean; isComposing?: boolean };
+          if (nativeEvent.key !== "Enter" || nativeEvent.shiftKey || nativeEvent.isComposing) return;
+          event.preventDefault();
+          void sendMessage();
+        }} placeholder="Kirjoita viesti..." placeholderTextColor="#8A978F" multiline maxLength={view === "lohko" ? 1000 : 2000} style={styles.input} />
       </View>
-      <Pressable onPress={sendMessage} style={styles.send}><Text style={styles.sendIcon}>↑</Text></Pressable>
+      <Pressable onPress={sendMessage} accessibilityRole="button" accessibilityLabel="Lähetä viesti" style={({ pressed }) => [styles.send, !draft.trim() && styles.sendEmpty, pressed && styles.sendPressed]}>
+        <Ionicons name="send" size={19} color={colors.lime} style={styles.sendIcon} />
+      </Pressable>
     </View> : null}
     {error ? <Text style={styles.error}>{error}</Text> : null}
     <Modal visible={showMembers} transparent animationType="fade" onRequestClose={() => setShowMembers(false)}>
@@ -381,8 +436,33 @@ export default function ChatTabScreen() {
             <Pressable onPress={() => setShowMembers(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.membersClose}>×</Text></Pressable>
           </View>
           {loadingMembers ? <ActivityIndicator color={colors.green} style={styles.membersLoading} /> : <ScrollView showsVerticalScrollIndicator={false}>
-            <TeamRosterList teams={groupRosterByTeam(groupMembers)} />
+            <TeamRosterList teams={groupRosterByTeam(groupMembers)} compact />
           </ScrollView>}
+        </Pressable>
+      </Pressable>
+    </Modal>
+    <Modal visible={showInfo} transparent animationType="fade" onRequestClose={() => setShowInfo(false)}>
+      <Pressable style={styles.membersBackdrop} onPress={() => setShowInfo(false)}>
+        <Pressable style={styles.membersModal} onPress={(event) => event.stopPropagation()}>
+          <View style={styles.membersHeader}>
+            <Text style={styles.membersTitle}>{view === "yhteiso" ? "Tiedotteet" : useQualificationChat ? "Karsintachat" : "Lohkochat"}</Text>
+            <Pressable onPress={() => setShowInfo(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.membersClose}>×</Text></Pressable>
+          </View>
+          <Text style={styles.infoText}>{view === "yhteiso"
+            ? "Tiedotteisiin liigan järjestäjä lähettää koko liigaa koskevia infoja."
+            : useQualificationChat
+              ? "Tässä chatissa on teidän ja karsintavastustajan joukkue. Voit sopia pelin ajankohdan täällä."
+              : "Tämä on lohkochat, jossa on kaikki teidän lohkon joukkueiden pelaajat. Lohkochatissa voit sopia pelit lohkosi joukkueita vastaan."}</Text>
+        </Pressable>
+      </Pressable>
+    </Modal>
+    <Modal visible={!!actionMessage} transparent animationType="fade" onRequestClose={() => setActionMessage(null)}>
+      <Pressable style={styles.membersBackdrop} onPress={() => setActionMessage(null)}>
+        <Pressable style={styles.membersModal} onPress={(event) => event.stopPropagation()}>
+          <Pressable disabled={deleting} onPress={() => confirmDelete ? void deleteMessage() : setConfirmDelete(true)} style={[styles.deleteButton, confirmDelete && styles.deleteButtonConfirm]}>
+            {deleting ? <ActivityIndicator color={colors.surface} /> : <Text style={[styles.deleteButtonText, confirmDelete && styles.deleteButtonTextConfirm]}>{confirmDelete ? "Vahvista poisto" : "Poista viesti"}</Text>}
+          </Pressable>
+          {actionError ? <Text style={styles.actionError}>{actionError}</Text> : null}
         </Pressable>
       </Pressable>
     </Modal>
@@ -392,6 +472,10 @@ export default function ChatTabScreen() {
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
   segmentRow: { flexDirection: "row", gap: 8, paddingHorizontal: 22, paddingTop: 27 },
+  infoRow: { flexDirection: "row", justifyContent: "flex-end", alignItems: "center", gap: 10, paddingHorizontal: 22, paddingTop: 8 },
+  infoIcon: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: colors.greenBright, alignItems: "center", justifyContent: "center" },
+  infoIconText: { color: colors.greenBright, fontSize: 12, fontWeight: "900", lineHeight: 14, fontStyle: "italic" },
+  infoText: { color: colors.ink, fontSize: 14, lineHeight: 21, marginTop: 6 },
   segment: { flex: 1, borderRadius: 12, paddingVertical: 11, alignItems: "center", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
   segmentActive: { backgroundColor: colors.green, borderColor: colors.green },
   segmentText: { color: colors.ink, fontSize: 12, fontWeight: "800" },
@@ -400,7 +484,7 @@ const styles = StyleSheet.create({
   selectorScroll: { flexGrow: 0, flexShrink: 0, height: 62 },
   lohkoTopRow: { flexDirection: "row", alignItems: "center", paddingRight: 18 },
   selectorScrollInline: { flex: 1, height: 62 },
-  membersInlineButton: { paddingHorizontal: 4 },
+  membersInlineButton: { flexShrink: 1, borderWidth: 1, borderColor: colors.greenBright, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
   selector: { paddingHorizontal: 22, gap: 8, paddingTop: 12, alignItems: "center" },
   selectorButton: { minHeight: 38, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, justifyContent: "center" },
   selectorSelected: { backgroundColor: colors.green, borderColor: colors.green },
@@ -411,10 +495,9 @@ const styles = StyleSheet.create({
   emptyText: { color: colors.green, fontSize: 13, lineHeight: 19, fontWeight: "700" },
   backRow: { paddingHorizontal: 18, paddingTop: 14 },
   backText: { color: colors.greenBright, fontWeight: "800" },
-  membersRow: { alignSelf: "flex-end", paddingHorizontal: 18, paddingTop: 10, paddingBottom: 8 },
   membersRowText: { color: colors.greenBright, fontWeight: "800", fontSize: 12 },
   membersBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: 24 },
-  membersModal: { backgroundColor: colors.surface, borderRadius: 18, padding: 20, width: "100%", maxWidth: 460, maxHeight: "75%" },
+  membersModal: { backgroundColor: colors.surface, borderRadius: 18, padding: 16, width: "100%", maxWidth: 460, maxHeight: "75%" },
   membersHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
   membersTitle: { color: colors.ink, fontSize: 18, fontWeight: "800" },
   membersClose: { color: colors.muted, fontSize: 26, lineHeight: 26, fontWeight: "600" },
@@ -433,9 +516,17 @@ const styles = StyleSheet.create({
   time: { color: colors.muted, fontSize: 10 },
   composer: { flexDirection: "row", padding: 12, paddingBottom: Platform.OS === "ios" ? 22 : 12, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.line, alignItems: "flex-end", gap: 9 },
   inputWrap: { flex: 1, minHeight: 46, borderRadius: 15, backgroundColor: colors.canvas, paddingLeft: 14, paddingRight: 8 },
-  input: { color: colors.ink, fontSize: 14, maxHeight: 90, paddingTop: 13, paddingBottom: 4 },
-  counter: { color: colors.muted, fontSize: 9, textAlign: "right", paddingBottom: 5 },
-  send: { width: 46, height: 46, borderRadius: 15, backgroundColor: colors.coral, justifyContent: "center", alignItems: "center" },
-  sendIcon: { color: colors.surface, fontSize: 25, fontWeight: "800", marginTop: -3 },
+  // The browser's focus outline drew a white frame around the field on web.
+  input: { color: colors.ink, fontSize: 14, maxHeight: 90, paddingTop: 13, paddingBottom: 13, ...(Platform.OS === "web" ? { outlineStyle: "none" } as object : {}) },
+  send: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.green, justifyContent: "center", alignItems: "center" },
+  sendEmpty: { opacity: 0.45 },
+  sendPressed: { backgroundColor: colors.greenBright },
+  // The send glyph's visual weight sits left of its box; nudge it to look centered.
+  sendIcon: { marginLeft: 3 },
   error: { color: colors.coral, backgroundColor: colors.surface, paddingHorizontal: 15, paddingBottom: 9, fontSize: 12 },
+  deleteButton: { borderRadius: 13, borderWidth: 1, borderColor: colors.coral, paddingVertical: 13, alignItems: "center" },
+  deleteButtonConfirm: { backgroundColor: colors.coral },
+  deleteButtonText: { color: colors.coral, fontWeight: "800" },
+  deleteButtonTextConfirm: { color: colors.surface },
+  actionError: { color: colors.coral, fontSize: 12, marginTop: 8 },
 });

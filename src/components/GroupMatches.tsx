@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "expo-router";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -13,7 +14,7 @@ const firstWeekdayOfMonth = (year: number, month: number) => (new Date(year, mon
 
 type SetScore = { home: number | null; away: number | null; tiebreak: boolean; homeTiebreak: string; awayTiebreak: string };
 type Match = { id: string; leagueId: string; homeId: string; awayId: string; home: string; away: string; category?: string; homeScore?: number | null; awayScore?: number | null; homePlayerOneId?: string | null; homePlayerTwoId?: string | null; awayPlayerOneId?: string | null; awayPlayerTwoId?: string | null; homePlayerOneName?: string; homePlayerTwoName?: string; awayPlayerOneName?: string; awayPlayerTwoName?: string; homeSubstituteId?: string | null; awaySubstituteId?: string | null; homeSubstituteName?: string; awaySubstituteName?: string; homeSubstituteSkillLevel?: string | null; awaySubstituteSkillLevel?: string | null; homeSubstituteApproved?: boolean; awaySubstituteApproved?: boolean; date?: string; venue?: string; setScores: SetScore[]; walkoverWinnerId?: string | null; completed?: boolean; doubleWalkover?: boolean; qualification?: boolean; homeRosterSize?: number; awayRosterSize?: number };
-type LineupPlayer = { team_id: string; player_id: string; first_name: string; last_name: string; gender?: string | null };
+type LineupPlayer = { team_id: string; player_id: string; first_name: string; last_name: string; gender?: string | null; player_code?: number | null };
 
 const emptySetScores = (): SetScore[] => [{ home: null, away: null, tiebreak: false, homeTiebreak: "", awayTiebreak: "" }, { home: null, away: null, tiebreak: false, homeTiebreak: "", awayTiebreak: "" }, { home: null, away: null, tiebreak: false, homeTiebreak: "", awayTiebreak: "" }];
 
@@ -55,6 +56,9 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
   const [pickedTime, setPickedTime] = useState<string | null>(null);
   const [calendarMonth, setCalendarMonth] = useState<{ year: number; month: number }>(() => { const now = new Date(); return { year: now.getFullYear(), month: now.getMonth() }; });
   const [calendarVisible, setCalendarVisible] = useState(false);
+  // Active round's date span ("YYYY-MM-DD"), highlighted in the calendar so
+  // players know which days the match has to be played on.
+  const [roundRange, setRoundRange] = useState<{ start: string; end: string } | null>(null);
   const [timeVisible, setTimeVisible] = useState(false);
   const [venue, setVenue] = useState("");
   const [venueOptions, setVenueOptions] = useState<string[]>([]);
@@ -77,6 +81,24 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
   const [error, setError] = useState("");
   const [editorSection, setEditorSection] = useState<"details" | "result">("details");
   const [activeQualificationRound, setActiveQualificationRound] = useState<{ nextRoundStartDate: string | null } | null>(null);
+  const [dismissedSubstituteCards, setDismissedSubstituteCards] = useState<string[]>([]);
+
+  // Approved substitute cards can be closed; keyed by match + substitute so a
+  // newly chosen substitute shows its card again.
+  const dismissedSubstituteCardsKey = `dismissed-substitute-cards-${teamId ?? groupId ?? "admin"}`;
+  const substituteCardKey = (matchId: string, substituteId: string) => `${matchId}:${substituteId}`;
+
+  useEffect(() => {
+    void AsyncStorage.getItem(dismissedSubstituteCardsKey).then((stored) => setDismissedSubstituteCards(stored ? JSON.parse(stored) as string[] : []));
+  }, [dismissedSubstituteCardsKey]);
+
+  const dismissSubstituteCard = (matchId: string, substituteId: string) => {
+    setDismissedSubstituteCards((current) => {
+      const next = [...current, substituteCardKey(matchId, substituteId)];
+      void AsyncStorage.setItem(dismissedSubstituteCardsKey, JSON.stringify(next));
+      return next;
+    });
+  };
 
   // Only relevant when this team has zero matches this round (checked
   // separately from loadMatches, which returns nothing to inspect in that
@@ -181,6 +203,18 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
       const now = new Date();
       setCalendarMonth({ year: now.getFullYear(), month: now.getMonth() });
     }
+    setRoundRange(null);
+    void supabase?.from("league_rounds").select("start_date, end_date").eq("league_id", match.leagueId).eq("status", "active").maybeSingle().then(({ data: round }) => {
+      if (!round?.start_date || !round?.end_date) return;
+      setRoundRange({ start: round.start_date, end: round.end_date });
+      // With no date picked yet, open the calendar on the round's month
+      // rather than today's, if today falls outside the round.
+      const today = new Date().toISOString().slice(0, 10);
+      if (!parsedDate && (today < round.start_date || today > round.end_date)) {
+        const [year, month] = round.start_date.split("-").map(Number);
+        setCalendarMonth({ year, month: month - 1 });
+      }
+    });
     setVenue(match.venue ?? "");
     const { data: venueRows } = await supabase?.from("league_venues").select("name").eq("league_id", match.leagueId).order("name") ?? { data: [] };
     setVenueOptions((venueRows ?? []).map((row) => row.name as string));
@@ -248,7 +282,7 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
     const { data, error: searchError } = await supabase.rpc("search_match_substitutes", { target_match_id: selected.id, target_team_id: targetTeamId, search_query: query });
     setSearchingSubstitutes(false);
     if (searchError) { setError(`Varapelaajahaku epäonnistui: ${searchError.message}`); return; }
-    setSubstituteResults(((data ?? []) as { id: string; first_name: string; last_name: string; gender: string | null }[]).map((player) => ({ team_id: targetTeamId, player_id: player.id, first_name: player.first_name, last_name: player.last_name, gender: player.gender })));
+    setSubstituteResults(((data ?? []) as { id: string; first_name: string; last_name: string; gender: string | null; player_code: number | null }[]).map((player) => ({ team_id: targetTeamId, player_id: player.id, first_name: player.first_name, last_name: player.last_name, gender: player.gender, player_code: player.player_code })));
   };
 
   useEffect(() => {
@@ -331,6 +365,16 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
         { home: 0, away: 0, tiebreak: false, homeTiebreak: "", awayTiebreak: "" },
       ];
       isDoubleWalkover = true;
+    } else if (selected.qualification && resultMode === "walkover") {
+      // Walkover needs no lineups - for when the opponent never picks players or answers.
+      if (!walkoverWinnerId) {
+        setError("Valitse luovutusvoiton voittaja.");
+        return;
+      }
+      homeSets = walkoverWinnerId === selected.homeId ? 1 : 0;
+      awaySets = walkoverWinnerId === selected.awayId ? 1 : 0;
+      savedWalkoverWinnerId = walkoverWinnerId;
+      completed = true;
     } else if (selected.qualification) {
       // Only demand a winner when the user is actually saving from the
       // "Tulos" tab - the "Tiedot" tab's save button is meant to let them
@@ -436,6 +480,9 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
       completed,
     } : match));
     setSelected(null);
+    // The optimistic update above lacks server-only fields such as a newly
+    // chosen substitute's skill level, so refetch to fill them in.
+    void loadMatches();
   };
 
   const homeRosterCount = lineupOptions.filter((player) => player.team_id === selected?.homeId).length;
@@ -483,19 +530,21 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
           {(match.awayPlayerOneId || match.awayPlayerTwoId) ? <Text style={styles.teamPlayers}>{[match.awayPlayerOneName, match.awayPlayerTwoName].filter(Boolean).join(" / ")}</Text> : (match.awayRosterSize ?? 0) > 2 ? <Text style={styles.teamPlayersMissing}>Pelaajat valitsematta</Text> : null}
         </View>
       </View>
-      {match.homeSubstituteId ? <View style={styles.substituteCard}>
+      {match.homeSubstituteId && !(match.homeSubstituteApproved && dismissedSubstituteCards.includes(substituteCardKey(match.id, match.homeSubstituteId))) ? <View style={styles.substituteCard}>
+        {match.homeSubstituteApproved ? <Pressable onPress={() => dismissSubstituteCard(match.id, match.homeSubstituteId!)} accessibilityRole="button" accessibilityLabel="Sulje" style={styles.substituteCardClose}><Text style={styles.substituteCardCloseText}>×</Text></Pressable> : null}
         <Text style={styles.substituteCardLabel}>{match.home.toUpperCase()} · VARAPELAAJA</Text>
         <Text style={styles.substituteCardName}>{match.homeSubstituteName ?? "Varapelaaja"}</Text>
         <Text style={styles.substituteCardLevel}>Taitotaso: {match.homeSubstituteSkillLevel ?? "-"}</Text>
         {match.homeSubstituteApproved ? <Text style={styles.substituteApproved}>✓ Hyväksytty</Text> : (isAdmin || teamId === match.awayId) ? <Pressable onPress={() => void approveSubstitute(match, "home")} style={styles.approveButton}><Text style={styles.approveButtonText}>Hyväksy varapelaaja</Text></Pressable> : <Text style={styles.substituteWaiting}>Odottaa vastustajan hyväksyntää</Text>}
       </View> : null}
-      {match.awaySubstituteId ? <View style={styles.substituteCard}>
+      {match.awaySubstituteId && !(match.awaySubstituteApproved && dismissedSubstituteCards.includes(substituteCardKey(match.id, match.awaySubstituteId))) ? <View style={styles.substituteCard}>
+        {match.awaySubstituteApproved ? <Pressable onPress={() => dismissSubstituteCard(match.id, match.awaySubstituteId!)} accessibilityRole="button" accessibilityLabel="Sulje" style={styles.substituteCardClose}><Text style={styles.substituteCardCloseText}>×</Text></Pressable> : null}
         <Text style={styles.substituteCardLabel}>{match.away.toUpperCase()} · VARAPELAAJA</Text>
         <Text style={styles.substituteCardName}>{match.awaySubstituteName ?? "Varapelaaja"}</Text>
         <Text style={styles.substituteCardLevel}>Taitotaso: {match.awaySubstituteSkillLevel ?? "-"}</Text>
         {match.awaySubstituteApproved ? <Text style={styles.substituteApproved}>✓ Hyväksytty</Text> : (isAdmin || teamId === match.homeId) ? <Pressable onPress={() => void approveSubstitute(match, "away")} style={styles.approveButton}><Text style={styles.approveButtonText}>Hyväksy varapelaaja</Text></Pressable> : <Text style={styles.substituteWaiting}>Odottaa vastustajan hyväksyntää</Text>}
       </View> : null}
-      {match.completed ? <Text style={styles.result}>{match.qualification ? `Voittaja: ${(match.homeScore ?? 0) > (match.awayScore ?? 0) ? match.home : match.away}` : `Lopputulos ${formatSetResult(match.setScores, match.walkoverWinnerId, match.homeId, match.home, match.away)}`}</Text> : match.doubleWalkover ? <Text style={styles.result}>Ei pelattu ({formatSetResult(match.setScores, null, match.homeId, match.home, match.away)}) · Ei pisteitä kummallekaan joukkueelle</Text> : null}
+      {match.completed ? <Text style={styles.result}>{match.qualification ? `Voittaja: ${(match.homeScore ?? 0) > (match.awayScore ?? 0) ? match.home : match.away}${match.walkoverWinnerId ? " (luovutusvoitto)" : ""}` : `Lopputulos ${formatSetResult(match.setScores, match.walkoverWinnerId, match.homeId, match.home, match.away)}`}</Text> : match.doubleWalkover ? <Text style={styles.result}>Ei pelattu ({formatSetResult(match.setScores, null, match.homeId, match.home, match.away)}) · Ei pisteitä kummallekaan joukkueelle</Text> : null}
       <View style={styles.editButton}>
         <Pressable style={styles.editSingle} onPress={() => void openEditor(match)}><Text style={styles.editText}>Muokkaa tietoja</Text></Pressable>
       </View>
@@ -516,13 +565,13 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
         </View>
         <Text style={styles.fieldLabel}>PELIPAIKKA</Text>
         {venueOptions.length > 0 ? <Pressable style={styles.dateTimeField} onPress={() => setVenuePickerVisible(true)}><Text style={styles.dateTimeText}>{venue || "Valitse pelipaikka"}</Text></Pressable> : <TextInput value={venue} onChangeText={setVenue} placeholder="Esim. Padel Center" placeholderTextColor={colors.muted} style={styles.input} />}
-        {(isAdmin || selected?.homeId === teamId) ? <><Text style={styles.fieldLabel}>{selected?.home} - PELAAJAT (2)</Text><View style={styles.lineup}>{lineupWithSubstitute("home").map((player) => <Pressable key={player.player_id} onPress={() => toggleLineupPlayer("home", player.player_id)} style={[styles.lineupPlayer, homeLineup.includes(player.player_id) && styles.lineupPlayerSelected]}><Text style={[styles.lineupPlayerText, homeLineup.includes(player.player_id) && styles.lineupPlayerTextSelected]}>{player.first_name} {player.last_name}{player.isSubstitute ? " (varapelaaja)" : ""}</Text></Pressable>)}</View><Pressable onPress={() => setSubstituteSearchTeam("home")} style={styles.substituteButton}><Text style={styles.substituteButtonText}>Käytä varapelaajaa</Text></Pressable></> : null}
-        {(isAdmin || selected?.awayId === teamId) ? <><Text style={styles.fieldLabel}>{selected?.away} - PELAAJAT (2)</Text><View style={styles.lineup}>{lineupWithSubstitute("away").map((player) => <Pressable key={player.player_id} onPress={() => toggleLineupPlayer("away", player.player_id)} style={[styles.lineupPlayer, awayLineup.includes(player.player_id) && styles.lineupPlayerSelected]}><Text style={[styles.lineupPlayerText, awayLineup.includes(player.player_id) && styles.lineupPlayerTextSelected]}>{player.first_name} {player.last_name}{player.isSubstitute ? " (varapelaaja)" : ""}</Text></Pressable>)}</View><Pressable onPress={() => setSubstituteSearchTeam("away")} style={styles.substituteButton}><Text style={styles.substituteButtonText}>Käytä varapelaajaa</Text></Pressable></> : null}
-        {substituteSearchTeam ? <><Text style={styles.fieldLabel}>HAE VARAPELAAJAA</Text><View style={styles.substituteSearchRow}><TextInput value={substituteSearchQuery} onChangeText={setSubstituteSearchQuery} placeholder="Hae nimellä" placeholderTextColor={colors.muted} style={[styles.input, styles.substituteSearchInput]} />{searchingSubstitutes ? <ActivityIndicator color={colors.green} /> : null}</View>{substituteResults.map((player) => <Pressable key={player.player_id} onPress={() => selectSubstitute(substituteSearchTeam, player.player_id, player.first_name, player.last_name, player.gender ?? null)} style={styles.substituteResult}><Text style={styles.substituteResultText}>{player.first_name} {player.last_name}</Text><Text style={styles.substituteButtonText}>Valitse</Text></Pressable>)}</> : null}
+        {(isAdmin || selected?.homeId === teamId) ? <><Text style={styles.fieldLabel}>{selected?.home} - PELAAJAT (2)</Text><View style={styles.lineup}>{lineupWithSubstitute("home").map((player) => <Pressable key={player.player_id} onPress={() => toggleLineupPlayer("home", player.player_id)} style={[styles.lineupPlayer, homeLineup.includes(player.player_id) && styles.lineupPlayerSelected]}><Text style={[styles.lineupPlayerText, homeLineup.includes(player.player_id) && styles.lineupPlayerTextSelected]}>{player.first_name} {player.last_name}{player.isSubstitute ? " (varapelaaja)  ×" : ""}</Text></Pressable>)}</View><Pressable onPress={() => setSubstituteSearchTeam("home")} style={styles.substituteButton}><Text style={styles.substituteButtonText}>Käytä varapelaajaa</Text></Pressable></> : null}
+        {(isAdmin || selected?.awayId === teamId) ? <><Text style={styles.fieldLabel}>{selected?.away} - PELAAJAT (2)</Text><View style={styles.lineup}>{lineupWithSubstitute("away").map((player) => <Pressable key={player.player_id} onPress={() => toggleLineupPlayer("away", player.player_id)} style={[styles.lineupPlayer, awayLineup.includes(player.player_id) && styles.lineupPlayerSelected]}><Text style={[styles.lineupPlayerText, awayLineup.includes(player.player_id) && styles.lineupPlayerTextSelected]}>{player.first_name} {player.last_name}{player.isSubstitute ? " (varapelaaja)  ×" : ""}</Text></Pressable>)}</View><Pressable onPress={() => setSubstituteSearchTeam("away")} style={styles.substituteButton}><Text style={styles.substituteButtonText}>Käytä varapelaajaa</Text></Pressable></> : null}
+        {substituteSearchTeam ? <><Text style={styles.fieldLabel}>HAE VARAPELAAJAA</Text><View style={styles.substituteSearchRow}><TextInput value={substituteSearchQuery} onChangeText={setSubstituteSearchQuery} placeholder="Hae nimellä" placeholderTextColor={colors.muted} style={[styles.input, styles.substituteSearchInput]} />{searchingSubstitutes ? <ActivityIndicator color={colors.green} /> : null}</View>{substituteResults.map((player) => <Pressable key={player.player_id} onPress={() => selectSubstitute(substituteSearchTeam, player.player_id, player.first_name, player.last_name, player.gender ?? null)} style={styles.substituteResult}><Text style={styles.substituteResultText}>{player.first_name} {player.last_name}{player.player_code != null ? ` · #${player.player_code}` : ""}</Text><Text style={styles.substituteButtonText}>Valitse</Text></Pressable>)}</> : null}
         </> : <>
-        {selected?.qualification ? <>
-        {isAdmin ? <View style={styles.modeRow}><Pressable onPress={() => setResultMode("sets")} style={[styles.mode, resultMode !== "double_walkover" && styles.modeSelected]}><Text style={[styles.modeText, resultMode !== "double_walkover" && styles.modeTextSelected]}>Voittaja</Text></Pressable><Pressable onPress={() => setResultMode("double_walkover")} style={[styles.walkoverMode, resultMode === "double_walkover" && styles.walkoverModeSelected]}><Text style={[styles.walkoverModeText, resultMode === "double_walkover" && styles.walkoverModeTextSelected]}>Ei pelattu</Text></Pressable></View> : null}
-        {resultMode === "double_walkover" ? <View style={styles.walkover}><Text style={styles.walkoverHint}>Joukkueet eivät sopineet karsintaottelua keskenään. Tulokseksi kirjataan 6-0, 0-6, 0-0, eikä kumpikaan joukkue etene tai saa pisteitä tästä ottelusta.</Text></View> : resultEntryReady ? <><Text style={styles.fieldLabel}>KARSINTAOTTELUN VOITTAJA</Text>
+        {selected?.qualification ? <><Text style={styles.fieldLabel}>LOPPUTULOS</Text>
+        <View style={styles.modeRow}><Pressable onPress={() => setResultMode("sets")} style={[styles.mode, resultMode === "sets" && styles.modeSelected]}><Text style={[styles.modeText, resultMode === "sets" && styles.modeTextSelected]}>Voittaja</Text></Pressable><Pressable onPress={() => setResultMode("walkover")} style={[styles.walkoverMode, resultMode === "walkover" && styles.walkoverModeSelected]}><Text style={[styles.walkoverModeText, resultMode === "walkover" && styles.walkoverModeTextSelected]}>Luovutusvoitto</Text></Pressable>{isAdmin ? <Pressable onPress={() => setResultMode("double_walkover")} style={[styles.walkoverMode, resultMode === "double_walkover" && styles.walkoverModeSelected]}><Text style={[styles.walkoverModeText, resultMode === "double_walkover" && styles.walkoverModeTextSelected]}>Ei pelattu</Text></Pressable> : null}</View>
+        {resultMode === "double_walkover" ? <View style={styles.walkover}><Text style={styles.walkoverHint}>Joukkueet eivät sopineet karsintaottelua keskenään. Tulokseksi kirjataan 6-0, 0-6, 0-0, eikä kumpikaan joukkue etene tai saa pisteitä tästä ottelusta.</Text></View> : resultMode === "walkover" ? <View style={styles.walkover}><Text style={styles.walkoverHint}>Valitse luovutusvoiton saanut joukkue, jos vastustaja ei valitse pelaajia tai pidä yhteyttä. Luovutusvoiton voi merkata ilman kokoonpanoja.</Text><Pressable onPress={() => setWalkoverWinnerId(selected.homeId)} style={[styles.winner, walkoverWinnerId === selected.homeId && styles.winnerSelected]}><Text style={[styles.winnerText, walkoverWinnerId === selected.homeId && styles.winnerTextSelected]}>{selected.home}</Text></Pressable><Pressable onPress={() => setWalkoverWinnerId(selected.awayId)} style={[styles.winner, walkoverWinnerId === selected.awayId && styles.winnerSelected]}><Text style={[styles.winnerText, walkoverWinnerId === selected.awayId && styles.winnerTextSelected]}>{selected.away}</Text></Pressable></View> : resultEntryReady ? <><Text style={styles.fieldLabel}>KARSINTAOTTELUN VOITTAJA</Text>
         <View style={styles.walkover}><Pressable onPress={() => setQualificationWinnerId(selected.homeId)} style={[styles.winner, qualificationWinnerId === selected.homeId && styles.winnerSelected]}><Text style={[styles.winnerText, qualificationWinnerId === selected.homeId && styles.winnerTextSelected]}>{selected.home}</Text></Pressable><Pressable onPress={() => setQualificationWinnerId(selected.awayId)} style={[styles.winner, qualificationWinnerId === selected.awayId && styles.winnerSelected]}><Text style={[styles.winnerText, qualificationWinnerId === selected.awayId && styles.winnerTextSelected]}>{selected.away}</Text></Pressable></View></> : <View style={styles.walkover}><Text style={styles.walkoverHint}>{resultEntryHint}</Text></View>}
         </> : <><Text style={styles.fieldLabel}>LOPPUTULOS</Text>
         <View style={styles.modeRow}><Pressable onPress={() => setResultMode("sets")} style={[styles.mode, resultMode === "sets" && styles.modeSelected]}><Text style={[styles.modeText, resultMode === "sets" && styles.modeTextSelected]}>Setit</Text></Pressable><Pressable onPress={() => setResultMode("walkover")} style={[styles.walkoverMode, resultMode === "walkover" && styles.walkoverModeSelected]}><Text style={[styles.walkoverModeText, resultMode === "walkover" && styles.walkoverModeTextSelected]}>Luovutusvoitto</Text></Pressable>{isAdmin ? <Pressable onPress={() => setResultMode("double_walkover")} style={[styles.walkoverMode, resultMode === "double_walkover" && styles.walkoverModeSelected]}><Text style={[styles.walkoverModeText, resultMode === "double_walkover" && styles.walkoverModeTextSelected]}>Ei pelattu</Text></Pressable> : null}</View>
@@ -551,11 +600,16 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
             {Array.from({ length: daysInMonth(calendarMonth.year, calendarMonth.month) }, (_, index) => {
               const day = index + 1;
               const isSelected = pickedDate?.year === calendarMonth.year && pickedDate?.month === calendarMonth.month && pickedDate?.day === day;
-              return <Pressable key={day} style={styles.calendarCell} onPress={() => { setPickedDate({ year: calendarMonth.year, month: calendarMonth.month, day }); setCalendarVisible(false); }}>
-                <View style={[styles.calendarDay, isSelected && styles.calendarDaySelected]}><Text style={[styles.calendarDayText, isSelected && styles.calendarDayTextSelected]}>{day}</Text></View>
+              const isoDay = `${calendarMonth.year}-${String(calendarMonth.month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+              const inRound = roundRange ? isoDay >= roundRange.start && isoDay <= roundRange.end : null;
+              // Keyed per month so switching months mounts fresh day views;
+              // reusing them let Android drop the round shape after a restyle.
+              return <Pressable key={isoDay} style={styles.calendarCell} onPress={() => { setPickedDate({ year: calendarMonth.year, month: calendarMonth.month, day }); setCalendarVisible(false); }}>
+                <View style={[styles.calendarDay, inRound && styles.calendarDayInRound, isSelected && styles.calendarDaySelected]}><Text style={[styles.calendarDayText, inRound === false && styles.calendarDayTextOutside, inRound && styles.calendarDayTextInRound, isSelected && styles.calendarDayTextSelected]}>{day}</Text></View>
               </Pressable>;
             })}
           </View>
+          {roundRange ? <View style={styles.calendarLegend}><View style={[styles.calendarLegendDot, styles.calendarDayInRound]} /><Text style={styles.calendarLegendText}>Kierroksen pelipäivät {formatFinnishDate(roundRange.start)} – {formatFinnishDate(roundRange.end)}</Text></View> : null}
         </Pressable>
       </Pressable>
     </Modal>
@@ -604,7 +658,9 @@ const styles = StyleSheet.create({
   substituteResult: { alignItems: "center", backgroundColor: colors.mint, borderRadius: 9, flexDirection: "row", justifyContent: "space-between", marginTop: 7, padding: 10 },
   substituteResultText: { color: colors.ink, fontSize: 13, fontWeight: "700" },
   substituteCard: { backgroundColor: colors.mint, borderRadius: 9, marginTop: 9, padding: 10 },
-  substituteCardLabel: { color: colors.green, fontSize: 9, fontWeight: "900", letterSpacing: 0.7 },
+  substituteCardClose: { position: "absolute", top: 4, right: 6, padding: 6, zIndex: 1 },
+  substituteCardCloseText: { color: colors.muted, fontSize: 20, lineHeight: 20, fontWeight: "700" },
+  substituteCardLabel: { color: colors.green, fontSize: 9, fontWeight: "900", letterSpacing: 0.7, paddingRight: 24 },
   substituteCardName: { color: colors.ink, fontSize: 14, fontWeight: "800", marginTop: 5 },
   substituteCardLevel: { color: colors.muted, fontSize: 12, fontWeight: "700", marginTop: 3 },
   substituteApproved: { color: colors.greenBright, fontSize: 12, fontWeight: "900", marginTop: 8 },
@@ -627,6 +683,12 @@ const styles = StyleSheet.create({
   calendarDaySelected: { backgroundColor: colors.green },
   calendarDayText: { color: colors.ink, fontSize: 13, fontWeight: "700" },
   calendarDayTextSelected: { color: colors.surface },
+  calendarDayInRound: { backgroundColor: "rgba(211,175,55,0.22)" },
+  calendarDayTextInRound: { color: colors.greenBright, fontWeight: "900" },
+  calendarDayTextOutside: { color: colors.muted, opacity: 0.5 },
+  calendarLegend: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
+  calendarLegendDot: { width: 14, height: 14, borderRadius: 7 },
+  calendarLegendText: { color: colors.muted, fontSize: 12, fontWeight: "700", flexShrink: 1 },
   timeCard: { width: "100%", maxWidth: 280, maxHeight: 420, backgroundColor: colors.surface, borderRadius: 18, padding: 18, ...shadow },
   timeList: { marginTop: 12 },
   timeSlot: { paddingVertical: 12, borderRadius: 10, alignItems: "center" },

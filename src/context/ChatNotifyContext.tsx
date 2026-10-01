@@ -27,9 +27,11 @@ async function findUnread(rows: Record<string, MessageRow[]>, keyPrefix: string,
 }
 
 export type ChatNotifyEvent = { group_id?: string; league_id?: string; match_id?: string; message_id: string; receivedAt: number };
+export type ChatDeleteEvent = { messageIds: string[]; receivedAt: number };
 
 type ChatNotifyContextValue = {
   lastNotify: ChatNotifyEvent | null;
+  lastDeleted: ChatDeleteEvent | null;
   unreadGroupIds: Set<string>;
   unreadLeagueIds: Set<string>;
   unreadQualificationMatchIds: Set<string>;
@@ -41,6 +43,7 @@ type ChatNotifyContextValue = {
 const emptySet = new Set<string>();
 const ChatNotifyContext = createContext<ChatNotifyContextValue>({
   lastNotify: null,
+  lastDeleted: null,
   unreadGroupIds: emptySet,
   unreadLeagueIds: emptySet,
   unreadQualificationMatchIds: emptySet,
@@ -72,6 +75,7 @@ export function ChatNotifyProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const userId = session?.user.id;
   const [lastNotify, setLastNotify] = useState<ChatNotifyEvent | null>(null);
+  const [lastDeleted, setLastDeleted] = useState<ChatDeleteEvent | null>(null);
   const [unreadGroupIds, setUnreadGroupIds] = useState<Set<string>>(new Set());
   const [unreadLeagueIds, setUnreadLeagueIds] = useState<Set<string>>(new Set());
   const [unreadQualificationMatchIds, setUnreadQualificationMatchIds] = useState<Set<string>>(new Set());
@@ -132,10 +136,18 @@ export function ChatNotifyProvider({ children }: { children: ReactNode }) {
         if (data.league_id) setUnreadLeagueIds((current) => current.has(data.league_id!) ? current : new Set(current).add(data.league_id!));
         if (data.match_id) setUnreadQualificationMatchIds((current) => current.has(data.match_id!) ? current : new Set(current).add(data.match_id!));
       });
+      // Deletions (121_chat_message_delete_broadcast.sql): the open chat drops
+      // the ids in place, and the unread dots are recomputed in case the
+      // deleted message was the only unread one in its thread.
+      channel.on("broadcast", { event: "chat_deleted" }, ({ payload }) => {
+        const data = payload as { message_ids?: string[] };
+        setLastDeleted({ messageIds: data.message_ids ?? [], receivedAt: Date.now() });
+        void refresh();
+      });
       channel.subscribe();
     });
     return () => { cancelled = true; if (channel) void client.removeChannel(channel); };
-  }, [userId, session?.access_token]);
+  }, [userId, session?.access_token, refresh]);
 
   const markGroupRead = useCallback((groupId: string) => {
     if (userId) void AsyncStorage.setItem(`group-chat-read-${userId}-${groupId}`, new Date().toISOString());
@@ -152,7 +164,7 @@ export function ChatNotifyProvider({ children }: { children: ReactNode }) {
     setUnreadQualificationMatchIds((current) => { if (!current.has(matchId)) return current; const next = new Set(current); next.delete(matchId); return next; });
   }, [userId]);
 
-  return <ChatNotifyContext.Provider value={{ lastNotify, unreadGroupIds, unreadLeagueIds, unreadQualificationMatchIds, markGroupRead, markLeagueRead, markQualificationMatchRead }}>{children}</ChatNotifyContext.Provider>;
+  return <ChatNotifyContext.Provider value={{ lastNotify, lastDeleted, unreadGroupIds, unreadLeagueIds, unreadQualificationMatchIds, markGroupRead, markLeagueRead, markQualificationMatchRead }}>{children}</ChatNotifyContext.Provider>;
 }
 
 export function useChatNotify() {

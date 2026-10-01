@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
@@ -118,7 +118,7 @@ export default function ProfileForm() {
       return;
     }
     await supabase.auth.signOut();
-    router.replace("/(auth)/login");
+    router.replace(Platform.OS === "web" ? "/" : "/(auth)/login");
   };
 
   if (loading) return <View style={styles.loadingBox}><ActivityIndicator color={colors.green} /></View>;

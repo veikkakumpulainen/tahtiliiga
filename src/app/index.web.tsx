@@ -1,4 +1,4 @@
-import { Link } from "expo-router";
+import { Link, Redirect } from "expo-router";
 import Head from "expo-router/head";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
@@ -8,6 +8,7 @@ import ProfileForm from "../components/ProfileForm";
 import RegisterForm from "../components/RegisterForm";
 import TeamRegisterForm from "../components/TeamRegisterForm";
 import { useAuth } from "../hooks/useAuth";
+import { useWebAppAccess } from "../hooks/useWebAppAccess";
 import { formatFinnishDate } from "../lib/dates";
 import { supabase } from "../lib/supabase";
 import { buildPaymentUrl, getOrCreatePaymentId, PARTICIPATION_FEE } from "../lib/stripe";
@@ -82,10 +83,12 @@ const groupRosterByTeam = (rows: RosterRow[]): Team[] => {
 
 export default function WebHomeScreen() {
   const { session, loading: authLoading } = useAuth();
+  const webAccess = useWebAppAccess(session);
   const { width } = useWindowDimensions();
   const isMobile = width < MOBILE_BREAKPOINT;
   const [league, setLeague] = useState<League | null>(null);
   const [upcomingLeague, setUpcomingLeague] = useState<UpcomingLeague | null>(null);
+  const [ongoingLeague, setOngoingLeague] = useState<League | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("avoin");
   const [loading, setLoading] = useState(true);
@@ -116,10 +119,11 @@ export default function WebHomeScreen() {
   const loadLeague = async () => {
     if (!supabase) { setLoading(false); return; }
     const today = new Date().toISOString().slice(0, 10);
-    const { data: leagues } = await supabase.from("leagues").select("id,name,start_date,end_date,registration_deadline,registration_opens_at,status").in("status", ["registration_open", "upcoming"]).order("start_date", { ascending: true });
+    const { data: leagues } = await supabase.from("leagues").select("id,name,start_date,end_date,registration_deadline,registration_opens_at,status").in("status", ["registration_open", "upcoming", "ongoing"]).order("start_date", { ascending: true });
     const rows = (leagues ?? []) as (League & { status: string; registration_opens_at: string | null })[];
     const openLeague = rows.filter((item) => item.status === "registration_open").find((item) => !item.registration_deadline || item.registration_deadline >= today) ?? null;
     setLeague(openLeague);
+    setOngoingLeague(rows.find((item) => item.status === "ongoing") ?? null);
     setUpcomingLeague(openLeague ? null : rows.find((item) => item.status === "upcoming") ?? null);
     if (openLeague) {
       const { data: rosterRows } = await supabase.rpc("get_league_team_rosters", { target_league_id: openLeague.id });
@@ -252,6 +256,11 @@ export default function WebHomeScreen() {
     setTimeout(() => setLinkCopied(false), 2000);
   };
 
+  // Players of a league that has started get the same tab app as on mobile;
+  // everyone else (signed out, or only registered to an upcoming league) stays here.
+  if (session && !webAccess) return <View style={[styles.page, styles.pageLoading]}><ActivityIndicator color={colors.green} /></View>;
+  if (webAccess?.inOngoingLeague) return <Redirect href="/(tabs)/home" />;
+
   return <>
   <Head>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -322,6 +331,11 @@ export default function WebHomeScreen() {
           </View> : <View style={styles.joinRow}>
             <Pressable onPress={joinLeague} style={[styles.joinButton, styles.joinButtonActive, isMobile && styles.joinButtonMobile, styles.joinButtonInRow]}><Text style={[styles.joinText, styles.joinTextActive]}>{userPending ? "Sinut on kutsuttu turnaukseen" : "Ilmoittaudu mukaan"}</Text><Text style={[styles.joinArrow, styles.joinArrowActive]}>→</Text></Pressable>
           </View>}
+        </View></> : ongoingLeague ? <><View style={[styles.leagueHeading, isMobile && styles.leagueHeadingMobile]} /><View style={[styles.leagueFeature, styles.leagueFeatureUpcoming, isMobile && styles.leagueFeatureMobile]}>
+          <Text style={[styles.leagueName, styles.leagueNameUpcoming, isMobile && styles.leagueNameMobile]}>{ongoingLeague.name}</Text>
+          <Text style={[styles.categoryTextUpcoming, styles.categoryTextInRow]}>Padel - Avoin ja Mixty</Text>
+          <View style={[styles.detailsRow, styles.detailsRowUpcoming, isMobile && styles.detailsRowMobile]}><View><Text style={[styles.detailLabel, styles.detailLabelUpcoming]}>LIIGA ALKOI</Text><Text style={[styles.detailValue, styles.detailValueUpcoming]}>{formatFinnishDate(ongoingLeague.start_date)}</Text></View><View><Text style={[styles.detailLabel, styles.detailLabelUpcoming]}>LIIGA LOPPUU</Text><Text style={[styles.detailValue, styles.detailValueUpcoming]}>{ongoingLeague.end_date ? formatFinnishDate(ongoingLeague.end_date) : "Ei määritetty"}</Text></View></View>
+          <Pressable disabled style={[styles.joinButton, styles.joinButtonUpcoming, isMobile && styles.joinButtonMobile]}><Text style={[styles.joinText, styles.joinTextUpcoming]}>{upcomingLeague ? `Nykyinen liiga on käynnissä. Seuraavan liigan ilmoittautuminen aukeaa ${upcomingLeague.registration_opens_at ? formatFinnishDate(upcomingLeague.registration_opens_at) : "pian"}.` : "Nykyinen liiga on käynnissä. Seuraavan liigan ilmoittautuminen aukeaa tähän myöhemmin."}</Text></Pressable>
         </View></> : upcomingLeague ? <><View style={[styles.leagueHeading, isMobile && styles.leagueHeadingMobile]}><Pressable onPress={() => { if (typeof window !== "undefined") window.open("https://www.padelution.com/leagues/jyvaskyla-kesaliiga-2026", "_blank"); }} style={styles.currentLeagueLinkButton}><Text style={[styles.currentLeagueLink, isMobile && styles.currentLeagueLinkMobile]}>Nykyisessä Jyväskylän Kesäliigassamme mukana +200 pelaajaa!</Text></Pressable></View><View style={[styles.leagueFeature, styles.leagueFeatureUpcoming, isMobile && styles.leagueFeatureMobile]}>
           <Text style={[styles.leagueName, styles.leagueNameUpcoming, isMobile && styles.leagueNameMobile]}>{upcomingLeague.name}</Text>
           <View style={styles.categoryRow}>
@@ -696,7 +710,7 @@ function ContactContent() {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: colors.canvas }, content: { paddingBottom: 40 },
+  page: { flex: 1, backgroundColor: colors.canvas }, pageLoading: { alignItems: "center", justifyContent: "center" }, content: { paddingBottom: 40 },
   currentLeagueLink: { color: colors.green, fontSize: 15, fontWeight: "900", lineHeight: 18, textDecorationLine: "underline", cursor: "pointer" }, currentLeagueLinkMobile: { fontSize: 13 },
   topBar: { maxWidth: 1180, width: "100%", alignSelf: "center", paddingHorizontal: 34, paddingVertical: 22, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, topBarMobile: { paddingHorizontal: 16, paddingVertical: 10 }, brandLink: { flexDirection: "row", alignItems: "center", gap: 11 }, topLogo: { width: 40, height: 40 }, topBrand: { color: colors.green, fontSize: 13, fontWeight: "900", letterSpacing: 1.7 }, accountLinks: { minWidth: 125, alignItems: "flex-end" }, loginLink: { color: colors.surface, backgroundColor: colors.green, borderRadius: 8, paddingHorizontal: 17, paddingVertical: 11, fontWeight: "800" }, accountRow: { flexDirection: "row", alignItems: "center", gap: 14 }, logoutLink: { color: colors.greenBright, fontWeight: "900", fontSize: 13 }, profileIconWrap: { position: "relative" }, profileIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.green, overflow: "hidden" }, profileIconBadge: { position: "absolute", top: -2, right: -2, width: 13, height: 13, borderRadius: 7, backgroundColor: colors.coral, borderWidth: 2, borderColor: colors.canvas }, profileIconHead: { position: "absolute", top: 7, left: 11, width: 14, height: 14, borderRadius: 7, backgroundColor: colors.surface }, profileIconBody: { position: "absolute", bottom: -8, left: 4, width: 28, height: 22, borderRadius: 14, backgroundColor: colors.surface },
   invites: { maxWidth: 1180, width: "100%", alignSelf: "center", paddingHorizontal: 34, gap: 12 }, invitesMobile: { paddingHorizontal: 16 },

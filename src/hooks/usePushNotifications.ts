@@ -15,11 +15,26 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// Call before signing out (the RPC needs the session), so a signed-out device
+// stops receiving the previous user's notifications.
+export async function unregisterPushToken() {
+  if (!supabase || Platform.OS === "web") return;
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+  if (!projectId) return;
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== "granted") return;
+    const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
+    await supabase.rpc("unregister_push_token", { token: data });
+  } catch (error) {
+    console.warn("Push-tokenin poisto epäonnistui", error);
+  }
+}
+
 export function usePushNotifications(session: Session | null) {
   useEffect(() => {
     if (!supabase || !session?.user.id || Platform.OS === "web") return;
     const client = supabase;
-    const userId = session.user.id;
 
     (async () => {
       if (Platform.OS === "android") {
@@ -38,11 +53,9 @@ export function usePushNotifications(session: Session | null) {
 
       try {
         const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
-        const { error: upsertError } = await client.from("push_tokens").upsert(
-          { user_id: userId, expo_push_token: data, platform: Platform.OS === "ios" ? "ios" : "android" },
-          { onConflict: "expo_push_token" },
-        );
-        if (upsertError) console.warn("Push-tokenin tallennus epäonnistui", upsertError);
+        // Moves the token to this user even if another account used this device before.
+        const { error: registerError } = await client.rpc("register_push_token", { token: data, token_platform: Platform.OS === "ios" ? "ios" : "android" });
+        if (registerError) console.warn("Push-tokenin tallennus epäonnistui", registerError);
       } catch (error) {
         console.warn("Push-tokenin haku epäonnistui", error);
       }

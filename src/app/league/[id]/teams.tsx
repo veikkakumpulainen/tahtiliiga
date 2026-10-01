@@ -1,9 +1,9 @@
-import { Redirect, router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import ScreenHeader from "../../../components/ScreenHeader";
 import TeamRosterList, { groupRosterByTeam, type TeamRosterRow } from "../../../components/TeamRosterList";
-import { isProductionSupabase, supabase } from "../../../lib/supabase";
+import { supabase } from "../../../lib/supabase";
 import { colors, shadow } from "../../../theme";
 
 const categoryOrder = ["avoin", "mixty"] as const;
@@ -35,7 +35,6 @@ export default function LeagueTeamsScreen() {
 
   // Production web has its own landing page (index.web.tsx) that lists teams
   // inline. Dev/preview builds still allow it, for testing.
-  if (Platform.OS === "web" && isProductionSupabase) return <Redirect href="/" />;
 
   return <View style={styles.page}>
     <ScreenHeader />

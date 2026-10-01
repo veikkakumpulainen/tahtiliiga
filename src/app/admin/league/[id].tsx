@@ -1,5 +1,5 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useState } from "react";
+import { Fragment, useCallback, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import ScreenHeader from "../../../components/ScreenHeader";
 import { useAppScreenRestriction } from "../../../hooks/useAppScreenRestriction";
@@ -142,6 +142,10 @@ export default function LeagueManagementScreen() {
   const [searchingPlayers, setSearchingPlayers] = useState(false);
   const [confirmTeamDelete, setConfirmTeamDelete] = useState(false);
   const [confirmLeagueDelete, setConfirmLeagueDelete] = useState(false);
+  // Deleting a group (cascades its matches and chat) or pulling a team out
+  // of one can't be undone, so both need a second tap.
+  const [confirmGroupDeleteId, setConfirmGroupDeleteId] = useState<string | null>(null);
+  const [confirmAssignmentDeleteId, setConfirmAssignmentDeleteId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -329,7 +333,8 @@ export default function LeagueManagementScreen() {
 {roster.length < 3 ? <><Text style={rosterStyles.rosterLabel}>LISÄÄ KORVAAVA PELAAJA</Text><View style={styles.inline}><TextInput value={playerSearch} onChangeText={setPlayerSearch} placeholder="Hae pelaajan nimellä" placeholderTextColor={colors.muted} style={[styles.input, styles.inlineInput]} /><Pressable onPress={() => void searchRosterPlayers()} disabled={searchingPlayers} style={styles.small}>{searchingPlayers ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.smallText}>Hae</Text>}</Pressable></View>{playerSearchResults.map((player) => <Pressable key={player.id} onPress={() => void updateRoster(null, player.id)} style={styles.add}><Text style={styles.addText}>+ Lisää {player.first_name} {player.last_name} · #{player.player_code}</Text></Pressable>)}</> : <Text style={rosterStyles.rosterHint}>Joukkueessa on jo kolme pelaajaa. Poista pelaaja ennen uuden lisäämistä.</Text>}
 {confirmTeamDelete ? <View style={rosterStyles.deleteConfirm}><Text style={rosterStyles.deleteConfirmText}>Poistetaanko joukkue sekä sen lohkojaot, ottelut ja pelaajajäsenyydet?</Text><View style={styles.inline}><Pressable onPress={() => void deleteManagedTeam()} style={rosterStyles.confirmDelete}><Text style={rosterStyles.confirmDeleteText}>Vahvista poisto</Text></Pressable><Pressable onPress={() => setConfirmTeamDelete(false)} style={rosterStyles.cancelDelete}><Text style={rosterStyles.cancelDeleteText}>Peruuta</Text></Pressable></View></View> : <Pressable onPress={() => setConfirmTeamDelete(true)} style={rosterStyles.rosterDelete}><Text style={rosterStyles.rosterDeleteText}>Poista joukkue liigasta</Text></Pressable>}
 </View> : null}<Text style={styles.sectionTitle}>Lohkot</Text>
-<Pressable onPress={() => void autoAssignGroups()} disabled={autoAssigning || teams.length === 0} style={[styles.secondary, autoAssigning && styles.primaryDisabled]}>{autoAssigning ? <ActivityIndicator color={colors.green} /> : <Text style={styles.secondaryText}>Järjestä lohkot automaattisesti taitotason mukaan</Text>}</Pressable>
+{/* admin_auto_assign_groups only allows this before the league starts. */}
+{league.status === "registration_open" || league.status === "registration_closed" ? <Pressable onPress={() => void autoAssignGroups()} disabled={autoAssigning || teams.length === 0} style={[styles.secondary, autoAssigning && styles.primaryDisabled]}>{autoAssigning ? <ActivityIndicator color={colors.green} /> : <Text style={styles.secondaryText}>Järjestä lohkot automaattisesti taitotason mukaan</Text>}</Pressable> : null}
 <View style={styles.inline}>
 <TextInput value={groupName} onChangeText={setGroupName} placeholder="Uuden lohkon nimi" placeholderTextColor={colors.muted} style={[styles.input, styles.inlineInput]} />
 <Pressable onPress={createGroup} style={styles.small}>
@@ -340,21 +345,23 @@ export default function LeagueManagementScreen() {
 {groups.filter((group) => group.category === newGroupCategory).map((group) => { const groupAssignments = assignments.filter((assignment) => assignment.group_id === group.id); const assignedIds = new Set(assignments.map((assignment) => assignment.team_id)); const available = teams.filter((team) => !assignedIds.has(team.id) && team.category === group.category); const isExpanded = league.status !== "ongoing" || expandedGroupId === group.id; return <View key={group.id} style={styles.group}>
 <Pressable onPress={() => league.status === "ongoing" && setExpandedGroupId((current) => current === group.id ? null : group.id)} style={styles.groupTop} disabled={league.status !== "ongoing"} accessibilityRole={league.status === "ongoing" ? "button" : undefined} accessibilityState={{ expanded: isExpanded }}>
 <Text style={styles.groupName}>{categoryLabels[group.category] ?? group.category} · {group.name}{league.status === "ongoing" ? isExpanded ? " −" : " +" : ""}</Text>
-<Pressable onPress={() => removeGroup(group.id)}>
+<Pressable onPress={() => setConfirmGroupDeleteId(group.id)}>
 <Text style={styles.delete}>Poista lohko</Text>
 </Pressable>
 </Pressable>
-{isExpanded ? <><Text style={styles.status}>{group.status}</Text>{groupAssignments.map((assignment) => { const team = teams.find((item) => item.id === assignment.team_id); return <View key={assignment.id} style={styles.item}>
+{confirmGroupDeleteId === group.id ? <View style={rosterStyles.deleteConfirm}><Text style={rosterStyles.deleteConfirmText}>Poistetaanko {group.name} pysyvästi? Lohkon ottelut, tulokset ja lohkochatin viestit poistuvat mukana.</Text><View style={styles.inline}><Pressable onPress={() => { setConfirmGroupDeleteId(null); void removeGroup(group.id); }} style={rosterStyles.confirmDelete}><Text style={rosterStyles.confirmDeleteText}>Vahvista poisto</Text></Pressable><Pressable onPress={() => setConfirmGroupDeleteId(null)} style={rosterStyles.cancelDelete}><Text style={rosterStyles.cancelDeleteText}>Peruuta</Text></Pressable></View></View> : null}
+{isExpanded ? <><Text style={styles.status}>{group.status}</Text>{groupAssignments.map((assignment) => { const team = teams.find((item) => item.id === assignment.team_id); return <Fragment key={assignment.id}><View style={styles.item}>
 <Text style={styles.itemText}>{team ? `${team.name} · Taso ${team.skill_level}` : "Joukkue"}</Text>
 <View style={teamInfoStyles.actions}>
 {team ? <Pressable onPress={() => void openTeamInfo(team)} style={teamInfoStyles.infoButton} accessibilityRole="button" accessibilityLabel={`Näytä joukkueen ${team.name} lisätiedot`}>
 <Text style={teamInfoStyles.infoText}>i</Text>
 </Pressable> : null}
-<Pressable onPress={() => removeAssignment(assignment.id)}>
+<Pressable onPress={() => setConfirmAssignmentDeleteId(assignment.id)}>
 <Text style={styles.delete}>Poista</Text>
 </Pressable>
 </View>
-</View>; })}{available.map((team) => <Pressable key={team.id} onPress={() => assignTeam(group.id, team.id)} style={styles.add}>
+</View>
+{confirmAssignmentDeleteId === assignment.id ? <View style={rosterStyles.deleteConfirm}><Text style={rosterStyles.deleteConfirmText}>Poistetaanko {team?.name ?? "joukkue"} lohkosta {group.name}?</Text><View style={styles.inline}><Pressable onPress={() => { setConfirmAssignmentDeleteId(null); void removeAssignment(assignment.id); }} style={rosterStyles.confirmDelete}><Text style={rosterStyles.confirmDeleteText}>Vahvista poisto</Text></Pressable><Pressable onPress={() => setConfirmAssignmentDeleteId(null)} style={rosterStyles.cancelDelete}><Text style={rosterStyles.cancelDeleteText}>Peruuta</Text></Pressable></View></View> : null}</Fragment>; })}{available.map((team) => <Pressable key={team.id} onPress={() => assignTeam(group.id, team.id)} style={styles.add}>
 <Text style={styles.addText}>+ Lisää {team.name} · Taso {team.skill_level}</Text>
 </Pressable>)}<GroupMatches groupId={group.id} isAdmin /></> : null}</View>; })}{(league.status === "registration_open" || league.status === "registration_closed") ? <Pressable onPress={() => void updateStatus("ongoing")} style={styles.start}>
 <Text style={styles.startText}>Käynnistä liiga</Text>

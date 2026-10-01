@@ -1,9 +1,10 @@
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useEffect, useState } from "react";
 import { router } from "expo-router";
 import { colors } from "../../theme";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
+import { unregisterPushToken } from "../../hooks/usePushNotifications";
 import ScreenHeader from "../../components/ScreenHeader";
 
 const infoItems = ["Kaikki tähtiliigasta", "Liigakonsepti + säännöt", "Yhteyttä"];
@@ -12,7 +13,7 @@ export default function InfoScreen() {
   const { session } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
   const [infoModal, setInfoModal] = useState<string | null>(null);
-  const logout = async () => { if (supabase) await supabase.auth.signOut(); router.replace("/(auth)/login"); };
+  const logout = async () => { await unregisterPushToken(); if (supabase) await supabase.auth.signOut(); router.replace(Platform.OS === "web" ? "/" : "/(auth)/login"); };
   useEffect(() => { if (!supabase || !session?.user.id) return; void supabase.rpc("is_admin").then(({ data }) => setIsAdmin(data === true)); }, [session?.user.id]);
   return <View style={styles.page}><ScreenHeader /><ScrollView style={styles.scroll} contentContainerStyle={styles.content}><View style={styles.body}><View style={styles.infoRow}>{infoItems.map((label) => <Pressable key={label} onPress={() => setInfoModal(label)} style={styles.infoButton}><Text style={styles.infoButtonText}>{label}</Text></Pressable>)}</View>{session ? <>
     <Pressable onPress={() => router.push("/profile/edit" as never)} style={styles.profile}><Text style={styles.profileText}>Omat tiedot</Text></Pressable>
