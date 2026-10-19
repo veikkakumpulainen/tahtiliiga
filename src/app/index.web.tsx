@@ -118,8 +118,9 @@ export default function WebHomeScreen() {
   const [payingTeamId, setPayingTeamId] = useState<string | null>(null);
   const [payError, setPayError] = useState("");
   const siteUrl = typeof window !== "undefined" ? toPrettyUrl(window.location.origin) : "";
-  // The league whose Info button is shown (open registration, else upcoming).
-  const introLeague = league ?? upcomingLeague;
+  // The league shown in the main card, whose Info and round schedule buttons
+  // open: open registration first, then an ongoing league, then an upcoming one.
+  const introLeague = league ?? ongoingLeague ?? upcomingLeague;
   const scrollRef = useRef<ScrollView>(null);
 
   const loadLeague = async () => {
@@ -185,7 +186,7 @@ export default function WebHomeScreen() {
   }, [inviteSuccess]);
 
   useEffect(() => {
-    const scheduleLeagueId = league?.id ?? upcomingLeague?.id;
+    const scheduleLeagueId = introLeague?.id;
     if (!supabase || !showRoundSchedule || !scheduleLeagueId) return;
     setRoundScheduleLoading(true);
     setRoundScheduleError("");
@@ -194,7 +195,7 @@ export default function WebHomeScreen() {
       setRoundScheduleError(error?.message ?? "");
       setRoundScheduleLoading(false);
     });
-  }, [showRoundSchedule, league?.id, upcomingLeague?.id]);
+  }, [showRoundSchedule, introLeague?.id]);
 
   const respondToInvitation = async (teamId: string, accept: boolean) => {
     if (!supabase) return;
@@ -356,7 +357,13 @@ export default function WebHomeScreen() {
           </View>}
         </View></> : ongoingLeague ? <><View style={[styles.leagueHeading, isMobile && styles.leagueHeadingMobile]} /><View style={[styles.leagueFeature, styles.leagueFeatureUpcoming, isMobile && styles.leagueFeatureMobile]}>
           <Text style={[styles.leagueName, styles.leagueNameUpcoming, isMobile && styles.leagueNameMobile]}>{ongoingLeague.name}</Text>
-          <Text style={[styles.categoryTextUpcoming, styles.categoryTextInRow]}>Padel - Avoin ja Mixty</Text>
+          <View style={styles.categoryRow}>
+            <Text style={[styles.categoryTextUpcoming, styles.categoryTextInRow]}>Padel - Avoin ja Mixty</Text>
+            <View style={styles.infoButtonsInline}>
+              {ongoingLeague.info_text?.trim() ? <Pressable onPress={() => setInfoModal("leagueIntro")} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable> : null}
+              <Pressable onPress={() => setShowRoundSchedule(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
+            </View>
+          </View>
           <View style={[styles.detailsRow, styles.detailsRowUpcoming, isMobile && styles.detailsRowMobile]}><View><Text style={[styles.detailLabel, styles.detailLabelUpcoming]}>LIIGA ALKOI</Text><Text style={[styles.detailValue, styles.detailValueUpcoming]}>{formatFinnishDate(ongoingLeague.start_date)}</Text></View><View><Text style={[styles.detailLabel, styles.detailLabelUpcoming]}>LIIGA LOPPUU</Text><Text style={[styles.detailValue, styles.detailValueUpcoming]}>{ongoingLeague.end_date ? formatFinnishDate(ongoingLeague.end_date) : "Ei määritetty"}</Text></View></View>
           <Pressable disabled style={[styles.joinButton, styles.joinButtonUpcoming, isMobile && styles.joinButtonMobile]}><Text style={[styles.joinText, styles.joinTextUpcoming]}>{upcomingLeague ? `Nykyinen liiga on käynnissä. Seuraavan liigan ilmoittautuminen aukeaa ${upcomingLeague.registration_opens_at ? formatFinnishDate(upcomingLeague.registration_opens_at) : "pian"}.` : "Nykyinen liiga on käynnissä. Seuraavan liigan ilmoittautuminen aukeaa tähän myöhemmin."}</Text></Pressable>
         </View></> : upcomingLeague ? <><View style={[styles.leagueHeading, isMobile && styles.leagueHeadingMobile]} /><View style={[styles.leagueFeature, styles.leagueFeatureUpcoming, isMobile && styles.leagueFeatureMobile]}>
