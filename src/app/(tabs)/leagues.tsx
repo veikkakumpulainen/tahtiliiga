@@ -186,13 +186,16 @@ export default function LeaguesScreen() {
 
   // A cached offset from an earlier visit would be scrollable to immediately,
   // but re-measuring is what's actually reliable: the group section below is
-  // keyed on wantsOwnGroupScroll, so bumping the counter forces React to
-  // remount it and fire a fresh onLayout, which is when the scroll happens -
-  // that's a real "this view now exists and here's where it is" signal,
-  // unlike guessing whether a stale cached number is still safe to scroll to.
+  // keyed on ownGroupLayoutPass, bumped together with every scroll request,
+  // which forces React to remount it and fire a fresh onLayout - that's when
+  // the scroll happens. Bumping it here rather than on the focus intent alone
+  // matters on the first visit after sign-in: the groups can render before
+  // ownGroupId arrives, and without a remount no onLayout would fire again.
+  const [ownGroupLayoutPass, setOwnGroupLayoutPass] = useState(0);
   useEffect(() => {
     if (!wantsOwnGroupScroll || standingsView !== "groups" || !ownGroupId) return;
     setPendingScrollGroupId(ownGroupId);
+    setOwnGroupLayoutPass((current) => current + 1);
   }, [wantsOwnGroupScroll, standingsView, ownGroupId, groupIds.join(",")]);
   const categoryTeams = groupRosterByTeam(rosterRows.filter((row) => row.category === category));
   const groupNumbers = standings.map((standing) => groupNumberOf(standing.group_name)).filter((value): value is number => value !== null);
@@ -271,7 +274,7 @@ export default function LeaguesScreen() {
             const groupStandings = standings.filter((standing) => standing.group_id === groupId).sort((left, right) => (left.rank_position ?? Number.MAX_SAFE_INTEGER) - (right.rank_position ?? Number.MAX_SAFE_INTEGER));
             const groupNumber = groupNumberOf(groupStandings[0]?.group_name);
             const lastRank = Math.max(...groupStandings.map((row, index) => row.rank_position ?? index + 1));
-            return <View key={`group-${groupId}-${groupIndex}-${wantsOwnGroupScroll}`} style={styles.groupSection} onLayout={(event) => {
+            return <View key={`group-${groupId}-${groupIndex}-${ownGroupLayoutPass}`} style={styles.groupSection} onLayout={(event) => {
               if (pendingScrollGroupId === groupId) {
                 scrollRef.current?.scrollTo({ y: Math.max(0, event.nativeEvent.layout.y - 12), animated: true });
                 setPendingScrollGroupId(null);
