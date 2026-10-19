@@ -4,9 +4,11 @@ import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import { useCity } from "./CityContext";
 
-export type MyLeague = { id: string; name: string; status: string; registration_opens_at: string | null; city_id: string };
+export type MyLeague = { id: string; name: string; status: string; registration_opens_at: string | null; start_date: string; city_id: string; city_name: string };
 
 type SelectedLeagueContextValue = {
+  // Every league in every city, for the header's league picker.
+  allLeagues: MyLeague[];
   myLeagues: MyLeague[];
   otherLeagues: MyLeague[];
   selectedLeague: MyLeague | null;
@@ -19,25 +21,34 @@ type SelectedLeagueContextValue = {
 const SelectedLeagueContext = createContext<SelectedLeagueContextValue | null>(null);
 
 const storageKey = (userId: string) => `selected-league-${userId}`;
-const byOngoingFirst = (left: MyLeague, right: MyLeague) => Number(right.status === "ongoing") - Number(left.status === "ongoing");
+
+// Most relevant first: a running league, then open registration, then
+// upcoming, closed registration and finally finished ones.
+const statusOrder = ["ongoing", "registration_open", "upcoming", "registration_closed", "finished"];
+export const byLeagueRelevance = (left: MyLeague, right: MyLeague) =>
+  statusOrder.indexOf(left.status) - statusOrder.indexOf(right.status) || right.start_date.localeCompare(left.start_date);
+
+type LeagueRow = Omit<MyLeague, "city_name"> & { cities: { name: string } | { name: string }[] | null };
+const toLeague = (row: LeagueRow): MyLeague => {
+  const city = Array.isArray(row.cities) ? row.cities[0] : row.cities;
+  return { id: row.id, name: row.name, status: row.status, registration_opens_at: row.registration_opens_at, start_date: row.start_date, city_id: row.city_id, city_name: city?.name ?? "" };
+};
 
 export function SelectedLeagueProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   const userId = session?.user.id;
-  const { cityId, loading: cityLoading } = useCity();
-  const [myLeagues, setMyLeagues] = useState<MyLeague[]>([]);
+  const { cityId: homeCityId } = useCity();
+  const [myLeagueIds, setMyLeagueIds] = useState<Set<string>>(new Set());
   const [allLeagues, setAllLeagues] = useState<MyLeague[]>([]);
   const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadLeagues = useCallback(async (isRetry = false): Promise<void> => {
-    if (cityLoading) return;
-    if (!supabase || !userId || !cityId) { setMyLeagues([]); setAllLeagues([]); setLoading(false); return; }
+    if (!supabase || !userId) { setMyLeagueIds(new Set()); setAllLeagues([]); setLoading(false); return; }
     const client = supabase;
-    // Only the selected city's leagues are shown, the user's own ones included.
     const [{ data: membershipData, error: membershipError }, { data: leagueRows, error: leagueError }] = await Promise.all([
-      client.from("team_members").select("teams(league_id, leagues(id, name, status, registration_opens_at, city_id))").eq("user_id", userId).eq("status", "active"),
-      client.from("leagues").select("id, name, status, registration_opens_at, city_id").eq("city_id", cityId).order("start_date", { ascending: false }),
+      client.from("team_members").select("teams(league_id)").eq("user_id", userId).eq("status", "active"),
+      client.from("leagues").select("id, name, status, registration_opens_at, start_date, city_id, cities(name)"),
     ]);
     if ((membershipError || leagueError) && !isRetry) {
       // Right after sign-in, this provider's own onAuthStateChange listener
@@ -48,17 +59,11 @@ export function SelectedLeagueProvider({ children }: { children: ReactNode }) {
       await new Promise((resolve) => setTimeout(resolve, 400));
       return loadLeagues(true);
     }
-    const rows = (membershipData ?? []) as unknown as { teams?: { league_id: string; leagues: MyLeague | MyLeague[] | null } | { league_id: string; leagues: MyLeague | MyLeague[] | null }[] | null }[];
-    const teamRows = rows.flatMap((row) => Array.isArray(row.teams) ? row.teams : row.teams ? [row.teams] : []);
-    const mine = new Map<string, MyLeague>();
-    for (const row of teamRows) {
-      const league = Array.isArray(row.leagues) ? row.leagues[0] : row.leagues;
-      if (league && league.city_id === cityId) mine.set(league.id, league);
-    }
-    setMyLeagues([...mine.values()].sort(byOngoingFirst));
-    setAllLeagues(((leagueRows ?? []) as MyLeague[]).sort(byOngoingFirst));
+    const rows = (membershipData ?? []) as unknown as { teams?: { league_id: string } | { league_id: string }[] | null }[];
+    setMyLeagueIds(new Set(rows.flatMap((row) => Array.isArray(row.teams) ? row.teams : row.teams ? [row.teams] : []).map((team) => team.league_id)));
+    setAllLeagues(((leagueRows ?? []) as unknown as LeagueRow[]).map(toLeague).sort(byLeagueRelevance));
     setLoading(false);
-  }, [userId, cityId, cityLoading]);
+  }, [userId]);
 
   useEffect(() => { void loadLeagues(); }, [loadLeagues]);
 
@@ -72,14 +77,17 @@ export function SelectedLeagueProvider({ children }: { children: ReactNode }) {
     if (userId) void AsyncStorage.setItem(storageKey(userId), leagueId);
   };
 
-  // Prefer an explicit choice; otherwise default to one of the user's own
-  // leagues (kept from before this feature); admins/new users with no team
-  // anywhere fall back to any league so the picker still has something to show.
-  const selectedLeague = allLeagues.find((league) => league.id === selectedLeagueId) ?? myLeagues[0] ?? allLeagues[0] ?? null;
-  const isMyLeague = Boolean(selectedLeague && myLeagues.some((league) => league.id === selectedLeague.id));
-  const otherLeagues = allLeagues.filter((league) => !myLeagues.some((mine) => mine.id === league.id));
+  const myLeagues = allLeagues.filter((league) => myLeagueIds.has(league.id));
+  const otherLeagues = allLeagues.filter((league) => !myLeagueIds.has(league.id));
+  // Prefer an explicit choice; otherwise the user's own most relevant league,
+  // then the most relevant league in their home city, then anything.
+  const selectedLeague = allLeagues.find((league) => league.id === selectedLeagueId)
+    ?? myLeagues.find((league) => league.status !== "finished")
+    ?? allLeagues.find((league) => league.city_id === homeCityId)
+    ?? myLeagues[0] ?? allLeagues[0] ?? null;
+  const isMyLeague = Boolean(selectedLeague && myLeagueIds.has(selectedLeague.id));
 
-  return <SelectedLeagueContext.Provider value={{ myLeagues, otherLeagues, selectedLeague, isMyLeague, selectLeague, refresh: loadLeagues, loading }}>{children}</SelectedLeagueContext.Provider>;
+  return <SelectedLeagueContext.Provider value={{ allLeagues, myLeagues, otherLeagues, selectedLeague, isMyLeague, selectLeague, refresh: loadLeagues, loading }}>{children}</SelectedLeagueContext.Provider>;
 }
 
 export function useSelectedLeague() {

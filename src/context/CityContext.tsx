@@ -20,8 +20,6 @@ const CityContext = createContext<CityContextValue | null>(null);
 // Signed-out visitors keep their pick on this device only.
 const STORAGE_KEY = "selected-city";
 
-export const cityLockedMessage = "Et voi vaihtaa kaupunkia, kun olet mukana liigassa, joka ei ole vielä päättynyt.";
-
 export function CityProvider({ children }: { children: ReactNode }) {
   const { session, loading: authLoading } = useAuth();
   const userId = session?.user.id;
@@ -50,7 +48,7 @@ export function CityProvider({ children }: { children: ReactNode }) {
     if (userId) {
       if (!supabase) return "Supabase-yhteyttä ei ole määritetty.";
       const { error } = await supabase.from("profiles").update({ city_id: nextCityId }).eq("id", userId);
-      if (error) return error.message.includes("City cannot be changed") ? cityLockedMessage : `Kaupungin vaihto epäonnistui: ${error.message}`;
+      if (error) return `Kaupungin vaihto epäonnistui: ${error.message}`;
     } else {
       void AsyncStorage.setItem(STORAGE_KEY, nextCityId).catch(() => undefined);
     }

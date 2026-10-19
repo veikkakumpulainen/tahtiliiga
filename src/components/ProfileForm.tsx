@@ -26,9 +26,6 @@ export default function ProfileForm() {
   // Unsaved city pick; falls back to the current city.
   const [cityChoice, setCityChoice] = useState<string | null>(null);
   const selectedCityId = cityChoice ?? currentCityId;
-  // Name of an unfinished league the player is on; while set, the city is locked.
-  const [lockingLeagueName, setLockingLeagueName] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -68,24 +65,6 @@ export default function ProfileForm() {
     };
     void loadProfile();
   }, [session?.user.id]);
-
-  useEffect(() => {
-    if (!supabase || !session?.user.id) return;
-    const client = supabase;
-    // Mirrors the profile_city_locked_during_league trigger (122_cities.sql).
-    void Promise.all([
-      client.from("team_members").select("teams!inner(leagues!inner(name, status))").eq("user_id", session.user.id).neq("teams.leagues.status", "finished").limit(1),
-      client.rpc("is_admin"),
-    ]).then(([{ data: memberships }, { data: admin }]) => {
-      const row = (memberships ?? [])[0] as unknown as { teams: { leagues: { name: string } | { name: string }[] } | { leagues: { name: string } | { name: string }[] }[] } | undefined;
-      const team = Array.isArray(row?.teams) ? row?.teams[0] : row?.teams;
-      const league = Array.isArray(team?.leagues) ? team?.leagues[0] : team?.leagues;
-      setLockingLeagueName(league?.name ?? null);
-      setIsAdmin(admin === true);
-    });
-  }, [session?.user.id]);
-
-  const cityLocked = Boolean(lockingLeagueName) && !isAdmin;
 
   const saveProfile = async () => {
     if (!supabase || !session?.user.id) return;
@@ -183,13 +162,13 @@ export default function ProfileForm() {
     <Text style={styles.label}>PUHELIN</Text>
     <TextInput value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+358 40 123 4567" placeholderTextColor={colors.muted} style={styles.input} />
 
-    <Text style={styles.label}>KAUPUNKI</Text>
+    <Text style={styles.label}>KOTIKAUPUNKI</Text>
     <View style={styles.options}>
-      {sortCitiesByName(cities).map((city) => <Pressable key={city.id} disabled={cityLocked} onPress={() => setCityChoice(city.id)} style={[styles.option, selectedCityId === city.id && styles.optionSelected, cityLocked && selectedCityId !== city.id && styles.optionDisabled]}>
+      {sortCitiesByName(cities).map((city) => <Pressable key={city.id} onPress={() => setCityChoice(city.id)} style={[styles.option, selectedCityId === city.id && styles.optionSelected]}>
         <Text style={[styles.optionText, selectedCityId === city.id && styles.optionTextSelected]}>{city.name}</Text>
       </Pressable>)}
     </View>
-    <Text style={styles.hint}>{cityLocked ? `Et voi vaihtaa kaupunkia, koska olet mukana liigassa ${lockingLeagueName}. Voit vaihtaa kaupunkia, kun liiga on päättynyt.` : "Näet sovelluksessa valitsemasi kaupungin liigan."}</Text>
+    <Text style={styles.hint}>Sovellus näyttää oletuksena tämän kaupungin liigan. Muita liigoja voit katsoa yläpalkin liigan nimeä painamalla.</Text>
 
     <Text style={styles.label}>TAITOTASO (SUUNTAA ANTAVA)</Text>
     <View style={styles.options}>
@@ -251,7 +230,6 @@ const styles = StyleSheet.create({
   optionSelected: { backgroundColor: colors.green, borderColor: colors.green },
   optionText: { color: colors.ink, fontSize: 12, fontWeight: "700" },
   optionTextSelected: { color: colors.surface },
-  optionDisabled: { opacity: 0.45 },
   success: { color: colors.greenBright, fontSize: 13, fontWeight: "700", marginTop: 16 },
   error: { color: colors.coral, fontSize: 13, lineHeight: 19, marginTop: 16 },
   save: { backgroundColor: colors.green, borderRadius: 13, padding: 16, alignItems: "center", marginTop: 22 },

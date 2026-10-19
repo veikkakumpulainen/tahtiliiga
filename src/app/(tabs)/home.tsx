@@ -39,8 +39,10 @@ type LeagueIntro = { name: string; text: string };
 
 export default function HomeScreen() {
   const { session } = useAuth();
-  const { selectedLeague, refresh: refreshMyLeagues } = useSelectedLeague();
-  const { cityId } = useCity();
+  const { selectedLeague, isMyLeague, refresh: refreshMyLeagues } = useSelectedLeague();
+  const { cityId: homeCityId } = useCity();
+  // The city of the league picked in the header, falling back to the home city.
+  const viewCityId = selectedLeague?.city_id ?? homeCityId;
   const { justRegistered } = useLocalSearchParams<{ justRegistered?: string }>();
   const [teams, setTeams] = useState<Team[]>([]);
   const [rosterRows, setRosterRows] = useState<RosterPlayer[]>([]);
@@ -60,31 +62,33 @@ export default function HomeScreen() {
   const [activeRoundName, setActiveRoundName] = useState<string | null>(null);
 
   const loadOpenLeague = useCallback(async () => {
-    if (!supabase || !cityId) return;
+    if (!supabase || !viewCityId) return;
     const today = new Date().toISOString().slice(0, 10);
-    const { data } = await supabase.from("leagues").select("id, name, start_date, end_date, registration_deadline, registration_opens_at, status, info_text").eq("city_id", cityId).in("status", ["registration_open", "upcoming", "ongoing"]).order("start_date", { ascending: true });
+    const { data } = await supabase.from("leagues").select("id, name, start_date, end_date, registration_deadline, registration_opens_at, status, info_text").eq("city_id", viewCityId).in("status", ["registration_open", "upcoming", "ongoing"]).order("start_date", { ascending: true });
     const rows = (data ?? []) as OpenLeague[];
     const openRow = rows.filter((row) => row.status === "registration_open").find((row) => !row.registration_deadline || row.registration_deadline >= today) ?? rows.find((row) => row.status === "upcoming") ?? null;
+    // A league picked in the header that the user isn't in is shown itself,
+    // rather than whichever league in its city happens to be most current.
+    const viewed = selectedLeague && !isMyLeague ? rows.find((row) => row.id === selectedLeague.id) : undefined;
+    if (viewed?.status === "ongoing") { setOngoingLeague(viewed); setOpenLeague(openRow); return; }
+    if (viewed) { setOpenLeague(viewed); setOngoingLeague(null); return; }
     setOpenLeague(openRow);
     setOngoingLeague(rows.find((row) => row.status === "ongoing") ?? null);
-  }, [cityId]);
+  }, [viewCityId, selectedLeague, isMyLeague]);
 
   useFocusEffect(useCallback(() => { void loadOpenLeague(); }, [loadOpenLeague]));
 
   const loadHome = useCallback(async () => {
-    if (!supabase || !session?.user.id || !cityId) return;
+    if (!supabase || !session?.user.id) return;
     const client = supabase;
     const [{ data: membershipData }, { data: invitationData }] = await Promise.all([
-      client.from("team_members").select("team_id, teams(id, name, skill_level, category, league_id, leagues(city_id))").eq("user_id", session.user.id).eq("status", "active"),
+      client.from("team_members").select("team_id, teams(id, name, skill_level, category, league_id)").eq("user_id", session.user.id).eq("status", "active"),
       client.rpc("get_pending_team_invitations"),
     ]);
     setInvitations((invitationData ?? []) as Invitation[]);
 
-    type MembershipTeam = { id: string; name: string; skill_level: string; category: string; league_id: string; leagues: { city_id: string } | { city_id: string }[] | null };
-    const memberships = (membershipData ?? []) as unknown as { teams?: MembershipTeam | MembershipTeam[] | null }[];
-    // Teams from other cities' (finished) leagues stay hidden while another city is selected.
-    const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : [])
-      .filter((team) => (Array.isArray(team.leagues) ? team.leagues[0] : team.leagues)?.city_id === cityId);
+    const memberships = (membershipData ?? []) as unknown as { teams?: { id: string; name: string; skill_level: string; category: string; league_id: string } | { id: string; name: string; skill_level: string; category: string; league_id: string }[] | null }[];
+    const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : []);
     const leagueIds = [...new Set(teamRows.map((team) => team.league_id))];
     const teamIds = teamRows.map((team) => team.id);
     const [{ data: leagueRows }, { data: groupRows }, { data: paymentRows }, rosterResults] = await Promise.all([
@@ -121,7 +125,7 @@ export default function HomeScreen() {
 
     setTeams(nextTeams);
     void refreshMyLeagues();
-  }, [session?.user.id, refreshMyLeagues, cityId]);
+  }, [session?.user.id, refreshMyLeagues]);
 
   useFocusEffect(useCallback(() => { void loadHome(); }, [loadHome]));
 
@@ -190,7 +194,7 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    const leagueId = teams.length === 0 && invitations.length === 0 ? openLeague?.id : (selectedLeague?.id ?? teams[0]?.leagueId);
+    const leagueId = isMyLeague ? selectedLeague?.id : openLeague?.id;
     if (!supabase || !leagueId) { setLeaguePlayerCount(null); return; }
     const client = supabase;
     let cancelled = false;
@@ -200,7 +204,7 @@ export default function HomeScreen() {
       setLeaguePlayerCount(new Set(rows.map((row) => row.player_id)).size);
     });
     return () => { cancelled = true; };
-  }, [teams, invitations.length, openLeague?.id, selectedLeague?.id]);
+  }, [isMyLeague, openLeague?.id, selectedLeague?.id]);
 
   useEffect(() => {
     const leagueId = selectedLeague?.id ?? teams[0]?.leagueId;
@@ -219,7 +223,13 @@ export default function HomeScreen() {
   const missingCategory = myCategoriesInOpenLeague.has("avoin") ? "mixty" : myCategoriesInOpenLeague.has("mixty") ? "avoin" : undefined;
   const registerMissingLabel = missingCategory === "avoin" ? "Ilmoittaudu avoimeen" : missingCategory === "mixty" ? "Ilmoittaudu mixtyyn" : "Ilmoittaudu toiseen sarjaan";
   const targetLeagueId = selectedLeague?.id ?? teams[0]?.leagueId;
-  const activeLeagueId = teams.length === 0 && invitations.length === 0 ? openLeague?.id : targetLeagueId;
+  // Without an own team in the selected league, the card shows either that
+  // league or its city's current one (see loadOpenLeague).
+  const showsOngoingLeague = Boolean(ongoingLeague && openLeague?.status !== "registration_open");
+  const activeLeagueId = isMyLeague ? targetLeagueId : showsOngoingLeague ? ongoingLeague?.id : openLeague?.id;
+  // Closed or finished leagues aren't in loadOpenLeague's list, so a picked
+  // one gets a short card of its own.
+  const viewedClosedLeague = selectedLeague && !isMyLeague && (selectedLeague.status === "finished" || selectedLeague.status === "registration_closed") ? selectedLeague : null;
   const currentLeagueTeams = targetLeagueId ? teams.filter((team) => team.leagueId === targetLeagueId).sort((left, right) => Number(left.category === "mixty") - Number(right.category === "mixty")) : [];
   const primary = currentLeagueTeams[0];
   const showCategoryToggle = primary?.leagueStatus === "ongoing" && currentLeagueTeams.length > 1;
@@ -278,12 +288,16 @@ export default function HomeScreen() {
         {inviteError ? <Text style={styles.inviteError}>{inviteError}</Text> : null}
       </View>)}
     </View> : null}
-    {teams.length === 0 && invitations.length === 0 ? <View style={styles.openLeagueCard}>
-      {ongoingLeague && openLeague?.status !== "registration_open" ? <>
+    {!primary && !(teams.length === 0 && invitations.length > 0) ? <View style={styles.openLeagueCard}>
+      {viewedClosedLeague ? <>
+        <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
+        <Text style={styles.cardNote}>{viewedClosedLeague.status === "finished" ? "Liiga on päättynyt." : "Liigan ilmoittautuminen on suljettu."}</Text>
+      </> : ongoingLeague && showsOngoingLeague ? <>
         <View style={styles.categoryRow}>
           <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
           <View style={styles.infoButtonsInline}>
             {ongoingLeague.info_text?.trim() ? <Pressable onPress={() => setLeagueIntro({ name: ongoingLeague.name, text: ongoingLeague.info_text ?? "" })} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable> : null}
+            <Pressable onPress={() => setShowRoundSchedule(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
           </View>
         </View>
         <View style={styles.dateRow}>

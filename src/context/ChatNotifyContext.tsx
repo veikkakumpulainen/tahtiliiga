@@ -3,7 +3,6 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { usePathname } from "expo-router";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
-import { useCity } from "./CityContext";
 
 type MessageRow = { user_id: string; created_at: string };
 
@@ -75,7 +74,6 @@ export function ChatNotifyProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   const pathname = usePathname();
   const userId = session?.user.id;
-  const { cityId } = useCity();
   const [lastNotify, setLastNotify] = useState<ChatNotifyEvent | null>(null);
   const [lastDeleted, setLastDeleted] = useState<ChatDeleteEvent | null>(null);
   const [unreadGroupIds, setUnreadGroupIds] = useState<Set<string>>(new Set());
@@ -93,14 +91,11 @@ export function ChatNotifyProvider({ children }: { children: ReactNode }) {
     if (!teamIds.length) { setUnreadGroupIds(new Set()); setUnreadLeagueIds(new Set()); setUnreadQualificationMatchIds(new Set()); return; }
 
     const [{ data: leagueRows }, { data: groupRows }, { data: qualificationMatchRows }] = await Promise.all([
-      leagueIds.length ? client.from("leagues").select("id, status, city_id").in("id", leagueIds) : Promise.resolve({ data: [] }),
+      leagueIds.length ? client.from("leagues").select("id, status").in("id", leagueIds) : Promise.resolve({ data: [] }),
       client.from("group_teams").select("group_id, groups(id, league_id)").in("team_id", teamIds),
       client.from("matches").select("id, league_rounds!inner(round_type, status)").or(`home_team_id.in.(${teamIds.join(",")}),away_team_id.in.(${teamIds.join(",")})`).eq("league_rounds.round_type", "qualification").eq("league_rounds.status", "active"),
     ]);
-    // Only the selected city's leagues count towards unread badges.
-    const cityLeagues = (leagueRows ?? []).filter((league) => league.city_id === cityId);
-    const cityLeagueIds = cityLeagues.map((league) => league.id as string);
-    const ongoingLeagueIds = new Set(cityLeagues.filter((league) => league.status === "ongoing").map((league) => league.id));
+    const ongoingLeagueIds = new Set((leagueRows ?? []).filter((league) => league.status === "ongoing").map((league) => league.id));
     const groupRelations = (groupRows ?? []) as unknown as { group_id: string; groups: { id: string; league_id: string } | { id: string; league_id: string }[] | null }[];
     const groupIds = [...new Set(groupRelations.map((row) => {
       const group = Array.isArray(row.groups) ? row.groups[0] : row.groups;
@@ -110,14 +105,14 @@ export function ChatNotifyProvider({ children }: { children: ReactNode }) {
 
     const [{ data: groupMessages }, { data: communityMessages }, { data: qualificationMessages }] = await Promise.all([
       groupIds.length ? client.from("group_messages").select("group_id, user_id, created_at").in("group_id", groupIds) : Promise.resolve({ data: [] }),
-      cityLeagueIds.length ? client.from("community_messages").select("league_id, user_id, created_at").in("league_id", cityLeagueIds) : Promise.resolve({ data: [] }),
+      leagueIds.length ? client.from("community_messages").select("league_id, user_id, created_at").in("league_id", leagueIds) : Promise.resolve({ data: [] }),
       qualificationMatchIds.length ? client.from("qualification_messages").select("match_id, user_id, created_at").in("match_id", qualificationMatchIds) : Promise.resolve({ data: [] }),
     ]);
 
     setUnreadGroupIds(await findUnread(groupBy((groupMessages ?? []) as (MessageRow & { group_id: string })[], "group_id"), "group-chat-read", userId));
     setUnreadLeagueIds(await findUnread(groupBy((communityMessages ?? []) as (MessageRow & { league_id: string })[], "league_id"), "community-chat-read", userId));
     setUnreadQualificationMatchIds(await findUnread(groupBy((qualificationMessages ?? []) as (MessageRow & { match_id: string })[], "match_id"), "qualification-chat-read", userId));
-  }, [userId, cityId]);
+  }, [userId]);
 
   useEffect(() => { void refresh(); }, [refresh, pathname]);
 
