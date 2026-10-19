@@ -42,7 +42,7 @@ const isRegistrable = (league: OpenLeague) => league.status === "registration_op
 
 export default function HomeScreen() {
   const { session } = useAuth();
-  const { selectedLeague, isMyLeague, myLeagues, hasExplicitSelection, clearSelection, loading: leaguesLoading, refresh: refreshMyLeagues } = useSelectedLeague();
+  const { selectedLeague, isMyLeague, myLeagues, hasExplicitSelection, loading: leaguesLoading, refresh: refreshMyLeagues } = useSelectedLeague();
   // Without an unfinished league of their own, and until they pick one, the
   // user browses every current league here; otherwise home shows one league.
   const inUnfinishedLeague = myLeagues.some((league) => league.status !== "finished");
@@ -304,9 +304,7 @@ export default function HomeScreen() {
         {isRegistrable(league) ? <Pressable style={styles.browseButton} onPress={() => router.push(`/league/${league.id}/register` as never)}><Text style={styles.browseText}>Ilmoittaudu joukkueella</Text><Text style={styles.arrow}>→</Text></Pressable>
           : league.status === "upcoming" ? <Text style={styles.cardNote}>{league.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(league.registration_opens_at)}.` : "Ilmoittautuminen avautuu pian."}</Text> : null}
       </View>)}
-    </> : !primary && !(teams.length === 0 && invitations.length > 0) ? <View style={styles.openLeagueCard}>
-      {!inUnfinishedLeague ? <Pressable onPress={clearSelection} style={styles.allLeaguesLink}><Text style={styles.openLeagueLinkText}>‹ Kaikki liigat</Text></Pressable> : null}
-      {viewedClosedLeague ? <>
+    </> : !primary && !(teams.length === 0 && invitations.length > 0) ? <View style={styles.openLeagueCard}>      {viewedClosedLeague ? <>
         <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
         <Text style={styles.cardNote}>{viewedClosedLeague.status === "finished" ? "Liiga on päättynyt." : "Liigan ilmoittautuminen on suljettu."}</Text>
       </> : ongoingLeague && showsOngoingLeague ? <>
@@ -425,8 +423,6 @@ const styles = StyleSheet.create({
   browseCard: { paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: colors.line },
   browseLeagueName: { color: colors.ink, fontSize: 18, fontWeight: "900" },
   browseLeagueMeta: { color: colors.greenBright, fontSize: 12, fontWeight: "800", marginTop: 4 },
-  allLeaguesLink: { alignSelf: "flex-start", paddingVertical: 6, marginBottom: 8 },
-  openLeagueLinkText: { color: colors.greenBright, fontSize: 13, fontWeight: "800" },
   categoryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8, gap: 8 },
   categoryText: { color: colors.greenBright, fontSize: 13, fontWeight: "800" },
   playerCountTextRow: { color: colors.coral, fontSize: 11, fontWeight: "900", letterSpacing: 0.3, marginTop: 8 },

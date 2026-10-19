@@ -15,7 +15,6 @@ type SelectedLeagueContextValue = {
   // True once the user has picked a league themselves (header or home list).
   hasExplicitSelection: boolean;
   selectLeague: (leagueId: string) => void;
-  clearSelection: () => void;
   refresh: () => Promise<void>;
   loading: boolean;
 };
@@ -78,11 +77,6 @@ export function SelectedLeagueProvider({ children }: { children: ReactNode }) {
     if (userId) void AsyncStorage.setItem(storageKey(userId), leagueId);
   };
 
-  const clearSelection = () => {
-    setSelectedLeagueId(null);
-    if (userId) void AsyncStorage.removeItem(storageKey(userId));
-  };
-
   const myLeagues = allLeagues.filter((league) => myLeagueIds.has(league.id));
   const otherLeagues = allLeagues.filter((league) => !myLeagueIds.has(league.id));
   const explicitLeague = allLeagues.find((league) => league.id === selectedLeagueId);
@@ -93,7 +87,7 @@ export function SelectedLeagueProvider({ children }: { children: ReactNode }) {
     ?? myLeagues[0] ?? allLeagues[0] ?? null;
   const isMyLeague = Boolean(selectedLeague && myLeagueIds.has(selectedLeague.id));
 
-  return <SelectedLeagueContext.Provider value={{ allLeagues, myLeagues, otherLeagues, selectedLeague, isMyLeague, hasExplicitSelection: Boolean(explicitLeague), selectLeague, clearSelection, refresh: loadLeagues, loading }}>{children}</SelectedLeagueContext.Provider>;
+  return <SelectedLeagueContext.Provider value={{ allLeagues, myLeagues, otherLeagues, selectedLeague, isMyLeague, hasExplicitSelection: Boolean(explicitLeague), selectLeague, refresh: loadLeagues, loading }}>{children}</SelectedLeagueContext.Provider>;
 }
 
 export function useSelectedLeague() {
