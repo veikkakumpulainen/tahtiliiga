@@ -9,7 +9,9 @@ export default function AdminLeagueInfoField({ value, onChange, leagueName, styl
   const [preview, setPreview] = useState(false);
 
   return <View style={style}>
-    <TextInput value={value} onChangeText={onChange} multiline textAlignVertical="top" placeholder="Kirjoita tai liitä liigan esittely tähän" placeholderTextColor={colors.muted} style={styles.input} />
+    {/* The device's spell checker follows its own (often English) language,
+        not the page's, so it would underline nearly every Finnish word. */}
+    <TextInput value={value} onChangeText={onChange} multiline textAlignVertical="top" spellCheck={false} autoCorrect={false} placeholder="Kirjoita tai liitä liigan esittely tähän" placeholderTextColor={colors.muted} style={styles.input} />
     <Text style={styles.hint}>Muotoilu: ⭐ rivin alussa = otsikko, *teksti* = lihavointi, - rivin alussa = luettelokohta. Jos kenttä on tyhjä, Info-painike ei näy.</Text>
     <Pressable onPress={() => setPreview(true)} disabled={!value.trim()} style={[styles.previewButton, !value.trim() && styles.previewButtonDisabled]}>
       <Text style={styles.previewButtonText}>Esikatsele</Text>
