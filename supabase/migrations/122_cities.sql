@@ -28,18 +28,13 @@ grant insert, update, delete on public.cities to authenticated;
 
 -- Existing data: the league so far has run in Jyväskylä only.
 insert into public.cities (name) values ('Jyväskylä') on conflict (name) do nothing;
-insert into public.cities (name)
-select distinct btrim(city) from public.leagues where nullif(btrim(city), '') is not null
-on conflict (name) do nothing;
 
 alter table public.leagues
   add column if not exists city_id uuid references public.cities(id);
 
-update public.leagues league
-set city_id = city.id
-from public.cities city
-where league.city_id is null
-  and city.name = coalesce(nullif(btrim(league.city), ''), 'Jyväskylä');
+update public.leagues
+set city_id = (select id from public.cities where name = 'Jyväskylä')
+where city_id is null;
 
 alter table public.leagues alter column city_id set not null;
 
