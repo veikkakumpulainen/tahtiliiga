@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, AppState, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import GroupMatches from "../../components/GroupMatches";
-import LeagueIntroContent from "../../components/LeagueIntroContent";
+import LeagueInfoModal from "../../components/LeagueInfoModal";
 import LeagueRoundSchedule from "../../components/LeagueRoundSchedule";
 import ScreenHeader, { leagueStatusLabels } from "../../components/ScreenHeader";
 import { useSelectedLeague } from "../../context/SelectedLeagueContext";
@@ -260,18 +260,7 @@ export default function HomeScreen() {
         </View>
       </View>
     </Modal>
-    <Modal visible={leagueIntro !== null} transparent animationType="slide" onRequestClose={() => setLeagueIntro(null)}>
-      <View style={styles.infoModalBackdrop}>
-        <Pressable style={styles.infoModalBackdropTap} onPress={() => setLeagueIntro(null)} />
-        <View style={styles.infoModalBox}>
-          <View style={styles.infoModalHeader}>
-            <Text style={styles.infoModalTitle}>{leagueIntro?.name}</Text>
-            <Pressable onPress={() => setLeagueIntro(null)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.infoModalClose}>×</Text></Pressable>
-          </View>
-          <ScrollView style={styles.infoModalContent} contentContainerStyle={styles.infoModalContentInner} showsVerticalScrollIndicator={false}>{leagueIntro ? <LeagueIntroContent text={leagueIntro.text} /> : null}</ScrollView>
-        </View>
-      </View>
-    </Modal>
+    <LeagueInfoModal visible={leagueIntro !== null} title={leagueIntro?.name ?? ""} text={leagueIntro?.text ?? ""} onClose={() => setLeagueIntro(null)} />
     {scheduleLeagueId ?? activeLeagueId ? <LeagueRoundSchedule leagueId={(scheduleLeagueId ?? activeLeagueId)!} visible={showRoundSchedule} onClose={() => { setShowRoundSchedule(false); setScheduleLeagueId(null); }} /> : null}
     {showCategoryToggle ? <View style={styles.fixedHeader}>
       <View style={styles.categoryToggle}>
@@ -446,14 +435,6 @@ const styles = StyleSheet.create({
   infoButtonsInline: { flexDirection: "row", gap: 8 },
   infoTextButton: { borderWidth: 1, borderColor: colors.green, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 12, alignItems: "center" },
   infoTextButtonLabel: { color: colors.green, fontSize: 12, fontWeight: "800" },
-  infoModalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)" },
-  infoModalBackdropTap: { flex: 1 },
-  infoModalBox: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "85%" },
-  infoModalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 22, paddingTop: 22, paddingBottom: 8 },
-  infoModalTitle: { color: colors.green, fontSize: 18, fontWeight: "800", flex: 1 },
-  infoModalClose: { color: colors.muted, fontSize: 24, fontWeight: "600", lineHeight: 24 },
-  infoModalContent: { flexGrow: 0 },
-  infoModalContentInner: { paddingHorizontal: 22, paddingBottom: 34 },
   leagueCard: { marginTop: 4, marginBottom: 12 },
   cardLabel: { color: colors.muted, fontSize: 9, letterSpacing: 1.1, fontWeight: "900", marginTop: 15 },
   teamBox: { backgroundColor: colors.canvas, borderRadius: 14, borderWidth: 1, borderColor: colors.line, padding: 16, marginTop: 16 },

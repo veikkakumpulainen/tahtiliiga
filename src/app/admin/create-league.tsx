@@ -188,7 +188,7 @@ export default function CreateLeagueScreen() {
     </> : null}
 
     <Text style={styles.label}>LIIGAN INFO</Text>
-    <AdminLeagueInfoField value={infoText} onChange={setInfoText} style={styles.fieldBlock} />
+    <AdminLeagueInfoField value={infoText} onChange={setInfoText} leagueName={name} style={styles.fieldBlock} />
 
     <View style={styles.roundHeading}><Text style={styles.roundTitle}>Kierrokset</Text><Pressable onPress={addRound} style={styles.addRound} accessibilityRole="button" accessibilityLabel="Lisää kierros"><Text style={styles.addRoundText}>+</Text></Pressable></View>
     {rounds.map((round, index) => <View key={index} style={styles.round}>

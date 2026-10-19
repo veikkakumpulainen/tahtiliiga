@@ -252,7 +252,7 @@ export default function LeagueManagementScreen() {
 <TextInput value={league.name} onChangeText={(value) => setLeague({ ...league, name: value })} placeholder="Liigan nimi" placeholderTextColor={colors.muted} style={styles.input} />
 <Text style={styles.label}>KAUPUNKI</Text>
 <AdminCityPicker value={cityId} onChange={setCityId} style={styles.cityPicker} /><Text style={styles.label}>LIIGAN INFO</Text>
-<AdminLeagueInfoField value={infoText} onChange={setInfoText} style={styles.cityPicker} />
+<AdminLeagueInfoField value={infoText} onChange={setInfoText} leagueName={league.name} style={styles.cityPicker} />
 <TextInput value={startDate} onChangeText={setStartDate} placeholder="D.M.YYYY" placeholderTextColor={colors.muted} style={styles.input} />
 <TextInput value={endDate} onChangeText={setEndDate} placeholder="Liigan loppupäivä D.M.YYYY" placeholderTextColor={colors.muted} style={styles.input} />
 <TextInput value={deadline} onChangeText={setDeadline} placeholder="Deadline D.M.YYYY (valinnainen)" placeholderTextColor={colors.muted} style={styles.input} />
