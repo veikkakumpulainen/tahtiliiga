@@ -16,9 +16,13 @@ export const leagueStatusLabels: Record<string, string> = {
 
 export default function ScreenHeader() {
   const insets = useSafeAreaInsets();
-  const { allLeagues, myLeagues, selectedLeague, selectLeague } = useSelectedLeague();
+  const { allLeagues, myLeagues, selectedLeague, hasExplicitSelection, selectLeague } = useSelectedLeague();
   const [pickerOpen, setPickerOpen] = useState(false);
-  const title = selectedLeague?.name || "Tähtiliiga";
+  // Until the user is in a league or picks one, the header shows the brand
+  // instead of whichever league the app falls back to (home lists them all).
+  const inUnfinishedLeague = myLeagues.some((league) => league.status !== "finished");
+  const showsLeague = (inUnfinishedLeague || hasExplicitSelection) && Boolean(selectedLeague);
+  const title = showsLeague && selectedLeague?.name ? selectedLeague.name : "Tähtiliiga";
   const canPick = allLeagues.length > 0;
 
   // Grouped by city: cities with the user's own leagues first, then the rest
@@ -54,7 +58,7 @@ export default function ScreenHeader() {
             {cityGroups.map((group) => <View key={group.cityId} style={styles.cityGroup}>
               {cityGroups.length > 1 ? <Text style={styles.cityName}>{group.cityName.toLocaleUpperCase("fi")}</Text> : null}
               {group.leagues.map((league) => {
-                const selected = league.id === selectedLeague?.id;
+                const selected = showsLeague && league.id === selectedLeague?.id;
                 return <Pressable key={league.id} onPress={() => pick(league.id)} style={[styles.leagueRow, selected && styles.leagueRowSelected]}>
                   <View style={styles.leagueInfo}>
                     <Text style={styles.leagueName}>{league.name}</Text>
