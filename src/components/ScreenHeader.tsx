@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useSelectedLeague, type MyLeague } from "../context/SelectedLeagueContext";
+import { useSelectedLeague } from "../context/SelectedLeagueContext";
 import { colors } from "../theme";
 
 const logo = require("../../assets/images/tahtiliigalogo.png");
@@ -25,16 +25,9 @@ export default function ScreenHeader() {
   const title = showsLeague && selectedLeague?.name ? selectedLeague.name : "Tähtiliiga";
   const canPick = allLeagues.length > 0;
 
-  // Grouped by city: cities with the user's own leagues first, then the rest
-  // alphabetically. Each city's leagues keep the context's most-relevant-first order.
+  // One flat list in the context's most-relevant-first order: a city only
+  // runs one league at a time, so grouping by city adds nothing.
   const myLeagueIds = new Set(myLeagues.map((league) => league.id));
-  const myCityIds = new Set(myLeagues.map((league) => league.city_id));
-  const cityGroups = [...allLeagues.reduce((groups, league) => {
-    const group = groups.get(league.city_id) ?? { cityId: league.city_id, cityName: league.city_name, leagues: [] as MyLeague[] };
-    group.leagues.push(league);
-    return groups.set(league.city_id, group);
-  }, new Map<string, { cityId: string; cityName: string; leagues: MyLeague[] }>()).values()]
-    .sort((left, right) => Number(myCityIds.has(right.cityId)) - Number(myCityIds.has(left.cityId)) || left.cityName.localeCompare(right.cityName, "fi"));
 
   const pick = (leagueId: string) => {
     selectLeague(leagueId);
@@ -55,22 +48,19 @@ export default function ScreenHeader() {
             <Pressable onPress={() => setPickerOpen(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.sheetClose}>×</Text></Pressable>
           </View>
           <ScrollView showsVerticalScrollIndicator={false}>
-            {cityGroups.map((group) => <View key={group.cityId} style={styles.cityGroup}>
-              {cityGroups.length > 1 ? <Text style={styles.cityName}>{group.cityName.toLocaleUpperCase("fi")}</Text> : null}
-              {group.leagues.map((league) => {
-                const selected = showsLeague && league.id === selectedLeague?.id;
-                return <Pressable key={league.id} onPress={() => pick(league.id)} style={[styles.leagueRow, selected && styles.leagueRowSelected]}>
-                  <View style={styles.leagueInfo}>
-                    <Text style={styles.leagueName}>{league.name}</Text>
-                    <View style={styles.leagueMetaRow}>
-                      <Text style={[styles.leagueStatus, league.status === "ongoing" && styles.leagueStatusOngoing]}>{leagueStatusLabels[league.status] ?? league.status}</Text>
-                      {myLeagueIds.has(league.id) ? <View style={styles.memberBadge}><Text style={styles.memberBadgeText}>Olet mukana</Text></View> : null}
-                    </View>
+            {allLeagues.map((league) => {
+              const selected = showsLeague && league.id === selectedLeague?.id;
+              return <Pressable key={league.id} onPress={() => pick(league.id)} style={[styles.leagueRow, selected && styles.leagueRowSelected]}>
+                <View style={styles.leagueInfo}>
+                  <Text style={styles.leagueName}>{league.name}</Text>
+                  <View style={styles.leagueMetaRow}>
+                    <Text style={[styles.leagueStatus, league.status === "ongoing" && styles.leagueStatusOngoing]}>{leagueStatusLabels[league.status] ?? league.status}</Text>
+                    {myLeagueIds.has(league.id) ? <View style={styles.memberBadge}><Text style={styles.memberBadgeText}>Olet mukana</Text></View> : null}
                   </View>
-                  {selected ? <Text style={styles.check}>✓</Text> : null}
-                </Pressable>;
-              })}
-            </View>)}
+                </View>
+                {selected ? <Text style={styles.check}>✓</Text> : null}
+              </Pressable>;
+            })}
           </ScrollView>
         </Pressable>
       </Pressable>
@@ -89,8 +79,6 @@ const styles = StyleSheet.create({
   sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
   sheetTitle: { color: colors.ink, fontSize: 18, fontWeight: "800" },
   sheetClose: { color: colors.muted, fontSize: 26, lineHeight: 26, fontWeight: "600" },
-  cityGroup: { marginTop: 8 },
-  cityName: { color: colors.muted, fontSize: 10, fontWeight: "900", letterSpacing: 1, marginTop: 8, marginBottom: 6 },
   leagueRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 13, marginTop: 8 },
   leagueRowSelected: { borderColor: colors.green, backgroundColor: colors.mint },
   leagueInfo: { flex: 1 },
