@@ -1,7 +1,6 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
-import { sortCitiesByName, useCity } from "../context/CityContext";
 import { privacySections, termsSections } from "../lib/legalContent";
 import { supabase } from "../lib/supabase";
 import { colors } from "../theme";
@@ -15,8 +14,7 @@ type ModalType = "terms" | "privacy" | null;
 export default function RegisterForm({ onRegistered, onResultChange }: { onRegistered?: () => void; onResultChange?: (result: "session" | "pending" | null) => void }) {
   const { width } = useWindowDimensions();
   const isMobile = width < MOBILE_BREAKPOINT;
-  const { cities } = useCity();
-  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", cityId: "", password: "", confirmation: "", skillCategory: "", skillLevel: "", termsPrivacyAccepted: false, marketingAccepted: false });
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", password: "", confirmation: "", skillCategory: "", skillLevel: "", termsPrivacyAccepted: false, marketingAccepted: false });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState<ModalType>(null);
@@ -24,7 +22,7 @@ export default function RegisterForm({ onRegistered, onResultChange }: { onRegis
   const update = <K extends keyof typeof form>(key: K, value: typeof form[K]) => setForm((current) => ({ ...current, [key]: value }));
 
   const register = async () => {
-    if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.phone.trim() || !form.cityId || !form.skillLevel || !form.password) {
+    if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.phone.trim() || !form.skillLevel || !form.password) {
       setError("Täytä kaikki pakolliset kentät.");
       return;
     }
@@ -58,7 +56,6 @@ export default function RegisterForm({ onRegistered, onResultChange }: { onRegis
           skill_level: form.skillLevel || null,
           gender: form.skillCategory === "Miesten" ? "male" : form.skillCategory === "Naisten" ? "female" : null,
           marketing_accepted: form.marketingAccepted,
-          city_id: form.cityId,
         },
       },
     });
@@ -97,14 +94,6 @@ export default function RegisterForm({ onRegistered, onResultChange }: { onRegis
 
     <Text style={styles.label}>PUHELIN *</Text>
     <TextInput value={form.phone} onChangeText={(value) => update("phone", value)} keyboardType="phone-pad" placeholder="+358 40 123 4567" placeholderTextColor={colors.muted} style={styles.input} />
-
-    <Text style={styles.label}>MINKÄ KAUPUNGIN LIIGASTA OLET KIINNOSTUNUT? *</Text>
-    <View style={styles.options}>
-      {sortCitiesByName(cities).map((city) => <Pressable key={city.id} onPress={() => update("cityId", city.id)} style={[styles.option, form.cityId === city.id && styles.optionSelected]}>
-        <Text style={[styles.optionText, form.cityId === city.id && styles.optionTextSelected]}>{city.name}</Text>
-      </Pressable>)}
-    </View>
-    <Text style={styles.fieldHint}>Voit vaihtaa kaupunkia myöhemmin profiilistasi.</Text>
 
     <Text style={styles.label}>TAITOTASO (SUUNTAA ANTAVA) *</Text>
     <View style={styles.options}>
@@ -183,7 +172,6 @@ const styles = StyleSheet.create({
   input: { backgroundColor: colors.canvas, borderWidth: 1, borderColor: colors.line, borderRadius: 10, color: colors.ink, fontSize: 15, padding: 14 },
   options: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 2 },
   skillLevelsRow: { marginTop: 12 },
-  fieldHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 6 },
   option: { borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.canvas },
   optionSelected: { backgroundColor: colors.green, borderColor: colors.green },
   optionText: { color: colors.ink, fontSize: 12, fontWeight: "700" },

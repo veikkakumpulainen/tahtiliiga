@@ -5,8 +5,7 @@ import * as WebBrowser from "expo-web-browser";
 import GroupMatches from "../../components/GroupMatches";
 import LeagueIntroContent from "../../components/LeagueIntroContent";
 import LeagueRoundSchedule from "../../components/LeagueRoundSchedule";
-import ScreenHeader from "../../components/ScreenHeader";
-import { useCity } from "../../context/CityContext";
+import ScreenHeader, { leagueStatusLabels } from "../../components/ScreenHeader";
 import { useSelectedLeague } from "../../context/SelectedLeagueContext";
 import { useAuth } from "../../hooks/useAuth";
 import { formatFinnishDate } from "../../lib/dates";
@@ -34,15 +33,20 @@ type RosterPlayer = { team_id: string; player_id: string; first_name: string; la
 const categoryLabels: Record<string, string> = { avoin: "Avoin", mixty: "Mixty" };
 
 type Invitation = { team_id: string; team_name: string; league_id: string; league_name: string; captain_name: string | null; league_start_date: string; league_end_date: string | null };
-type OpenLeague = { id: string; name: string; start_date: string; end_date: string | null; registration_deadline: string | null; registration_opens_at: string | null; status: string; info_text: string | null };
+type OpenLeague = { id: string; name: string; start_date: string; end_date: string | null; registration_deadline: string | null; registration_opens_at: string | null; status: string; info_text: string | null; city_id: string; city_name: string };
 type LeagueIntro = { name: string; text: string };
+
+// Registration is open for real only until its deadline.
+const today = () => new Date().toISOString().slice(0, 10);
+const isRegistrable = (league: OpenLeague) => league.status === "registration_open" && (!league.registration_deadline || league.registration_deadline >= today());
 
 export default function HomeScreen() {
   const { session } = useAuth();
-  const { selectedLeague, isMyLeague, refresh: refreshMyLeagues } = useSelectedLeague();
-  const { cityId: homeCityId } = useCity();
-  // The city of the league picked in the header, falling back to the home city.
-  const viewCityId = selectedLeague?.city_id ?? homeCityId;
+  const { selectedLeague, isMyLeague, myLeagues, hasExplicitSelection, selectLeague, clearSelection, loading: leaguesLoading, refresh: refreshMyLeagues } = useSelectedLeague();
+  // Without an unfinished league of their own, and until they pick one, the
+  // user browses every current league here; otherwise home shows one league.
+  const inUnfinishedLeague = myLeagues.some((league) => league.status !== "finished");
+  const browseAll = !leaguesLoading && !inUnfinishedLeague && !hasExplicitSelection;
   const { justRegistered } = useLocalSearchParams<{ justRegistered?: string }>();
   const [teams, setTeams] = useState<Team[]>([]);
   const [rosterRows, setRosterRows] = useState<RosterPlayer[]>([]);
@@ -53,6 +57,9 @@ export default function HomeScreen() {
   const [inviteSuccess, setInviteSuccess] = useState("");
   const [openLeague, setOpenLeague] = useState<OpenLeague | null>(null);
   const [ongoingLeague, setOngoingLeague] = useState<OpenLeague | null>(null);
+  const [browseLeagues, setBrowseLeagues] = useState<OpenLeague[]>([]);
+  // Set when the round schedule opens from a league in the browse list.
+  const [scheduleLeagueId, setScheduleLeagueId] = useState<string | null>(null);
   const [payingTeamId, setPayingTeamId] = useState<string | null>(null);
   const [payError, setPayError] = useState("");
   const [selectedTeamCategory, setSelectedTeamCategory] = useState<string | null>(null);
@@ -62,19 +69,19 @@ export default function HomeScreen() {
   const [activeRoundName, setActiveRoundName] = useState<string | null>(null);
 
   const loadOpenLeague = useCallback(async () => {
-    if (!supabase || !viewCityId) return;
-    const today = new Date().toISOString().slice(0, 10);
-    const { data } = await supabase.from("leagues").select("id, name, start_date, end_date, registration_deadline, registration_opens_at, status, info_text").eq("city_id", viewCityId).in("status", ["registration_open", "upcoming", "ongoing"]).order("start_date", { ascending: true });
-    const rows = (data ?? []) as OpenLeague[];
-    const openRow = rows.filter((row) => row.status === "registration_open").find((row) => !row.registration_deadline || row.registration_deadline >= today) ?? rows.find((row) => row.status === "upcoming") ?? null;
-    // A league picked in the header that the user isn't in is shown itself,
-    // rather than whichever league in its city happens to be most current.
-    const viewed = selectedLeague && !isMyLeague ? rows.find((row) => row.id === selectedLeague.id) : undefined;
-    if (viewed?.status === "ongoing") { setOngoingLeague(viewed); setOpenLeague(openRow); return; }
-    if (viewed) { setOpenLeague(viewed); setOngoingLeague(null); return; }
-    setOpenLeague(openRow);
-    setOngoingLeague(rows.find((row) => row.status === "ongoing") ?? null);
-  }, [viewCityId, selectedLeague, isMyLeague]);
+    if (!supabase) return;
+    const { data } = await supabase.from("leagues").select("id, name, start_date, end_date, registration_deadline, registration_opens_at, status, info_text, city_id, cities(name)").in("status", ["registration_open", "upcoming", "ongoing"]).order("start_date", { ascending: true });
+    const rows = ((data ?? []) as unknown as (Omit<OpenLeague, "city_name"> & { cities: { name: string } | { name: string }[] | null })[]).map(({ cities, ...row }) => ({ ...row, city_name: (Array.isArray(cities) ? cities[0] : cities)?.name ?? "" }));
+    setBrowseLeagues(rows);
+    const selected = selectedLeague ? rows.find((row) => row.id === selectedLeague.id) : undefined;
+    // While the selected league runs, the card also tells when the next one
+    // in the same city opens for registration.
+    const sameCity = rows.filter((row) => row.city_id === selectedLeague?.city_id && row.id !== selected?.id);
+    const nextInCity = sameCity.find(isRegistrable) ?? sameCity.find((row) => row.status === "upcoming") ?? null;
+    if (selected?.status === "ongoing") { setOngoingLeague(selected); setOpenLeague(nextInCity); return; }
+    setOpenLeague(selected ?? null);
+    setOngoingLeague(null);
+  }, [selectedLeague]);
 
   useFocusEffect(useCallback(() => { void loadOpenLeague(); }, [loadOpenLeague]));
 
@@ -225,7 +232,7 @@ export default function HomeScreen() {
   const targetLeagueId = selectedLeague?.id ?? teams[0]?.leagueId;
   // Without an own team in the selected league, the card shows either that
   // league or its city's current one (see loadOpenLeague).
-  const showsOngoingLeague = Boolean(ongoingLeague && openLeague?.status !== "registration_open");
+  const showsOngoingLeague = Boolean(ongoingLeague);
   const activeLeagueId = isMyLeague ? targetLeagueId : showsOngoingLeague ? ongoingLeague?.id : openLeague?.id;
   // Closed or finished leagues aren't in loadOpenLeague's list, so a picked
   // one gets a short card of its own.
@@ -265,7 +272,7 @@ export default function HomeScreen() {
         </View>
       </View>
     </Modal>
-    {activeLeagueId ? <LeagueRoundSchedule leagueId={activeLeagueId} visible={showRoundSchedule} onClose={() => setShowRoundSchedule(false)} /> : null}
+    {scheduleLeagueId ?? activeLeagueId ? <LeagueRoundSchedule leagueId={(scheduleLeagueId ?? activeLeagueId)!} visible={showRoundSchedule} onClose={() => { setShowRoundSchedule(false); setScheduleLeagueId(null); }} /> : null}
     {showCategoryToggle ? <View style={styles.fixedHeader}>
       <View style={styles.categoryToggle}>
         {currentLeagueTeams.map((team) => <Pressable key={team.id} onPress={() => setSelectedTeamCategory(team.category)} style={[styles.categoryToggleButton, (selectedTeamCategory ?? primary.category) === team.category && styles.categoryToggleButtonSelected]}>
@@ -288,7 +295,29 @@ export default function HomeScreen() {
         {inviteError ? <Text style={styles.inviteError}>{inviteError}</Text> : null}
       </View>)}
     </View> : null}
-    {!primary && !(teams.length === 0 && invitations.length > 0) ? <View style={styles.openLeagueCard}>
+    {browseAll ? <>
+      <Text style={styles.browseTitle}>Liigat</Text>
+      {browseLeagues.length === 0 ? <View style={styles.openLeagueCard}><Text style={styles.emptyCopy}>Uudet liigat ilmestyvät tähän, kun ilmoittautuminen avataan.</Text></View> : browseLeagues.map((league) => <View key={league.id} style={[styles.openLeagueCard, styles.browseCard]}>
+        <Text style={styles.browseLeagueName}>{league.name}</Text>
+        <Text style={styles.browseLeagueMeta}>{league.city_name ? `${league.city_name} · ` : ""}{leagueStatusLabels[league.status] ?? league.status}</Text>
+        <View style={styles.categoryRow}>
+          <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
+          <View style={styles.infoButtonsInline}>
+            {league.info_text?.trim() ? <Pressable onPress={() => setLeagueIntro({ name: league.name, text: league.info_text ?? "" })} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable> : null}
+            <Pressable onPress={() => { setScheduleLeagueId(league.id); setShowRoundSchedule(true); }} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
+          </View>
+        </View>
+        <View style={styles.dateRow}>
+          <View><Text style={styles.cardLabel}>{league.status === "ongoing" ? "LIIGA ALKOI" : "LIIGA ALKAA"}</Text><Text style={styles.season}>{formatFinnishDate(league.start_date)}</Text></View>
+          <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(league.end_date)}</Text></View>
+          {isRegistrable(league) && league.registration_deadline ? <View><Text style={styles.cardLabel}>ILMOITTAUTUMISEN DEADLINE</Text><Text style={styles.season}>{formatFinnishDate(league.registration_deadline)}</Text></View> : null}
+        </View>
+        {isRegistrable(league) ? <Pressable style={styles.browseButton} onPress={() => router.push(`/league/${league.id}/register` as never)}><Text style={styles.browseText}>Ilmoittaudu joukkueella</Text><Text style={styles.arrow}>→</Text></Pressable>
+          : league.status === "upcoming" ? <Text style={styles.cardNote}>{league.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(league.registration_opens_at)}.` : "Ilmoittautuminen avautuu pian."}</Text> : null}
+        <Pressable onPress={() => selectLeague(league.id)} style={styles.openLeagueLink}><Text style={styles.openLeagueLinkText}>Näytä liigan tiedot ›</Text></Pressable>
+      </View>)}
+    </> : !primary && !(teams.length === 0 && invitations.length > 0) ? <View style={styles.openLeagueCard}>
+      {!inUnfinishedLeague ? <Pressable onPress={clearSelection} style={styles.allLeaguesLink}><Text style={styles.openLeagueLinkText}>‹ Kaikki liigat</Text></Pressable> : null}
       {viewedClosedLeague ? <>
         <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
         <Text style={styles.cardNote}>{viewedClosedLeague.status === "finished" ? "Liiga on päättynyt." : "Liigan ilmoittautuminen on suljettu."}</Text>
@@ -304,7 +333,7 @@ export default function HomeScreen() {
           <View><Text style={styles.cardLabel}>LIIGA ALKOI</Text><Text style={styles.season}>{formatFinnishDate(ongoingLeague.start_date)}</Text></View>
           <View><Text style={styles.cardLabel}>LIIGA LOPPUU</Text><Text style={styles.season}>{formatFinnishDate(ongoingLeague.end_date)}</Text></View>
         </View>
-        <Text style={styles.cardNote}>{openLeague ? `Nykyinen liiga on jo käynnissä. Seuraavan liigan ilmoittautuminen aukeaa ${openLeague.registration_opens_at ? formatFinnishDate(openLeague.registration_opens_at) : "pian"}.` : "Nykyinen liiga on jo käynnissä. Seuraavan liigan ilmoittautuminen aukeaa tähän myöhemmin."}</Text>
+        <Text style={styles.cardNote}>{openLeague && isRegistrable(openLeague) ? `Liiga on jo käynnissä. Seuraavan liigan (${openLeague.name}) ilmoittautuminen on auki.` : openLeague ? `Liiga on jo käynnissä. Seuraavan liigan ilmoittautuminen aukeaa ${openLeague.registration_opens_at ? formatFinnishDate(openLeague.registration_opens_at) : "pian"}.` : "Liiga on jo käynnissä. Seuraavan liigan ilmoittautuminen aukeaa tähän myöhemmin."}</Text>
       </> : openLeague ? <>
         <View style={styles.categoryRow}>
           <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
@@ -404,6 +433,13 @@ const styles = StyleSheet.create({
   browseButton: { backgroundColor: colors.green, borderRadius: 13, padding: 15, marginTop: 19, flexDirection: "row", alignItems: "center" },
   browseText: { color: colors.surface, fontWeight: "800" },
   openLeagueCard: { marginTop: 4 },
+  browseTitle: { color: colors.ink, fontSize: 21, fontWeight: "800", marginBottom: 4 },
+  browseCard: { paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: colors.line },
+  browseLeagueName: { color: colors.ink, fontSize: 18, fontWeight: "900" },
+  browseLeagueMeta: { color: colors.greenBright, fontSize: 12, fontWeight: "800", marginTop: 4 },
+  openLeagueLink: { alignSelf: "flex-start", paddingVertical: 8, marginTop: 10 },
+  allLeaguesLink: { alignSelf: "flex-start", paddingVertical: 6, marginBottom: 8 },
+  openLeagueLinkText: { color: colors.greenBright, fontSize: 13, fontWeight: "800" },
   categoryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8, gap: 8 },
   categoryText: { color: colors.greenBright, fontSize: 13, fontWeight: "800" },
   playerCountTextRow: { color: colors.coral, fontSize: 11, fontWeight: "900", letterSpacing: 0.3, marginTop: 8 },

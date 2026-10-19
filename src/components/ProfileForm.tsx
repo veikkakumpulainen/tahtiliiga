@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
-import { sortCitiesByName, useCity } from "../context/CityContext";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import { colors } from "../theme";
@@ -22,10 +21,6 @@ const skillLevelLetters = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
 
 export default function ProfileForm() {
   const { session } = useAuth();
-  const { cities, cityId: currentCityId, setCity } = useCity();
-  // Unsaved city pick; falls back to the current city.
-  const [cityChoice, setCityChoice] = useState<string | null>(null);
-  const selectedCityId = cityChoice ?? currentCityId;
   const [profile, setProfile] = useState<Profile | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -78,15 +73,6 @@ export default function ProfileForm() {
     }
     setSaving(true);
     setMessage("");
-    if (selectedCityId && selectedCityId !== currentCityId) {
-      const cityError = await setCity(selectedCityId);
-      setCityChoice(null);
-      if (cityError) {
-        setSaving(false);
-        setMessage(cityError);
-        return;
-      }
-    }
     const inferredGender = skillCategory === "Miesten" ? "male" : skillCategory === "Naisten" ? "female" : null;
     const values = {
       first_name: firstName.trim(),
@@ -161,14 +147,6 @@ export default function ProfileForm() {
 
     <Text style={styles.label}>PUHELIN</Text>
     <TextInput value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+358 40 123 4567" placeholderTextColor={colors.muted} style={styles.input} />
-
-    <Text style={styles.label}>KOTIKAUPUNKI</Text>
-    <View style={styles.options}>
-      {sortCitiesByName(cities).map((city) => <Pressable key={city.id} onPress={() => setCityChoice(city.id)} style={[styles.option, selectedCityId === city.id && styles.optionSelected]}>
-        <Text style={[styles.optionText, selectedCityId === city.id && styles.optionTextSelected]}>{city.name}</Text>
-      </Pressable>)}
-    </View>
-    <Text style={styles.hint}>Sovellus näyttää oletuksena tämän kaupungin liigan. Muita liigoja voit katsoa yläpalkin liigan nimeä painamalla.</Text>
 
     <Text style={styles.label}>TAITOTASO (SUUNTAA ANTAVA)</Text>
     <View style={styles.options}>

@@ -2,7 +2,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
-import { useCity } from "./CityContext";
 
 export type MyLeague = { id: string; name: string; status: string; registration_opens_at: string | null; start_date: string; city_id: string; city_name: string };
 
@@ -13,7 +12,10 @@ type SelectedLeagueContextValue = {
   otherLeagues: MyLeague[];
   selectedLeague: MyLeague | null;
   isMyLeague: boolean;
+  // True once the user has picked a league themselves (header or home list).
+  hasExplicitSelection: boolean;
   selectLeague: (leagueId: string) => void;
+  clearSelection: () => void;
   refresh: () => Promise<void>;
   loading: boolean;
 };
@@ -37,7 +39,6 @@ const toLeague = (row: LeagueRow): MyLeague => {
 export function SelectedLeagueProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   const userId = session?.user.id;
-  const { cityId: homeCityId } = useCity();
   const [myLeagueIds, setMyLeagueIds] = useState<Set<string>>(new Set());
   const [allLeagues, setAllLeagues] = useState<MyLeague[]>([]);
   const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
@@ -77,17 +78,22 @@ export function SelectedLeagueProvider({ children }: { children: ReactNode }) {
     if (userId) void AsyncStorage.setItem(storageKey(userId), leagueId);
   };
 
+  const clearSelection = () => {
+    setSelectedLeagueId(null);
+    if (userId) void AsyncStorage.removeItem(storageKey(userId));
+  };
+
   const myLeagues = allLeagues.filter((league) => myLeagueIds.has(league.id));
   const otherLeagues = allLeagues.filter((league) => !myLeagueIds.has(league.id));
+  const explicitLeague = allLeagues.find((league) => league.id === selectedLeagueId);
   // Prefer an explicit choice; otherwise the user's own most relevant league,
-  // then the most relevant league in their home city, then anything.
-  const selectedLeague = allLeagues.find((league) => league.id === selectedLeagueId)
+  // then the most relevant league anywhere.
+  const selectedLeague = explicitLeague
     ?? myLeagues.find((league) => league.status !== "finished")
-    ?? allLeagues.find((league) => league.city_id === homeCityId)
     ?? myLeagues[0] ?? allLeagues[0] ?? null;
   const isMyLeague = Boolean(selectedLeague && myLeagueIds.has(selectedLeague.id));
 
-  return <SelectedLeagueContext.Provider value={{ allLeagues, myLeagues, otherLeagues, selectedLeague, isMyLeague, selectLeague, refresh: loadLeagues, loading }}>{children}</SelectedLeagueContext.Provider>;
+  return <SelectedLeagueContext.Provider value={{ allLeagues, myLeagues, otherLeagues, selectedLeague, isMyLeague, hasExplicitSelection: Boolean(explicitLeague), selectLeague, clearSelection, refresh: loadLeagues, loading }}>{children}</SelectedLeagueContext.Provider>;
 }
 
 export function useSelectedLeague() {

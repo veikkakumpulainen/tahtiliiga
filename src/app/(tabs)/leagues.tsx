@@ -3,7 +3,6 @@ import { Link, useFocusEffect } from "expo-router";
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import ScreenHeader from "../../components/ScreenHeader";
 import TeamRosterList, { groupRosterByTeam, type TeamRosterRow } from "../../components/TeamRosterList";
-import { useCity } from "../../context/CityContext";
 import { useSelectedLeague } from "../../context/SelectedLeagueContext";
 import { useAuth } from "../../hooks/useAuth";
 import { formatFinnishDate } from "../../lib/dates";
@@ -44,7 +43,6 @@ function movementMarker(movement: Movement) {
 export default function LeaguesScreen() {
   const { session } = useAuth();
   const { selectedLeague, loading: leaguesContextLoading } = useSelectedLeague();
-  const { cityId } = useCity();
   const [league, setLeague] = useState<League | null>(null);
   const [category, setCategory] = useState<string>("avoin");
   const [loadingLeague, setLoadingLeague] = useState(true);
@@ -62,14 +60,13 @@ export default function LeaguesScreen() {
   const [pendingScrollGroupId, setPendingScrollGroupId] = useState<string | null>(null);
 
   const loadOpenLeague = useCallback(async (client: NonNullable<typeof supabase>) => {
-    if (!cityId) { setLeague(null); return; }
     const today = new Date().toISOString().slice(0, 10);
-    const { data: openRows } = await client.from("leagues").select("id, name, status, start_date, registration_deadline").eq("city_id", cityId).in("status", ["registration_open", "upcoming"]).order("start_date", { ascending: true });
+    const { data: openRows } = await client.from("leagues").select("id, name, status, start_date, registration_deadline").in("status", ["registration_open", "upcoming"]).order("start_date", { ascending: true });
     const rows = (openRows ?? []) as { id: string; name: string; status: string; registration_deadline: string | null }[];
     const openRow = rows.filter((row) => row.status === "registration_open").find((row) => !row.registration_deadline || row.registration_deadline >= today) ?? rows.find((row) => row.status === "upcoming") ?? null;
     setLeague(openRow ? { id: openRow.id, name: openRow.name, status: openRow.status } : null);
     setCategory("avoin");
-  }, [cityId]);
+  }, []);
 
   const loadLeague = useCallback(async () => {
     if (!supabase) { setLoadingLeague(false); return; }

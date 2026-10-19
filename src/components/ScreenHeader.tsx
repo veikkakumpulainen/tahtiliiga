@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useCity } from "../context/CityContext";
 import { useSelectedLeague, type MyLeague } from "../context/SelectedLeagueContext";
 import { colors } from "../theme";
 
@@ -18,20 +17,20 @@ export const leagueStatusLabels: Record<string, string> = {
 export default function ScreenHeader() {
   const insets = useSafeAreaInsets();
   const { allLeagues, myLeagues, selectedLeague, selectLeague } = useSelectedLeague();
-  const { cityId: homeCityId } = useCity();
   const [pickerOpen, setPickerOpen] = useState(false);
   const title = selectedLeague?.name || "Tähtiliiga";
   const canPick = allLeagues.length > 0;
 
-  // Grouped by city: the home city first, then the rest alphabetically. Each
-  // city's leagues keep the context's most-relevant-first order.
+  // Grouped by city: cities with the user's own leagues first, then the rest
+  // alphabetically. Each city's leagues keep the context's most-relevant-first order.
   const myLeagueIds = new Set(myLeagues.map((league) => league.id));
+  const myCityIds = new Set(myLeagues.map((league) => league.city_id));
   const cityGroups = [...allLeagues.reduce((groups, league) => {
     const group = groups.get(league.city_id) ?? { cityId: league.city_id, cityName: league.city_name, leagues: [] as MyLeague[] };
     group.leagues.push(league);
     return groups.set(league.city_id, group);
   }, new Map<string, { cityId: string; cityName: string; leagues: MyLeague[] }>()).values()]
-    .sort((left, right) => Number(right.cityId === homeCityId) - Number(left.cityId === homeCityId) || left.cityName.localeCompare(right.cityName, "fi"));
+    .sort((left, right) => Number(myCityIds.has(right.cityId)) - Number(myCityIds.has(left.cityId)) || left.cityName.localeCompare(right.cityName, "fi"));
 
   const pick = (leagueId: string) => {
     selectLeague(leagueId);
