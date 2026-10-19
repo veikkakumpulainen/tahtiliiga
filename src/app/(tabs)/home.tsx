@@ -22,6 +22,7 @@ type Team = {
   category: string;
   leagueName: string;
   leagueStatus: string;
+  leagueInfoText: string | null;
   startDate: string;
   endDate: string | null;
   groupId?: string;
@@ -33,7 +34,8 @@ type RosterPlayer = { team_id: string; player_id: string; first_name: string; la
 const categoryLabels: Record<string, string> = { avoin: "Avoin", mixty: "Mixty" };
 
 type Invitation = { team_id: string; team_name: string; league_id: string; league_name: string; captain_name: string | null; league_start_date: string; league_end_date: string | null };
-type OpenLeague = { id: string; name: string; start_date: string; end_date: string | null; registration_deadline: string | null; registration_opens_at: string | null; status: string };
+type OpenLeague = { id: string; name: string; start_date: string; end_date: string | null; registration_deadline: string | null; registration_opens_at: string | null; status: string; info_text: string | null };
+type LeagueIntro = { name: string; text: string };
 
 export default function HomeScreen() {
   const { session } = useAuth();
@@ -53,14 +55,14 @@ export default function HomeScreen() {
   const [payError, setPayError] = useState("");
   const [selectedTeamCategory, setSelectedTeamCategory] = useState<string | null>(null);
   const [leaguePlayerCount, setLeaguePlayerCount] = useState<number | null>(null);
-  const [showLeagueIntro, setShowLeagueIntro] = useState(false);
+  const [leagueIntro, setLeagueIntro] = useState<LeagueIntro | null>(null);
   const [showRoundSchedule, setShowRoundSchedule] = useState(false);
   const [activeRoundName, setActiveRoundName] = useState<string | null>(null);
 
   const loadOpenLeague = useCallback(async () => {
     if (!supabase || !cityId) return;
     const today = new Date().toISOString().slice(0, 10);
-    const { data } = await supabase.from("leagues").select("id, name, start_date, end_date, registration_deadline, registration_opens_at, status").eq("city_id", cityId).in("status", ["registration_open", "upcoming", "ongoing"]).order("start_date", { ascending: true });
+    const { data } = await supabase.from("leagues").select("id, name, start_date, end_date, registration_deadline, registration_opens_at, status, info_text").eq("city_id", cityId).in("status", ["registration_open", "upcoming", "ongoing"]).order("start_date", { ascending: true });
     const rows = (data ?? []) as OpenLeague[];
     const openRow = rows.filter((row) => row.status === "registration_open").find((row) => !row.registration_deadline || row.registration_deadline >= today) ?? rows.find((row) => row.status === "upcoming") ?? null;
     setOpenLeague(openRow);
@@ -86,7 +88,7 @@ export default function HomeScreen() {
     const leagueIds = [...new Set(teamRows.map((team) => team.league_id))];
     const teamIds = teamRows.map((team) => team.id);
     const [{ data: leagueRows }, { data: groupRows }, { data: paymentRows }, rosterResults] = await Promise.all([
-      leagueIds.length ? client.from("leagues").select("id, name, start_date, end_date, status").in("id", leagueIds) : Promise.resolve({ data: [] }),
+      leagueIds.length ? client.from("leagues").select("id, name, start_date, end_date, status, info_text").in("id", leagueIds) : Promise.resolve({ data: [] }),
       teamIds.length ? client.from("group_teams").select("team_id, group_id, groups(id, name)").in("team_id", teamIds) : Promise.resolve({ data: [] }),
       teamIds.length ? client.from("payments").select("team_id, user_id, payment_status").in("team_id", teamIds) : Promise.resolve({ data: [] }),
       Promise.all(leagueIds.map((leagueId) => client.rpc("get_league_team_rosters", { target_league_id: leagueId }))),
@@ -109,6 +111,7 @@ export default function HomeScreen() {
         category: team.category,
         leagueName: league?.name ?? "",
         leagueStatus: league?.status ?? "",
+        leagueInfoText: league?.info_text ?? null,
         startDate: league?.start_date ?? "",
         endDate: league?.end_date ?? null,
         groupId: group?.group_id,
@@ -240,15 +243,15 @@ export default function HomeScreen() {
         </View>
       </View>
     </Modal>
-    <Modal visible={showLeagueIntro} transparent animationType="slide" onRequestClose={() => setShowLeagueIntro(false)}>
+    <Modal visible={leagueIntro !== null} transparent animationType="slide" onRequestClose={() => setLeagueIntro(null)}>
       <View style={styles.infoModalBackdrop}>
-        <Pressable style={styles.infoModalBackdropTap} onPress={() => setShowLeagueIntro(false)} />
+        <Pressable style={styles.infoModalBackdropTap} onPress={() => setLeagueIntro(null)} />
         <View style={styles.infoModalBox}>
           <View style={styles.infoModalHeader}>
-            <Text style={styles.infoModalTitle}>Jyväskylän Tähtiliiga</Text>
-            <Pressable onPress={() => setShowLeagueIntro(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.infoModalClose}>×</Text></Pressable>
+            <Text style={styles.infoModalTitle}>{leagueIntro?.name}</Text>
+            <Pressable onPress={() => setLeagueIntro(null)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.infoModalClose}>×</Text></Pressable>
           </View>
-          <ScrollView style={styles.infoModalContent} contentContainerStyle={styles.infoModalContentInner} showsVerticalScrollIndicator={false}><LeagueIntroContent /></ScrollView>
+          <ScrollView style={styles.infoModalContent} contentContainerStyle={styles.infoModalContentInner} showsVerticalScrollIndicator={false}>{leagueIntro ? <LeagueIntroContent text={leagueIntro.text} /> : null}</ScrollView>
         </View>
       </View>
     </Modal>
@@ -280,7 +283,7 @@ export default function HomeScreen() {
         <View style={styles.categoryRow}>
           <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
           <View style={styles.infoButtonsInline}>
-            <Pressable onPress={() => setShowLeagueIntro(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable>
+            {ongoingLeague.info_text?.trim() ? <Pressable onPress={() => setLeagueIntro({ name: ongoingLeague.name, text: ongoingLeague.info_text ?? "" })} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable> : null}
           </View>
         </View>
         <View style={styles.dateRow}>
@@ -292,7 +295,7 @@ export default function HomeScreen() {
         <View style={styles.categoryRow}>
           <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
           <View style={styles.infoButtonsInline}>
-            <Pressable onPress={() => setShowLeagueIntro(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable>
+            {openLeague.info_text?.trim() ? <Pressable onPress={() => setLeagueIntro({ name: openLeague.name, text: openLeague.info_text ?? "" })} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable> : null}
             <Pressable onPress={() => setShowRoundSchedule(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
           </View>
         </View>
@@ -310,7 +313,7 @@ export default function HomeScreen() {
       <View style={styles.categoryRow}>
         <Text style={styles.categoryText}>{categoryHeaderText}</Text>
         <View style={styles.infoButtonsInline}>
-          <Pressable onPress={() => setShowLeagueIntro(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable>
+          {primary.leagueInfoText?.trim() ? <Pressable onPress={() => setLeagueIntro({ name: primary.leagueName, text: primary.leagueInfoText ?? "" })} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable> : null}
           <Pressable onPress={() => setShowRoundSchedule(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
         </View>
       </View>

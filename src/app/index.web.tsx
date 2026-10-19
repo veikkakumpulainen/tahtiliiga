@@ -29,8 +29,8 @@ const socialLinks = [
 
 const MOBILE_BREAKPOINT = 760;
 
-type League = { id: string; name: string; start_date: string; end_date: string | null; registration_deadline: string | null };
-type UpcomingLeague = { id: string; name: string; start_date: string; end_date: string | null; registration_opens_at: string | null };
+type League = { id: string; name: string; start_date: string; end_date: string | null; registration_deadline: string | null; info_text: string | null };
+type UpcomingLeague = { id: string; name: string; start_date: string; end_date: string | null; registration_opens_at: string | null; info_text: string | null };
 type TeamPlayer = { id: string; name: string; pending: boolean; isCaptain: boolean };
 type Team = { id: string; name: string; category: string; players: TeamPlayer[] };
 type RosterRow = { team_id: string; team_name: string; category: string; player_id: string; first_name: string; last_name: string; is_captain: boolean; status: string };
@@ -58,7 +58,8 @@ function groupRounds(rounds: LeagueRound[]): RoundGroup[] {
   return groups;
 }
 
-const infoModalTitles: Record<InfoModal, string> = { about: "Kaikki tähtiliigasta", league: "Liigakonsepti + säännöt", vision: "Yhteyttä", leagueIntro: "Jyväskylän Tähtiliiga" };
+// The leagueIntro title is the league's own name, set where the modal renders.
+const infoModalTitles: Record<InfoModal, string> = { about: "Kaikki tähtiliigasta", league: "Liigakonsepti + säännöt", vision: "Yhteyttä", leagueIntro: "" };
 
 const PRETTY_HOSTNAMES: Record<string, string> = { "xn--thtiliiga-v2a.fi": "tähtiliiga.fi", "www.xn--thtiliiga-v2a.fi": "www.tähtiliiga.fi" };
 
@@ -117,13 +118,15 @@ export default function WebHomeScreen() {
   const [payingTeamId, setPayingTeamId] = useState<string | null>(null);
   const [payError, setPayError] = useState("");
   const siteUrl = typeof window !== "undefined" ? toPrettyUrl(window.location.origin) : "";
+  // The league whose Info button is shown (open registration, else upcoming).
+  const introLeague = league ?? upcomingLeague;
   const scrollRef = useRef<ScrollView>(null);
 
   const loadLeague = async () => {
     if (!supabase) { setLoading(false); return; }
     if (!cityId) return;
     const today = new Date().toISOString().slice(0, 10);
-    const { data: leagues } = await supabase.from("leagues").select("id,name,start_date,end_date,registration_deadline,registration_opens_at,status").eq("city_id", cityId).in("status", ["registration_open", "upcoming", "ongoing"]).order("start_date", { ascending: true });
+    const { data: leagues } = await supabase.from("leagues").select("id,name,start_date,end_date,registration_deadline,registration_opens_at,status,info_text").eq("city_id", cityId).in("status", ["registration_open", "upcoming", "ongoing"]).order("start_date", { ascending: true });
     const rows = (leagues ?? []) as (League & { status: string; registration_opens_at: string | null })[];
     const openLeague = rows.filter((item) => item.status === "registration_open").find((item) => !item.registration_deadline || item.registration_deadline >= today) ?? null;
     setLeague(openLeague);
@@ -324,7 +327,7 @@ export default function WebHomeScreen() {
           <View style={styles.categoryRow}>
             <Text style={[styles.categoryText, styles.categoryTextActive, styles.categoryTextInRow]}>Padel - Avoin ja Mixty</Text>
             <View style={styles.infoButtonsInline}>
-              <Pressable onPress={() => setInfoModal("leagueIntro")} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable>
+              {league.info_text?.trim() ? <Pressable onPress={() => setInfoModal("leagueIntro")} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable> : null}
               <Pressable onPress={() => setShowRoundSchedule(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
             </View>
           </View>
@@ -361,7 +364,7 @@ export default function WebHomeScreen() {
           <View style={styles.categoryRow}>
             <Text style={[styles.categoryTextUpcoming, styles.categoryTextInRow]}>Padel - Avoin ja Mixty</Text>
             <View style={styles.infoButtonsInline}>
-              <Pressable onPress={() => setInfoModal("leagueIntro")} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable>
+              {upcomingLeague.info_text?.trim() ? <Pressable onPress={() => setInfoModal("leagueIntro")} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Info</Text></Pressable> : null}
               <Pressable onPress={() => setShowRoundSchedule(true)} style={styles.infoTextButton}><Text style={styles.infoTextButtonLabel}>Kierrosaikataulu</Text></Pressable>
             </View>
           </View>
@@ -489,10 +492,10 @@ export default function WebHomeScreen() {
     <Pressable style={styles.modalBackdrop} onPress={() => setInfoModal(null)}>
       <Pressable style={[styles.modalBox, !isMobile && styles.modalBoxWide]} onPress={(event) => event.stopPropagation()}>
         <View style={styles.modalHeader}>
-          <Text style={[styles.modalTitle, infoModal === "leagueIntro" && styles.modalTitleGold]}>{infoModal ? infoModalTitles[infoModal] : ""}</Text>
+          <Text style={[styles.modalTitle, infoModal === "leagueIntro" && styles.modalTitleGold]}>{infoModal === "leagueIntro" ? introLeague?.name ?? "" : infoModal ? infoModalTitles[infoModal] : ""}</Text>
           <Pressable onPress={() => setInfoModal(null)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.modalClose}>×</Text></Pressable>
         </View>
-        {infoModal === "about" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><AllAboutContent onContactPress={() => setInfoModal("vision")} /></ScrollView> : infoModal === "league" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><LeagueRulesContent /></ScrollView> : infoModal === "vision" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><ContactContent /></ScrollView> : infoModal === "leagueIntro" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><LeagueIntroContent /></ScrollView> : <Text style={styles.placeholderCopy}>Sisältö tulossa pian.</Text>}
+        {infoModal === "about" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><AllAboutContent onContactPress={() => setInfoModal("vision")} /></ScrollView> : infoModal === "league" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><LeagueRulesContent /></ScrollView> : infoModal === "vision" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><ContactContent /></ScrollView> : infoModal === "leagueIntro" ? <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}><LeagueIntroContent text={introLeague?.info_text ?? ""} /></ScrollView> : <Text style={styles.placeholderCopy}>Sisältö tulossa pian.</Text>}
       </Pressable>
     </Pressable>
   </Modal>

@@ -2,6 +2,7 @@ import { router as expoRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import AdminCityPicker from "../../components/AdminCityPicker";
+import AdminLeagueInfoField from "../../components/AdminLeagueInfoField";
 import ScreenHeader from "../../components/ScreenHeader";
 import { useAuth } from "../../hooks/useAuth";
 import { useAppScreenRestriction } from "../../hooks/useAppScreenRestriction";
@@ -18,6 +19,7 @@ export default function CreateLeagueScreen() {
   const { session } = useAuth();
   const [name, setName] = useState("");
   const [cityId, setCityId] = useState<string | null>(null);
+  const [infoText, setInfoText] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [deadline, setDeadline] = useState("");
@@ -113,6 +115,7 @@ export default function CreateLeagueScreen() {
     const { data: league, error: leagueError } = await supabase.from("leagues").insert({
       name: name.trim(),
       city_id: cityId,
+      info_text: infoText.trim() || null,
       start_date: parsedStartDate,
       end_date: parsedEndDate,
       registration_deadline: parsedDeadline,
@@ -158,7 +161,7 @@ export default function CreateLeagueScreen() {
     <Text style={styles.label}>LIIGAN NIMI</Text>
     <TextInput value={name} onChangeText={setName} placeholder="Esim. Jyväskylä Syksy 2026" placeholderTextColor={colors.muted} style={styles.input} />
     <Text style={styles.label}>KAUPUNKI</Text>
-    <AdminCityPicker value={cityId} onChange={setCityId} style={styles.cityPicker} />
+    <AdminCityPicker value={cityId} onChange={setCityId} style={styles.fieldBlock} />
     <Text style={styles.label}>LIIGAN ALKAMISPÄIVÄ</Text>
     <TextInput value={startDate} onChangeText={setStartDate} placeholder="D.M.YYYY" placeholderTextColor={colors.muted} style={styles.input} />
     <Text style={styles.label}>LIIGAN LOPPUPÄIVÄ</Text>
@@ -183,6 +186,9 @@ export default function CreateLeagueScreen() {
         <TextInput value={opensDate} onChangeText={setOpensDate} placeholder="D.M.YYYY" placeholderTextColor={colors.muted} style={styles.input} />
       </> : <Text style={styles.hint}>Liiga näkyy käyttäjille tulevana, ja "Ilmoittautuminen avautuu pian" -tekstillä ilman tarkkaa päivää.</Text>}
     </> : null}
+
+    <Text style={styles.label}>LIIGAN INFO</Text>
+    <AdminLeagueInfoField value={infoText} onChange={setInfoText} style={styles.fieldBlock} />
 
     <View style={styles.roundHeading}><Text style={styles.roundTitle}>Kierrokset</Text><Pressable onPress={addRound} style={styles.addRound} accessibilityRole="button" accessibilityLabel="Lisää kierros"><Text style={styles.addRoundText}>+</Text></Pressable></View>
     {rounds.map((round, index) => <View key={index} style={styles.round}>
@@ -216,7 +222,7 @@ const styles = StyleSheet.create({
   content: { paddingBottom: 40 },
   label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 20, marginHorizontal: 22, marginBottom: 7 },
   input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, color: colors.ink, padding: 14, marginHorizontal: 22 },
-  cityPicker: { marginHorizontal: 22 },
+  fieldBlock: { marginHorizontal: 22 },
   hint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginHorizontal: 22, marginTop: 10 },
   publishRow: { flexDirection: "row", gap: 8, marginHorizontal: 22, marginTop: 8 },
   roundHeading: { marginTop: 28, marginHorizontal: 22, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
