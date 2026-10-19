@@ -6,6 +6,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import ScreenHeader from "../../components/ScreenHeader";
 import TeamRosterList, { groupRosterByTeam, type TeamRosterRow } from "../../components/TeamRosterList";
 import { useChatNotify } from "../../context/ChatNotifyContext";
+import { useCity } from "../../context/CityContext";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { colors, shadow } from "../../theme";
@@ -28,6 +29,7 @@ function toMessage(id: string, name: string, sub: string, body: string, createdA
 export default function ChatTabScreen() {
   const { session } = useAuth();
   const { lastNotify, lastDeleted, unreadGroupIds, unreadLeagueIds, unreadQualificationMatchIds, markGroupRead, markLeagueRead, markQualificationMatchRead } = useChatNotify();
+  const { cityId } = useCity();
   const [view, setView] = useState<"lohko" | "yhteiso">("lohko");
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
@@ -52,7 +54,7 @@ export default function ChatTabScreen() {
   const [qualificationMatchByTeamId, setQualificationMatchByTeamId] = useState<Record<string, { matchId: string; opponentTeamId: string; opponentName: string }>>({});
 
   const loadTeams = useCallback(async () => {
-    if (!supabase || !session?.user.id) return;
+    if (!supabase || !session?.user.id || !cityId) return;
     const client = supabase;
     const { data: membershipData } = await client.from("team_members").select("team_id, teams(id, name, league_id, category)").eq("user_id", session.user.id).eq("status", "active");
     const memberships = (membershipData ?? []) as unknown as { teams?: { id: string; name: string; league_id: string; category: string } | { id: string; name: string; league_id: string; category: string }[] | null }[];
@@ -60,19 +62,20 @@ export default function ChatTabScreen() {
     const leagueIds = [...new Set(teamRows.map((team) => team.league_id))];
     const teamIds = teamRows.map((team) => team.id);
     const [{ data: leagueRows }, { data: groupRows }] = await Promise.all([
-      leagueIds.length ? client.from("leagues").select("id, name, status").in("id", leagueIds) : Promise.resolve({ data: [] }),
+      leagueIds.length ? client.from("leagues").select("id, name, status").in("id", leagueIds).eq("city_id", cityId) : Promise.resolve({ data: [] }),
       teamIds.length ? client.from("group_teams").select("team_id, group_id") : Promise.resolve({ data: [] }),
     ]);
     const leagueMap = new Map((leagueRows ?? []).map((league) => [league.id, league]));
     const groupMap = new Map((groupRows ?? []).map((group) => [group.team_id, group]));
-    const nextTeams = teamRows.map((team) => {
+    // Other cities' leagues are left out of leagueMap, and their teams with them.
+    const nextTeams = teamRows.filter((team) => leagueMap.has(team.league_id)).map((team) => {
       const league = leagueMap.get(team.league_id);
       const group = groupMap.get(team.id);
       return { id: team.id, leagueId: team.league_id, leagueName: league?.name ?? "", leagueStatus: league?.status ?? "", category: team.category, groupId: group?.group_id };
     }).sort((left, right) => Number(right.leagueStatus === "ongoing") - Number(left.leagueStatus === "ongoing") || categoryOrder(left.category) - categoryOrder(right.category));
     setTeams(nextTeams);
     setSelectedTeamId((current) => current && nextTeams.some((team) => team.id === current) ? current : nextTeams[0]?.id ?? null);
-  }, [session?.user.id]);
+  }, [session?.user.id, cityId]);
 
   useFocusEffect(useCallback(() => { void loadTeams(); }, [loadTeams]));
 
@@ -82,16 +85,16 @@ export default function ChatTabScreen() {
   }, [session?.user.id]);
 
   useEffect(() => {
-    if (!supabase || !isAdmin) { setAllLeagues([]); return; }
-    void supabase.from("leagues").select("id, name, status").order("start_date", { ascending: false }).then(({ data }) => setAllLeagues((data ?? []) as LeagueOption[]));
-  }, [isAdmin]);
+    if (!supabase || !isAdmin || !cityId) { setAllLeagues([]); return; }
+    void supabase.from("leagues").select("id, name, status").eq("city_id", cityId).order("start_date", { ascending: false }).then(({ data }) => setAllLeagues((data ?? []) as LeagueOption[]));
+  }, [isAdmin, cityId]);
 
   // Admins are usually not members of any team, so they'd otherwise never see a
   // "lohko" to pick. Let an admin without own teams browse every ongoing league's groups.
   useEffect(() => {
-    if (!supabase || !isAdmin) { setAdminGroups([]); return; }
+    if (!supabase || !isAdmin || !cityId) { setAdminGroups([]); return; }
     const client = supabase;
-    void client.from("groups").select("id, league_id, name, category, leagues(name, status)").order("name").then(({ data }) => {
+    void client.from("groups").select("id, league_id, name, category, leagues!inner(name, status, city_id)").eq("leagues.city_id", cityId).order("name").then(({ data }) => {
       const rows = (data ?? []) as unknown as { id: string; league_id: string; name: string; category: string; leagues: { name: string; status: string } | { name: string; status: string }[] | null }[];
       const ongoingGroups = rows.map((row) => {
         const league = Array.isArray(row.leagues) ? row.leagues[0] : row.leagues;
@@ -99,7 +102,7 @@ export default function ChatTabScreen() {
       }).filter((row) => row.leagueStatus === "ongoing");
       setAdminGroups(ongoingGroups.map(({ id, leagueId, leagueName, name, category }) => ({ id, leagueId, leagueName, name, category })));
     });
-  }, [isAdmin]);
+  }, [isAdmin, cityId]);
 
   // A push notification for a lohko message links here with ?groupId=... so
   // the right team/lohko is selected instead of whichever loaded first.

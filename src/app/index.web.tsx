@@ -7,6 +7,7 @@ import LoginForm from "../components/LoginForm";
 import ProfileForm from "../components/ProfileForm";
 import RegisterForm from "../components/RegisterForm";
 import TeamRegisterForm from "../components/TeamRegisterForm";
+import { sortCitiesByName, useCity } from "../context/CityContext";
 import { useAuth } from "../hooks/useAuth";
 import { useWebAppAccess } from "../hooks/useWebAppAccess";
 import { formatFinnishDate } from "../lib/dates";
@@ -84,6 +85,8 @@ const groupRosterByTeam = (rows: RosterRow[]): Team[] => {
 export default function WebHomeScreen() {
   const { session, loading: authLoading } = useAuth();
   const webAccess = useWebAppAccess(session);
+  const { cities, cityId, setCity } = useCity();
+  const [cityError, setCityError] = useState("");
   const { width } = useWindowDimensions();
   const isMobile = width < MOBILE_BREAKPOINT;
   const [league, setLeague] = useState<League | null>(null);
@@ -118,8 +121,9 @@ export default function WebHomeScreen() {
 
   const loadLeague = async () => {
     if (!supabase) { setLoading(false); return; }
+    if (!cityId) return;
     const today = new Date().toISOString().slice(0, 10);
-    const { data: leagues } = await supabase.from("leagues").select("id,name,start_date,end_date,registration_deadline,registration_opens_at,status").in("status", ["registration_open", "upcoming", "ongoing"]).order("start_date", { ascending: true });
+    const { data: leagues } = await supabase.from("leagues").select("id,name,start_date,end_date,registration_deadline,registration_opens_at,status").eq("city_id", cityId).in("status", ["registration_open", "upcoming", "ongoing"]).order("start_date", { ascending: true });
     const rows = (leagues ?? []) as (League & { status: string; registration_opens_at: string | null })[];
     const openLeague = rows.filter((item) => item.status === "registration_open").find((item) => !item.registration_deadline || item.registration_deadline >= today) ?? null;
     setLeague(openLeague);
@@ -132,6 +136,7 @@ export default function WebHomeScreen() {
       setTeams(groupRosterByTeam(rosterList));
     } else {
       setRosterRows([]);
+      setTeams([]);
     }
     setLoading(false);
   };
@@ -139,7 +144,14 @@ export default function WebHomeScreen() {
   useEffect(() => {
     void loadLeague();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [cityId]);
+
+  const chooseCity = async (nextCityId: string) => {
+    if (nextCityId === cityId) return;
+    setCityError("");
+    const error = await setCity(nextCityId);
+    if (error) setCityError(error);
+  };
 
   const loadInvitations = async () => {
     if (!supabase || !session?.user.id) { setInvitations([]); return; }
@@ -297,6 +309,14 @@ export default function WebHomeScreen() {
       </View>)}
     </View> : null}
     <View style={[styles.hero, isMobile && styles.heroMobile]}><Image source={logo} style={[styles.heroLogo, isMobile && styles.heroLogoMobile]} resizeMode="contain" /><Text style={[styles.heroTitle, isMobile && styles.heroTitleMobile]}>Tähtiliiga</Text></View>
+    {cities.length > 1 ? <View style={[styles.cityPicker, isMobile && styles.cityPickerMobile]}>
+      <View style={styles.categorySwitch}>
+        {sortCitiesByName(cities).map((city) => <Pressable key={city.id} onPress={() => void chooseCity(city.id)} style={[styles.categoryButton, cityId === city.id && styles.categoryButtonSelected]}>
+          <Text style={[styles.categoryButtonText, cityId === city.id && styles.categoryButtonTextSelected]}>{city.name}</Text>
+        </Pressable>)}
+      </View>
+      {cityError ? <Text style={styles.cityError}>{cityError}</Text> : null}
+    </View> : null}
     <View style={[styles.mainGrid, isMobile && styles.mainGridMobile]}>
       <View style={[styles.leagueColumn, isMobile && styles.leagueColumnMobile]}>
         {loading ? <View style={styles.loading}><ActivityIndicator color={colors.green} /></View> : league ? <><View style={[styles.leagueHeading, isMobile && styles.leagueHeadingMobile]}><Pressable onPress={() => { if (typeof window !== "undefined") window.open("https://www.padelution.com/leagues/jyvaskyla-kesaliiga-2026", "_blank"); }} style={styles.currentLeagueLinkButton}><Text style={[styles.currentLeagueLink, isMobile && styles.currentLeagueLinkMobile]}>Nykyisessä Jyväskylän Kesäliigassamme mukana +200 pelaajaa!</Text></Pressable></View><View style={[styles.leagueFeature, styles.leagueFeatureActive, isMobile && styles.leagueFeatureMobile]}>
@@ -718,6 +738,7 @@ const styles = StyleSheet.create({
   inviteCard: { backgroundColor: colors.surface, borderRadius: 12, padding: 22, borderWidth: 1, borderColor: colors.greenBright }, inviteTitle: { color: colors.ink, fontSize: 17, fontWeight: "900" }, inviteCopy: { color: colors.muted, fontSize: 13, marginTop: 6 }, inviteDates: { color: colors.muted, fontSize: 13, marginTop: 3 },
   inviteActions: { flexDirection: "row", gap: 10, marginTop: 16 }, inviteAccept: { flex: 1, backgroundColor: colors.green, borderRadius: 8, paddingVertical: 14, alignItems: "center" }, inviteAcceptText: { color: colors.surface, fontWeight: "900", fontSize: 13 }, inviteDecline: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 8, paddingVertical: 14, alignItems: "center" }, inviteDeclineText: { color: colors.coral, fontWeight: "900", fontSize: 13 }, inviteLoading: { marginTop: 16 }, inviteError: { color: colors.coral, fontSize: 12, lineHeight: 18, marginTop: 12 },
   hero: { alignItems: "center", paddingTop: 40, paddingBottom: 70 }, heroMobile: { paddingTop: 8, paddingBottom: 24, paddingHorizontal: 18 }, heroLogo: { width: 104, height: 104 }, heroLogoMobile: { width: 68, height: 68 }, heroTitle: { color: colors.ink, fontSize: 48, fontWeight: "900", fontFamily: "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Helvetica, Arial, sans-serif", marginTop: 17 }, heroTitleMobile: { fontSize: 22, marginTop: 8, textAlign: "center" },
+  cityPicker: { alignItems: "center", marginTop: -40, marginBottom: 40 }, cityPickerMobile: { marginTop: -8, marginBottom: 20, paddingHorizontal: 18 }, cityError: { color: colors.coral, fontSize: 12, marginTop: 8, textAlign: "center" },
   mainGrid: { maxWidth: 1180, width: "100%", alignSelf: "center", paddingHorizontal: 34, flexDirection: "row", alignItems: "stretch", gap: 56 }, mainGridMobile: { flexDirection: "column", paddingHorizontal: 16, gap: 0 }, leagueColumn: { flex: 2, minWidth: 0 }, leagueColumnMobile: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%" }, leagueHeading: { height: 38, justifyContent: "flex-start" }, leagueHeadingMobile: { height: "auto", paddingBottom: 14 }, currentLeagueLinkButton: { alignSelf: "flex-start" }, teamsColumn: { flex: 1, minWidth: 260 }, teamsColumnMobile: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%", minWidth: 0, marginTop: 36 }, teamsHeading: { height: 38, justifyContent: "center" }, kicker: { color: colors.greenBright, fontSize: 10, fontWeight: "900", letterSpacing: 1.5 }, sectionTitle: { color: colors.ink, fontSize: 28, fontWeight: "900" }, sectionTitleMobile: { fontSize: 22 },
   leagueFeature: { backgroundColor: colors.green, borderRadius: 6, padding: 30 }, leagueFeatureMobile: { padding: 14 }, leagueFeatureActive: { backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.green }, leagueName: { color: colors.surface, fontSize: 31, fontWeight: "900" }, leagueNameActive: { color: colors.ink }, leagueNameMobile: { fontSize: 18 }, signupTitle: { color: colors.surface, fontSize: 24, fontWeight: "900" }, signupTitleMobile: { fontSize: 17 }, leagueDescription: { color: "#3A2E12", fontSize: 15, lineHeight: 23, maxWidth: 620, marginTop: 10 }, leagueDescriptionActive: { color: colors.muted }, categoryText: { color: "#3A2E12", fontSize: 13, fontWeight: "800", marginTop: 8 }, categoryTextActive: { color: colors.greenBright }, categoryTextUpcoming: { color: colors.greenBright, fontSize: 13, fontWeight: "800", marginTop: 8 }, categoryRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", rowGap: 6, gap: 8, marginTop: 8 }, categoryTextInRow: { marginTop: 0 }, infoButtonsInline: { flexDirection: "row", gap: 8 }, infoTextButton: { borderWidth: 1, borderColor: colors.greenBright, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 12, alignItems: "center" }, infoTextButtonLabel: { color: colors.greenBright, fontSize: 12, fontWeight: "800" }, descriptionMobile: { fontSize: 12, lineHeight: 17, marginTop: 6 }, inviteLinkBox: { backgroundColor: "rgba(0,0,0,0.14)", borderRadius: 6, paddingVertical: 12, paddingHorizontal: 14, marginTop: 20 }, inviteLinkBoxMobile: { paddingVertical: 8, paddingHorizontal: 10, marginTop: 10 }, inviteLinkText: { color: "#3A2E12", fontSize: 13, fontWeight: "700" }, leagueFeatureUpcoming: { backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.green }, leagueNameUpcoming: { color: colors.ink }, detailsRow: { flexDirection: "row", gap: 42, borderTopWidth: 1, borderTopColor: "#B8933A", marginTop: 27, paddingTop: 19 }, detailsRowActive: { borderTopColor: colors.line }, detailsRowUpcoming: { borderTopColor: colors.line }, detailsRowMobile: { flexWrap: "wrap", gap: 20, rowGap: 10, marginTop: 12, paddingTop: 10 }, detailLabel: { color: "#5C4A1E", fontSize: 9, fontWeight: "900", letterSpacing: 1 }, detailLabelActive: { color: colors.muted }, detailLabelUpcoming: { color: colors.muted }, detailValue: { color: colors.surface, fontSize: 14, fontWeight: "800", marginTop: 6 }, detailValueActive: { color: colors.ink }, detailValueUpcoming: { color: colors.ink }, joinButton: { backgroundColor: colors.lime, borderRadius: 5, paddingHorizontal: 17, paddingVertical: 15, marginTop: 28, flexDirection: "row", alignItems: "center", alignSelf: "flex-start", minWidth: 210 }, joinButtonMobile: { paddingVertical: 11, paddingHorizontal: 14, marginTop: 12, minWidth: 0 }, joinRow: { flexDirection: "row", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }, joinButtonInRow: { alignSelf: "flex-end" }, joinButtonActive: { backgroundColor: colors.green }, joinButtonRegistered: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.line }, joinButtonSide: { marginTop: 0, alignSelf: "flex-end", flexShrink: 0 }, joinButtonSideMobile: { alignSelf: "flex-start" }, myTeamDividerMobile: { width: "100%", borderTopWidth: 1, borderTopColor: colors.line }, joinTextRegistered: { color: colors.muted }, joinButtonUpcoming: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.line, alignSelf: "stretch", justifyContent: "center" }, joinText: { color: colors.green, fontWeight: "900" }, joinTextActive: { color: colors.surface }, joinTextUpcoming: { color: colors.muted }, joinArrow: { color: colors.green, fontSize: 21, marginLeft: "auto" }, joinArrowActive: { color: colors.surface }, loading: { height: 220, alignItems: "center", justifyContent: "center" }, empty: { backgroundColor: colors.surface, borderRadius: 6, padding: 26 }, emptyTitle: { color: colors.ink, fontWeight: "900", fontSize: 17 }, emptyCopy: { color: colors.muted, lineHeight: 21, marginTop: 8 },
   teamList: { backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.green, borderRadius: 6, paddingLeft: 22, paddingRight: 6 }, teamListFill: { minHeight: 220, maxHeight: 420 }, teamListScrollFill: { flex: 1, minHeight: 0 }, teamListScrollMobile: { minHeight: 160, maxHeight: 290 }, teamListTitle: { color: colors.green, fontSize: 15, fontWeight: "900", letterSpacing: 0.3, paddingTop: 16, paddingRight: 16 }, categorySwitch: { flexDirection: "row", gap: 8, paddingTop: 12, paddingRight: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.line }, categoryButton: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 6, paddingVertical: 10, alignItems: "center" }, categoryButtonSelected: { backgroundColor: colors.green, borderColor: colors.green }, categoryButtonText: { color: colors.ink, fontSize: 12, fontWeight: "800" }, categoryButtonTextSelected: { color: colors.surface }, teamRow: { flexDirection: "row", alignItems: "center", paddingVertical: 18, paddingRight: 16, borderBottomWidth: 1, borderBottomColor: colors.line }, myTeamBox: { borderTopWidth: 1, borderTopColor: colors.line, marginTop: 27, paddingTop: 19 }, myTeamBoxMobile: { marginTop: 12, paddingTop: 10 }, myTeamRow: { flexDirection: "row", gap: 24 }, myTeamRowMobile: { flexDirection: "column", gap: 14 }, myTeamCard: { flex: 1 }, myTeamName: { color: colors.ink, fontSize: 16, fontWeight: "900", marginTop: 6 }, myTeamPlayers: { marginTop: 4 }, myTeamPlayerRow: { color: colors.ink, fontSize: 13, fontWeight: "700", marginTop: 3 }, myTeamPaymentSection: { marginTop: "auto", alignItems: "flex-start" }, paidBadge: { backgroundColor: "rgba(52,199,89,0.12)", borderRadius: 6, paddingVertical: 8, paddingHorizontal: 10, marginTop: 10, alignSelf: "flex-start" }, paidBadgeText: { color: colors.greenBright, fontWeight: "800", fontSize: 12 }, payButton: { backgroundColor: colors.green, borderRadius: 6, paddingVertical: 10, paddingHorizontal: 14, marginTop: 10, alignSelf: "flex-start" }, payButtonText: { color: colors.surface, fontWeight: "800", fontSize: 12 }, payNoteText: { color: colors.muted, fontSize: 11, marginTop: 6 }, payErrorText: { color: colors.coral, fontSize: 12, marginTop: 10 },

@@ -6,6 +6,7 @@ import GroupMatches from "../../components/GroupMatches";
 import LeagueIntroContent from "../../components/LeagueIntroContent";
 import LeagueRoundSchedule from "../../components/LeagueRoundSchedule";
 import ScreenHeader from "../../components/ScreenHeader";
+import { useCity } from "../../context/CityContext";
 import { useSelectedLeague } from "../../context/SelectedLeagueContext";
 import { useAuth } from "../../hooks/useAuth";
 import { formatFinnishDate } from "../../lib/dates";
@@ -37,6 +38,7 @@ type OpenLeague = { id: string; name: string; start_date: string; end_date: stri
 export default function HomeScreen() {
   const { session } = useAuth();
   const { selectedLeague, refresh: refreshMyLeagues } = useSelectedLeague();
+  const { cityId } = useCity();
   const { justRegistered } = useLocalSearchParams<{ justRegistered?: string }>();
   const [teams, setTeams] = useState<Team[]>([]);
   const [rosterRows, setRosterRows] = useState<RosterPlayer[]>([]);
@@ -56,28 +58,31 @@ export default function HomeScreen() {
   const [activeRoundName, setActiveRoundName] = useState<string | null>(null);
 
   const loadOpenLeague = useCallback(async () => {
-    if (!supabase) return;
+    if (!supabase || !cityId) return;
     const today = new Date().toISOString().slice(0, 10);
-    const { data } = await supabase.from("leagues").select("id, name, start_date, end_date, registration_deadline, registration_opens_at, status").in("status", ["registration_open", "upcoming", "ongoing"]).order("start_date", { ascending: true });
+    const { data } = await supabase.from("leagues").select("id, name, start_date, end_date, registration_deadline, registration_opens_at, status").eq("city_id", cityId).in("status", ["registration_open", "upcoming", "ongoing"]).order("start_date", { ascending: true });
     const rows = (data ?? []) as OpenLeague[];
     const openRow = rows.filter((row) => row.status === "registration_open").find((row) => !row.registration_deadline || row.registration_deadline >= today) ?? rows.find((row) => row.status === "upcoming") ?? null;
     setOpenLeague(openRow);
     setOngoingLeague(rows.find((row) => row.status === "ongoing") ?? null);
-  }, []);
+  }, [cityId]);
 
   useFocusEffect(useCallback(() => { void loadOpenLeague(); }, [loadOpenLeague]));
 
   const loadHome = useCallback(async () => {
-    if (!supabase || !session?.user.id) return;
+    if (!supabase || !session?.user.id || !cityId) return;
     const client = supabase;
     const [{ data: membershipData }, { data: invitationData }] = await Promise.all([
-      client.from("team_members").select("team_id, teams(id, name, skill_level, category, league_id)").eq("user_id", session.user.id).eq("status", "active"),
+      client.from("team_members").select("team_id, teams(id, name, skill_level, category, league_id, leagues(city_id))").eq("user_id", session.user.id).eq("status", "active"),
       client.rpc("get_pending_team_invitations"),
     ]);
     setInvitations((invitationData ?? []) as Invitation[]);
 
-    const memberships = (membershipData ?? []) as unknown as { teams?: { id: string; name: string; skill_level: string; category: string; league_id: string } | { id: string; name: string; skill_level: string; category: string; league_id: string }[] | null }[];
-    const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : []);
+    type MembershipTeam = { id: string; name: string; skill_level: string; category: string; league_id: string; leagues: { city_id: string } | { city_id: string }[] | null };
+    const memberships = (membershipData ?? []) as unknown as { teams?: MembershipTeam | MembershipTeam[] | null }[];
+    // Teams from other cities' (finished) leagues stay hidden while another city is selected.
+    const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : [])
+      .filter((team) => (Array.isArray(team.leagues) ? team.leagues[0] : team.leagues)?.city_id === cityId);
     const leagueIds = [...new Set(teamRows.map((team) => team.league_id))];
     const teamIds = teamRows.map((team) => team.id);
     const [{ data: leagueRows }, { data: groupRows }, { data: paymentRows }, rosterResults] = await Promise.all([
@@ -113,7 +118,7 @@ export default function HomeScreen() {
 
     setTeams(nextTeams);
     void refreshMyLeagues();
-  }, [session?.user.id, refreshMyLeagues]);
+  }, [session?.user.id, refreshMyLeagues, cityId]);
 
   useFocusEffect(useCallback(() => { void loadHome(); }, [loadHome]));
 

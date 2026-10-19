@@ -1,6 +1,7 @@
 import { router as expoRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import AdminCityPicker from "../../components/AdminCityPicker";
 import ScreenHeader from "../../components/ScreenHeader";
 import { useAuth } from "../../hooks/useAuth";
 import { useAppScreenRestriction } from "../../hooks/useAppScreenRestriction";
@@ -16,7 +17,7 @@ export default function CreateLeagueScreen() {
   useAppScreenRestriction();
   const { session } = useAuth();
   const [name, setName] = useState("");
-  const [city, setCity] = useState("");
+  const [cityId, setCityId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [deadline, setDeadline] = useState("");
@@ -68,6 +69,10 @@ export default function CreateLeagueScreen() {
       setError("Anna liigan nimi sekä alku- ja loppupäivä muodossa D.M.YYYY.");
       return;
     }
+    if (!cityId) {
+      setError("Valitse kaupunki, jossa liiga pelataan.");
+      return;
+    }
     if (parsedEndDate < parsedStartDate) {
       setError("Liigan loppupäivä ei voi olla ennen aloituspäivää.");
       return;
@@ -107,7 +112,7 @@ export default function CreateLeagueScreen() {
     setError("");
     const { data: league, error: leagueError } = await supabase.from("leagues").insert({
       name: name.trim(),
-      city: city.trim() || null,
+      city_id: cityId,
       start_date: parsedStartDate,
       end_date: parsedEndDate,
       registration_deadline: parsedDeadline,
@@ -153,7 +158,7 @@ export default function CreateLeagueScreen() {
     <Text style={styles.label}>LIIGAN NIMI</Text>
     <TextInput value={name} onChangeText={setName} placeholder="Esim. Jyväskylä Syksy 2026" placeholderTextColor={colors.muted} style={styles.input} />
     <Text style={styles.label}>KAUPUNKI</Text>
-    <TextInput value={city} onChangeText={setCity} placeholder="Esim. Jyväskylä" placeholderTextColor={colors.muted} style={styles.input} />
+    <AdminCityPicker value={cityId} onChange={setCityId} style={styles.cityPicker} />
     <Text style={styles.label}>LIIGAN ALKAMISPÄIVÄ</Text>
     <TextInput value={startDate} onChangeText={setStartDate} placeholder="D.M.YYYY" placeholderTextColor={colors.muted} style={styles.input} />
     <Text style={styles.label}>LIIGAN LOPPUPÄIVÄ</Text>
@@ -211,6 +216,7 @@ const styles = StyleSheet.create({
   content: { paddingBottom: 40 },
   label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 20, marginHorizontal: 22, marginBottom: 7 },
   input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, color: colors.ink, padding: 14, marginHorizontal: 22 },
+  cityPicker: { marginHorizontal: 22 },
   hint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginHorizontal: 22, marginTop: 10 },
   publishRow: { flexDirection: "row", gap: 8, marginHorizontal: 22, marginTop: 8 },
   roundHeading: { marginTop: 28, marginHorizontal: 22, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },

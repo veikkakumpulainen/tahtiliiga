@@ -3,6 +3,7 @@ import { Stack } from "expo-router";
 import { Platform } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { ChatNotifyProvider } from "../context/ChatNotifyContext";
+import { CityProvider } from "../context/CityContext";
 import { SelectedLeagueProvider } from "../context/SelectedLeagueContext";
 import { useAuth } from "../hooks/useAuth";
 import { usePushNotifications } from "../hooks/usePushNotifications";
@@ -11,6 +12,7 @@ export default function RootLayout() {
   const { session } = useAuth();
   usePushNotifications(session);
   return (
+    <CityProvider>
     <ChatNotifyProvider>
     <SelectedLeagueProvider>
       <StatusBar style="light" />
@@ -27,5 +29,6 @@ export default function RootLayout() {
       </Stack>
     </SelectedLeagueProvider>
     </ChatNotifyProvider>
+    </CityProvider>
   );
 }
