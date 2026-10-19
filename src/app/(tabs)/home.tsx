@@ -302,7 +302,8 @@ export default function HomeScreen() {
           {isRegistrable(league) && league.registration_deadline ? <View><Text style={styles.cardLabel}>ILMOITTAUTUMISEN DEADLINE</Text><Text style={styles.season}>{formatFinnishDate(league.registration_deadline)}</Text></View> : null}
         </View>
         {isRegistrable(league) ? <Pressable style={styles.browseButton} onPress={() => router.push(`/league/${league.id}/register` as never)}><Text style={styles.browseText}>Ilmoittaudu joukkueella</Text><Text style={styles.arrow}>→</Text></Pressable>
-          : league.status === "upcoming" ? <Text style={styles.cardNote}>{league.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(league.registration_opens_at)}.` : "Ilmoittautuminen avautuu pian."}</Text> : null}      </View>)}
+          : league.status === "upcoming" ? <Text style={styles.cardNote}>{league.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(league.registration_opens_at)}.` : "Ilmoittautuminen avautuu pian."}</Text> : null}
+      </View>)}
     </> : !primary && !(teams.length === 0 && invitations.length > 0) ? <View style={styles.openLeagueCard}>
       {!inUnfinishedLeague ? <Pressable onPress={clearSelection} style={styles.allLeaguesLink}><Text style={styles.openLeagueLinkText}>‹ Kaikki liigat</Text></Pressable> : null}
       {viewedClosedLeague ? <>
