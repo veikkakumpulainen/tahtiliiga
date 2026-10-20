@@ -7,7 +7,7 @@
 // automatically by Supabase.)
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { resolveRecipientIds, sendExpoPush, type NotificationTarget } from "../_shared/notifications.ts";
+import { filterMutedRecipients, resolveRecipientIds, sendExpoPush, type NotificationTarget } from "../_shared/notifications.ts";
 import { corsHeaders, handleCorsPreflight } from "../_shared/cors.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
     return new Response("Missing title, body or target", { status: 400, headers: corsHeaders });
   }
 
-  const recipients = await resolveRecipientIds(payload.target, payload.target.excludeUserId);
+  const recipients = await filterMutedRecipients(await resolveRecipientIds(payload.target, payload.target.excludeUserId), "admin_notifications");
   const sent = await sendExpoPush(recipients, { title: payload.title.trim(), body: payload.body.trim(), data: payload.data });
 
   return new Response(JSON.stringify({ sent, recipients: recipients.length }), { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } });

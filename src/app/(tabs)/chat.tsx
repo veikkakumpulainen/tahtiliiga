@@ -56,6 +56,8 @@ export default function ChatTabScreen() {
   const { lastNotify, lastDeleted, unreadGroupIds, unreadLeagueIds, unreadQualificationMatchIds, markGroupRead, markLeagueRead, markQualificationMatchRead } = useChatNotify();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [lastMessages, setLastMessages] = useState<Record<string, LastMessage>>({});
+  // Conversation keys whose push notifications this user has muted.
+  const [mutedKeys, setMutedKeys] = useState<Set<string>>(new Set());
   const [loadingList, setLoadingList] = useState(true);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -144,11 +146,13 @@ export default function ChatTabScreen() {
 
     const idsOf = (type: ThreadType) => next.filter((conversation) => conversation.type === type).map((conversation) => conversation.id);
     const [groupIds, leagueIds, matchIds] = [idsOf("group"), idsOf("community"), idsOf("qualification")];
-    const [{ data: groupMessages }, { data: communityMessages }, { data: qualificationMessages }] = await Promise.all([
+    const [{ data: groupMessages }, { data: communityMessages }, { data: qualificationMessages }, { data: mutedRows }] = await Promise.all([
       groupIds.length ? client.from("group_messages").select("group_id, user_id, message, created_at").in("group_id", groupIds).order("created_at", { ascending: false }).limit(1000) : empty,
       leagueIds.length ? client.from("community_messages").select("league_id, user_id, message, created_at").in("league_id", leagueIds).order("created_at", { ascending: false }).limit(1000) : empty,
       matchIds.length ? client.from("qualification_messages").select("match_id, user_id, message, created_at").in("match_id", matchIds).order("created_at", { ascending: false }).limit(1000) : empty,
+      client.from("muted_conversations").select("thread_type, thread_id").eq("user_id", userId),
     ]);
+    setMutedKeys(new Set(((mutedRows ?? []) as { thread_type: string; thread_id: string }[]).map((row) => `${row.thread_type}:${row.thread_id}`)));
     const latest: Record<string, LastMessage> = {};
     const collect = (rows: unknown[] | null, type: ThreadType, idKey: string) => {
       // Rows arrive newest first, so the first one seen per thread is its latest.
@@ -336,6 +340,31 @@ export default function ChatTabScreen() {
     setDraft(""); setError("");
   };
 
+  // Long-press (touch) or right-click (web) on a thread in the list opens a
+  // sheet for muting its push notifications. Admin-only threads never notify.
+  const [actionConversation, setActionConversation] = useState<Conversation | null>(null);
+  const [muting, setMuting] = useState(false);
+  const [muteError, setMuteError] = useState("");
+
+  const openConversationActions = (conversation: Conversation) => {
+    if (conversation.adminOnly) return;
+    setActionConversation(conversation); setMuteError("");
+  };
+
+  const toggleMute = async () => {
+    if (!supabase || !session?.user.id || !actionConversation) return;
+    const { key, type, id } = actionConversation;
+    const muted = mutedKeys.has(key);
+    setMuting(true);
+    const { error: muteSaveError } = muted
+      ? await supabase.from("muted_conversations").delete().eq("user_id", session.user.id).eq("thread_type", type).eq("thread_id", id)
+      : await supabase.from("muted_conversations").insert({ user_id: session.user.id, thread_type: type, thread_id: id });
+    setMuting(false);
+    if (muteSaveError) { setMuteError("Tallennus epäonnistui. Yritä uudelleen."); return; }
+    setMutedKeys((current) => { const next = new Set(current); if (muted) next.delete(key); else next.add(key); return next; });
+    setActionConversation(null);
+  };
+
   const isUnread = (conversation: Conversation) => conversation.type === "group" ? unreadGroupIds.has(conversation.id)
     : conversation.type === "qualification" ? unreadQualificationMatchIds.has(conversation.id)
       : unreadLeagueIds.has(conversation.id);
@@ -344,13 +373,15 @@ export default function ChatTabScreen() {
     const last = lastMessages[conversation.key];
     const unread = isUnread(conversation);
     const preview = last ? `${last.user_id === session?.user.id ? "Sinä: " : ""}${last.message.replace(/\s+/g, " ")}` : conversation.subtitle;
-    return <Pressable key={conversation.key} onPress={() => setOpenKey(conversation.key)} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+    return <Pressable key={conversation.key} onPress={() => setOpenKey(conversation.key)} onLongPress={() => openConversationActions(conversation)} delayLongPress={400} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      {...(Platform.OS === "web" && !conversation.adminOnly ? { onContextMenu: (event: { preventDefault: () => void }) => { event.preventDefault(); openConversationActions(conversation); } } : {})}>
       <View style={[styles.avatar, conversation.type === "community" && styles.avatarCommunity]}>
         <Ionicons name={threadIcons[conversation.type]} size={21} color={conversation.type === "community" ? colors.green : colors.lime} />
       </View>
       <View style={styles.rowBody}>
         <View style={styles.rowTop}>
           <Text style={[styles.rowTitle, unread && styles.rowTitleUnread]} numberOfLines={1}>{conversation.title}</Text>
+          {mutedKeys.has(conversation.key) ? <Ionicons name="notifications-off-outline" size={14} color={colors.muted} accessibilityLabel="Hiljennetty" /> : null}
           {last ? <Text style={[styles.rowTime, unread && styles.rowTimeUnread]}>{formatListTime(last.created_at)}</Text> : null}
         </View>
         {last ? <Text style={styles.rowLeague} numberOfLines={1}>{conversation.subtitle}</Text> : null}
@@ -380,6 +411,21 @@ export default function ChatTabScreen() {
         {adminConversations.map(renderRow)}
       </> : null}
     </ScrollView>}
+    <Modal visible={!!actionConversation} transparent animationType="fade" onRequestClose={() => setActionConversation(null)}>
+      <Pressable style={styles.membersBackdrop} onPress={() => setActionConversation(null)}>
+        <Pressable style={styles.membersModal} onPress={(event) => event.stopPropagation()}>
+          <Text style={styles.actionTitle} numberOfLines={1}>{actionConversation?.title}</Text>
+          <Text style={styles.actionSubtitle} numberOfLines={1}>{actionConversation?.subtitle}</Text>
+          <Pressable disabled={muting} onPress={() => void toggleMute()} style={styles.muteButton}>
+            {muting ? <ActivityIndicator color={colors.green} /> : <>
+              <Ionicons name={actionConversation && mutedKeys.has(actionConversation.key) ? "notifications-outline" : "notifications-off-outline"} size={18} color={colors.green} />
+              <Text style={styles.muteButtonText}>{actionConversation && mutedKeys.has(actionConversation.key) ? "Poista hiljennys" : "Hiljennä keskustelu"}</Text>
+            </>}
+          </Pressable>
+          {muteError ? <Text style={styles.actionError}>{muteError}</Text> : null}
+        </Pressable>
+      </Pressable>
+    </Modal>
   </View>;
 
   return <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -525,4 +571,8 @@ const styles = StyleSheet.create({
   deleteButtonText: { color: colors.coral, fontWeight: "800" },
   deleteButtonTextConfirm: { color: colors.surface },
   actionError: { color: colors.coral, fontSize: 12, marginTop: 8 },
+  actionTitle: { color: colors.ink, fontSize: 16, fontWeight: "800" },
+  actionSubtitle: { color: colors.greenBright, fontSize: 12, fontWeight: "700", marginTop: 2, marginBottom: 14 },
+  muteButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 13, borderWidth: 1, borderColor: colors.green, paddingVertical: 13 },
+  muteButtonText: { color: colors.green, fontWeight: "800" },
 });

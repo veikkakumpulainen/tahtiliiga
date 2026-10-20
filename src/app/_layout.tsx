@@ -25,6 +25,7 @@ export default function RootLayout() {
           <Stack.Screen name="admin/league/[id]" />
           <Stack.Screen name="league/[id]/register" />
           <Stack.Screen name="profile/edit" />
+          <Stack.Screen name="settings" />
         <Stack.Screen name="reset-password" />
       </Stack>
     </SelectedLeagueProvider>

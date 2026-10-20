@@ -7,7 +7,7 @@
 // Secrets needed: FUNCTION_INTERNAL_SECRET (shared with notify-group-message)
 // (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided automatically by Supabase.)
 
-import { resolveRecipientIds, sendExpoPush, supabaseAdmin } from "../_shared/notifications.ts";
+import { filterMutedRecipients, resolveRecipientIds, sendExpoPush, supabaseAdmin } from "../_shared/notifications.ts";
 
 const internalSecret = Deno.env.get("FUNCTION_INTERNAL_SECRET");
 
@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
   const title = league ? `${senderName} · ${league.name}` : senderName;
   const excerpt = message.length > 120 ? `${message.slice(0, 117)}...` : message;
 
-  const recipients = await resolveRecipientIds({ type: "league", leagueId }, senderId);
+  const recipients = await filterMutedRecipients(await resolveRecipientIds({ type: "league", leagueId }, senderId), "community_messages", { type: "community", id: leagueId });
   const sent = await sendExpoPush(recipients, { title, body: excerpt, data: { path: "/chat", messageId } });
 
   return new Response(JSON.stringify({ sent }), { status: 200, headers: { "content-type": "application/json" } });
