@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Redirect, router } from "expo-router";
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import Constants from "expo-constants";
 import DeleteAccountButton from "../components/DeleteAccountButton";
 import ScreenHeader from "../components/ScreenHeader";
 import { useAuth } from "../hooks/useAuth";
+import { legalEffectiveDate, privacySections, termsSections } from "../lib/legalContent";
 import { supabase } from "../lib/supabase";
 import { colors } from "../theme";
 
@@ -28,6 +29,7 @@ export default function SettingsScreen() {
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordSaved, setPasswordSaved] = useState(false);
+  const [legalModal, setLegalModal] = useState<"privacy" | "terms" | null>(null);
 
   useEffect(() => {
     if (!supabase || !session?.user.id) return;
@@ -100,14 +102,32 @@ export default function SettingsScreen() {
 
         <Text style={styles.label}>TIETOSUOJA JA EHDOT</Text>
         <View style={styles.card}>
-          <Pressable onPress={() => router.push("/privacy" as never)} style={styles.linkRow}><Text style={styles.linkText}>Tietosuojaseloste</Text><Text style={styles.chevron}>›</Text></Pressable>
-          <Pressable onPress={() => router.push("/terms" as never)} style={[styles.linkRow, styles.switchRowBorder]}><Text style={styles.linkText}>Käyttöehdot</Text><Text style={styles.chevron}>›</Text></Pressable>
+          <Pressable onPress={() => setLegalModal("privacy")} style={styles.linkRow}><Text style={styles.linkText}>Tietosuojaseloste</Text><Text style={styles.chevron}>›</Text></Pressable>
+          <Pressable onPress={() => setLegalModal("terms")} style={[styles.linkRow, styles.switchRowBorder]}><Text style={styles.linkText}>Käyttöehdot</Text><Text style={styles.chevron}>›</Text></Pressable>
         </View>
 
         <DeleteAccountButton />
         {version ? <Text style={styles.version}>Versio {version}</Text> : null}
       </View>
     </ScrollView>
+    <Modal visible={legalModal !== null} transparent animationType="slide" onRequestClose={() => setLegalModal(null)}>
+      <View style={styles.modalBackdrop}>
+        <Pressable style={styles.modalBackdropTap} onPress={() => setLegalModal(null)} />
+        <View style={styles.modalBox}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{legalModal === "privacy" ? "Tietosuojaseloste" : "Käyttöehdot"}</Text>
+            <Pressable onPress={() => setLegalModal(null)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.modalClose}>×</Text></Pressable>
+          </View>
+          <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalContentInner} showsVerticalScrollIndicator={false}>
+            <Text style={styles.modalDate}>{legalEffectiveDate}</Text>
+            {(legalModal === "privacy" ? privacySections : termsSections).map((section, index) => <View key={index} style={styles.modalSection}>
+              <Text style={styles.modalHeading}>{section.heading}</Text>
+              <Text style={styles.modalText}>{section.text}</Text>
+            </View>)}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   </View>;
 }
 
@@ -139,4 +159,17 @@ const styles = StyleSheet.create({
   linkText: { color: colors.ink, fontSize: 14, fontWeight: "700" },
   chevron: { color: colors.muted, fontSize: 20, fontWeight: "700" },
   version: { color: colors.muted, fontSize: 11, textAlign: "center", marginTop: 14 },
+  // Same bottom sheet as the Muu tab's info modals.
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)" },
+  modalBackdropTap: { flex: 1 },
+  modalBox: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "85%" },
+  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 22, paddingTop: 22, paddingBottom: 8 },
+  modalTitle: { color: colors.ink, fontSize: 18, fontWeight: "800", flex: 1 },
+  modalClose: { color: colors.muted, fontSize: 24, fontWeight: "600", lineHeight: 24 },
+  modalContent: { flexGrow: 0 },
+  modalContentInner: { paddingHorizontal: 22, paddingBottom: 34 },
+  modalDate: { color: colors.muted, fontSize: 12, marginBottom: 14 },
+  modalSection: { marginBottom: 18 },
+  modalHeading: { color: colors.green, fontSize: 14, fontWeight: "900", marginBottom: 8 },
+  modalText: { color: colors.ink, fontSize: 13, lineHeight: 19 },
 });
