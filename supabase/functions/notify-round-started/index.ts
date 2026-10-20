@@ -13,7 +13,7 @@ const internalSecret = Deno.env.get("FUNCTION_INTERNAL_SECRET");
 
 type WebhookPayload = {
   table: string;
-  record: { id: string; league_id: string; round_type: "regular" | "qualification"; status: string };
+  record: { id: string; name: string; league_id: string; round_type: "regular" | "qualification"; status: string };
 };
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
@@ -32,18 +32,16 @@ Deno.serve(async (req) => {
   }
   if (payload.table !== "league_rounds" || payload.record?.status !== "active") return json({ sent: 0 });
 
-  const { id: roundId, league_id: leagueId, round_type: roundType } = payload.record;
-  const [{ data: league }, { data: rounds }, { data: teams }] = await Promise.all([
+  const { name: roundName, league_id: leagueId, round_type: roundType } = payload.record;
+  const [{ data: league }, { data: teams }] = await Promise.all([
     supabaseAdmin.from("leagues").select("name").eq("id", leagueId).single(),
-    supabaseAdmin.from("league_rounds").select("id").eq("league_id", leagueId).eq("round_type", roundType).order("start_date").order("created_at"),
     supabaseAdmin.from("teams").select("id").eq("league_id", leagueId),
   ]);
 
-  // Rounds are numbered within their type: "Kierros 2", "Karsintakierros 1".
-  const roundNumber = (rounds ?? []).findIndex((round) => round.id === roundId) + 1;
+  // The round's own name as the admin gave it, e.g. "Kierros 2".
   const body = roundType === "qualification"
-    ? `Karsintakierros ${roundNumber} on alkanut, sovi ja pelaa mahdollinen ottelusi ⭐️`
-    : `Kierros ${roundNumber} on alkanut, sovi pelien ajankohdat ja pelaa ottelut ⭐️`;
+    ? `${roundName} on alkanut, sovi ja pelaa mahdollinen ottelusi ⭐️`
+    : `${roundName} on alkanut, sovi pelien ajankohdat ja pelaa ottelut ⭐️`;
 
   const teamIds = (teams ?? []).map((team) => team.id);
   if (teamIds.length === 0) return json({ sent: 0 });
