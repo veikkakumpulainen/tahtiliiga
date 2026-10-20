@@ -59,3 +59,10 @@ example
 # Supabase local development
 supabase/.temp/
 supabase/.branches/
+
+# Local production database dumps (contain personal data)
+backups/
+
+# Local notes and editor/agent settings
+Tahtiliiga-testiohje.txt
+.claude/

@@ -1,56 +1,76 @@
-# Welcome to your Expo app 👋
+# Tähtiliiga
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Mobiili- ja verkkosovellus padelin harrastesarjojen järjestämiseen. Pelaajat ilmoittautuvat sarjoihin joukkueena, sopivat otteluajat oman lohkonsa chatissa, kirjaavat tulokset ja seuraavat sarjataulukoita. Järjestäjä hallitsee sarjoja, kierroksia ja lohkoja samasta sovelluksesta.
 
-## Get started
+## Ominaisuudet
 
-1. Install dependencies
+**Pelaajille**
+- Rekisteröityminen, sähköpostivahvistus ja salasanan palautus
+- Joukkueen kokoaminen pelaajahaulla ja kutsuilla, kapteenin valinta
+- Lohkon otteluparit, ottelun ajan ja paikan sopiminen
+- Tulosten kirjaus (erät ja tiebreakit tai luovutusvoitto), ottelukohtaiset kokoonpanot
+- Varapelaajat, jotka vastustajajoukkue hyväksyy
+- Lohko- ja kokonaistaulukot, jotka päivittyvät automaattisesti
+- Reaaliaikaiset chatit (lohko, karsintaottelu, yhteisö) ja lukemattomien viestien merkinnät
+- Push-ilmoitukset uusista viesteistä, kierroksen alkamisesta ja sopimattomista otteluista
+- Tilin poisto sovelluksen sisältä
 
-   ```bash
-   npm install
-   ```
+**Järjestäjälle**
+- Sarjojen, kierrosten, kategorioiden ja pelipaikkojen hallinta
+- Automaattinen lohkojako taitotason mukaan
+- Karsintakierrokset ja tavalliset kierrokset nousuineen ja putoamisineen
+- Joukkueiden ja kokoonpanojen muokkaus poikkeustilanteissa
+- Maksujen seuranta (Stripe)
 
-2. Start the app
+## Tekniikka
 
-   ```bash
-   npx expo start
-   ```
+| Osa | Teknologia |
+| --- | --- |
+| Sovellus | React Native, Expo (SDK 57), Expo Router, TypeScript |
+| Verkkoversio | React Native Web, julkaisu Vercelissä |
+| Backend | Supabase: PostgreSQL, Auth, Realtime |
+| Palvelinlogiikka | PostgreSQL-funktiot (RPC) ja Supabase Edge Functions (Deno) |
+| Ilmoitukset | Expo Notifications, ajastetut ja triggeröidyt Edge Functionit |
+| Maksut | Stripe webhookit |
 
-In the output, you'll find options to open the app in a
+### Tietoturva ja datamalli
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+Sovelluksessa ei ole omaa API-palvelinta. Pääsynhallinta on toteutettu tietokannassa PostgreSQL:n Row Level Securityllä ja `security definer` -funktioilla. Esimerkiksi tulosten kirjaus, varapelaajien hyväksyntä ja lohkojako tapahtuvat tietokantafunktioissa, jotka tarkistavat käyttäjän roolin ja sarjan tilan. Asiakas ei siis voi ohittaa sääntöjä.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+Tietokannan rakenne on kehittynyt yli 120 migraation kautta ([supabase/migrations/](supabase/migrations/)). Service role -avainta käytetään vain Edge Functioneissa.
 
-## Get a fresh project
+## Rakenne
 
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+src/
+  app/          Expo Router -näkymät (auth, välilehdet, sarjat, admin, profiili)
+  components/   Jaetut UI-komponentit
+  context/      Auth- ja sovellustila
+  hooks/        Datahaut ja reaaliaikaiset tilaukset
+  lib/          Supabase-asiakas ja apufunktiot
+supabase/
+  migrations/   Tietokantaskeema, RLS-säännöt ja RPC-funktiot
+  functions/    Edge Functionit (ilmoitukset, Stripe-webhook, tilin poisto)
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Ajaminen paikallisesti
 
-### Other setup steps
+Tarvitset oman Supabase-projektin. Luo projektin juureen `.env`:
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+```bash
+EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
 
-## Learn more
+Aja migraatiot ja käynnistä sovellus:
 
-To learn more about developing your project with Expo, look at the following resources:
+```bash
+npm install
+npx supabase link --project-ref <oma-projekti>
+npx supabase db push
+npm start          # tai: npm run web
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Lisenssi
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Koodi on julkisena portfoliotarkoituksessa. Kaikki oikeudet pidätetään.
