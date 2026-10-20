@@ -10,10 +10,11 @@ import { supabase } from "../lib/supabase";
 import { colors } from "../theme";
 
 // Columns of notification_preferences; a missing row means everything is on.
-type Preferences = { muted_all: boolean; round_starts: boolean; group_messages: boolean; qualification_messages: boolean; community_messages: boolean };
-const defaultPreferences: Preferences = { muted_all: false, round_starts: true, group_messages: true, qualification_messages: true, community_messages: true };
+type Preferences = { muted_all: boolean; round_starts: boolean; match_reminders: boolean; group_messages: boolean; qualification_messages: boolean; community_messages: boolean };
+const defaultPreferences: Preferences = { muted_all: false, round_starts: true, match_reminders: true, group_messages: true, qualification_messages: true, community_messages: true };
 const categoryRows: [keyof Preferences, string][] = [
   ["round_starts", "Kierrosten alkaminen"],
+  ["match_reminders", "Muistutus sopimattomista otteluista (kapteenit)"],
   ["group_messages", "Lohkochatin viestit"],
   ["qualification_messages", "Karsintachatin viestit"],
   ["community_messages", "Tiedotteet"],
@@ -36,7 +37,7 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     if (!supabase || !session?.user.id) return;
-    void supabase.from("notification_preferences").select("muted_all, round_starts, group_messages, qualification_messages, community_messages").eq("user_id", session.user.id).maybeSingle().then(({ data }) => {
+    void supabase.from("notification_preferences").select("muted_all, round_starts, match_reminders, group_messages, qualification_messages, community_messages").eq("user_id", session.user.id).maybeSingle().then(({ data }) => {
       if (data) setPreferences(data as Preferences);
       setLoadingPreferences(false);
     });

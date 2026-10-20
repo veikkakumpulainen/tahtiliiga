@@ -49,7 +49,7 @@ export async function resolveRecipientIds(target: NotificationTarget, excludeUse
 }
 
 // Columns of notification_preferences, one per kind of notification.
-export type NotificationCategory = "group_messages" | "qualification_messages" | "community_messages" | "round_starts";
+export type NotificationCategory = "group_messages" | "qualification_messages" | "community_messages" | "round_starts" | "match_reminders";
 export type MutableThread = { type: "group" | "qualification" | "community"; id: string };
 
 // Drops users who muted everything, this kind of notification (when given;
