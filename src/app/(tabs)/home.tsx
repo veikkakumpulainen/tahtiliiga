@@ -304,7 +304,8 @@ export default function HomeScreen() {
         {isRegistrable(league) ? <Pressable style={styles.browseButton} onPress={() => router.push(`/league/${league.id}/register` as never)}><Text style={styles.browseText}>Ilmoittaudu joukkueella</Text><Text style={styles.arrow}>→</Text></Pressable>
           : league.status === "upcoming" ? <Text style={styles.cardNote}>{league.registration_opens_at ? `Ilmoittautuminen aukeaa ${formatFinnishDate(league.registration_opens_at)}.` : "Ilmoittautuminen avautuu pian."}</Text> : null}
       </View>)}
-    </> : !primary && !(teams.length === 0 && invitations.length > 0) ? <View style={styles.openLeagueCard}>      {viewedClosedLeague ? <>
+    </> : !primary && !(teams.length === 0 && invitations.length > 0) ? <View style={styles.openLeagueCard}>
+      {viewedClosedLeague ? <>
         <Text style={styles.categoryText}>Padel - Avoin ja Mixty</Text>
         <Text style={styles.cardNote}>{viewedClosedLeague.status === "finished" ? "Liiga on päättynyt." : "Liigan ilmoittautuminen on suljettu."}</Text>
       </> : ongoingLeague && showsOngoingLeague ? <>
