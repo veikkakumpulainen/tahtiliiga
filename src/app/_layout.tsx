@@ -1,5 +1,6 @@
 import { Analytics } from "@vercel/analytics/react";
 import { Stack } from "expo-router";
+import Head from "expo-router/head";
 import { Platform } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { ChatNotifyProvider } from "../context/ChatNotifyContext";
@@ -17,6 +18,9 @@ export default function RootLayout() {
     <SelectedLeagueProvider>
       <StatusBar style="light" />
       {Platform.OS === "web" ? <Analytics /> : null}
+      {/* expo-router's head renders its own (empty) <title> ahead of any in
+          +html.tsx, so the browser tab title has to be set through it. */}
+      {Platform.OS === "web" ? <Head><title>Tähtiliiga</title></Head> : null}
       <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
