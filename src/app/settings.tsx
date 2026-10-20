@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Redirect, router } from "expo-router";
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import Constants from "expo-constants";
 import DeleteAccountButton from "../components/DeleteAccountButton";
 import ScreenHeader from "../components/ScreenHeader";
@@ -19,16 +19,19 @@ const categoryRows: [keyof Preferences, string][] = [
   ["community_messages", "Tiedotteet"],
 ];
 
+// The theme is dark, so the off-state thumb needs a light colour to show
+// against its track (a surface-coloured thumb disappeared on Android).
+const switchColors = (on: boolean) => ({
+  trackColor: { false: colors.line, true: colors.green },
+  thumbColor: on ? colors.ink : colors.muted,
+  ios_backgroundColor: colors.line,
+});
+
 export default function SettingsScreen() {
   const { session, loading: loadingSession } = useAuth();
   const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
   const [loadingPreferences, setLoadingPreferences] = useState(true);
   const [preferencesError, setPreferencesError] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmation, setConfirmation] = useState("");
-  const [savingPassword, setSavingPassword] = useState(false);
-  const [passwordMessage, setPasswordMessage] = useState("");
-  const [passwordSaved, setPasswordSaved] = useState(false);
   const [legalModal, setLegalModal] = useState<"privacy" | "terms" | null>(null);
 
   useEffect(() => {
@@ -50,22 +53,6 @@ export default function SettingsScreen() {
     if (error) { setPreferences(previous); setPreferencesError("Asetuksen tallennus epäonnistui. Yritä uudelleen."); }
   };
 
-  const savePassword = async () => {
-    if (!supabase) return;
-    if (password.length < 8 || password !== confirmation) {
-      setPasswordSaved(false);
-      setPasswordMessage(password.length < 8 ? "Salasanassa tulee olla vähintään 8 merkkiä." : "Salasanojen tulee olla samat.");
-      return;
-    }
-    setSavingPassword(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    setSavingPassword(false);
-    setPasswordSaved(!error);
-    if (error) { setPasswordMessage(`Salasanan vaihto epäonnistui: ${error.message}`); return; }
-    setPassword(""); setConfirmation("");
-    setPasswordMessage("Salasana vaihdettu.");
-  };
-
   if (loadingSession) return <View style={styles.loading}><ActivityIndicator color={colors.lime} /></View>;
   if (!session) return <Redirect href={Platform.OS === "web" ? "/" : "/(auth)/login"} />;
 
@@ -82,23 +69,15 @@ export default function SettingsScreen() {
         {loadingPreferences ? <ActivityIndicator color={colors.green} style={styles.sectionLoading} /> : <View style={styles.card}>
           <View style={styles.switchRow}>
             <Text style={styles.switchLabelStrong}>Hiljennä kaikki ilmoitukset</Text>
-            <Switch value={preferences.muted_all} onValueChange={(value) => void setPreference("muted_all", value)} trackColor={{ false: colors.line, true: colors.green }} thumbColor={colors.surface} />
+            <Switch value={preferences.muted_all} onValueChange={(value) => void setPreference("muted_all", value)} {...switchColors(preferences.muted_all)} />
           </View>
           {categoryRows.map(([key, label]) => <View key={key} style={[styles.switchRow, styles.switchRowBorder]}>
             <Text style={[styles.switchLabel, preferences.muted_all && styles.switchLabelDisabled]}>{label}</Text>
-            <Switch value={!preferences.muted_all && preferences[key]} disabled={preferences.muted_all} onValueChange={(value) => void setPreference(key, value)} trackColor={{ false: colors.line, true: colors.green }} thumbColor={colors.surface} />
+            <Switch value={!preferences.muted_all && preferences[key]} disabled={preferences.muted_all} onValueChange={(value) => void setPreference(key, value)} {...switchColors(!preferences.muted_all && preferences[key])} />
           </View>)}
         </View>}
         {preferencesError ? <Text style={styles.error}>{preferencesError}</Text> : null}
         <Text style={styles.hint}>Yksittäisen keskustelun voit hiljentää Chat-välilehdellä pitämällä keskustelua pohjassa{Platform.OS === "web" ? " tai klikkaamalla sitä hiiren oikealla painikkeella" : ""}. Ilmoitukset tulevat puhelimen sovellukseen.</Text>
-
-        <Text style={styles.label}>VAIHDA SALASANA</Text>
-        <TextInput value={password} onChangeText={setPassword} secureTextEntry placeholder="Uusi salasana, vähintään 8 merkkiä" placeholderTextColor={colors.muted} style={styles.input} />
-        <TextInput value={confirmation} onChangeText={setConfirmation} secureTextEntry placeholder="Kirjoita salasana uudelleen" placeholderTextColor={colors.muted} style={[styles.input, styles.inputSpacing]} />
-        {passwordMessage ? <Text style={passwordSaved ? styles.success : styles.error}>{passwordMessage}</Text> : null}
-        <Pressable onPress={() => void savePassword()} disabled={savingPassword} style={styles.button}>
-          {savingPassword ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.buttonText}>Vaihda salasana</Text>}
-        </Pressable>
 
         <Text style={styles.label}>TIETOSUOJA JA EHDOT</Text>
         <View style={styles.card}>
@@ -149,11 +128,6 @@ const styles = StyleSheet.create({
   switchLabel: { flex: 1, color: colors.ink, fontSize: 14, fontWeight: "600" },
   switchLabelDisabled: { color: colors.muted },
   hint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 8 },
-  input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, color: colors.ink, fontSize: 15, padding: 14 },
-  inputSpacing: { marginTop: 10 },
-  button: { backgroundColor: colors.green, borderRadius: 13, padding: 15, alignItems: "center", marginTop: 14 },
-  buttonText: { color: colors.surface, fontSize: 14, fontWeight: "800" },
-  success: { color: colors.greenBright, fontSize: 13, fontWeight: "700", marginTop: 10 },
   error: { color: colors.coral, fontSize: 13, lineHeight: 19, marginTop: 10 },
   linkRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14 },
   linkText: { color: colors.ink, fontSize: 14, fontWeight: "700" },

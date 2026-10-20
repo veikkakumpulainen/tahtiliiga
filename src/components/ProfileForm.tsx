@@ -31,6 +31,11 @@ export default function ProfileForm() {
   const [message, setMessage] = useState("");
   const [sendingVerification, setSendingVerification] = useState(false);
   const [verificationMessage, setVerificationMessage] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [passwordSaved, setPasswordSaved] = useState(false);
 
   const emailVerified = Boolean(profile?.email_verified_at);
 
@@ -103,6 +108,22 @@ export default function ProfileForm() {
     setVerificationMessage(error ? (waitSeconds ? `Odota ${waitSeconds} sekuntia ennen kuin voit pyytää uuden linkin.` : `Lähetys epäonnistui: ${error.message}`) : "Vahvistuslinkki lähetetty sähköpostiisi.");
   };
 
+  const savePassword = async () => {
+    if (!supabase) return;
+    if (password.length < 8 || password !== confirmation) {
+      setPasswordSaved(false);
+      setPasswordMessage(password.length < 8 ? "Salasanassa tulee olla vähintään 8 merkkiä." : "Salasanojen tulee olla samat.");
+      return;
+    }
+    setSavingPassword(true);
+    const { error } = await supabase.auth.updateUser({ password });
+    setSavingPassword(false);
+    setPasswordSaved(!error);
+    if (error) { setPasswordMessage(`Salasanan vaihto epäonnistui: ${error.message}`); return; }
+    setPassword(""); setConfirmation("");
+    setPasswordMessage("Salasana vaihdettu.");
+  };
+
   if (loading) return <View style={styles.loadingBox}><ActivityIndicator color={colors.green} /></View>;
 
   return <View>
@@ -150,6 +171,14 @@ export default function ProfileForm() {
     <Pressable onPress={() => void saveProfile()} disabled={saving} style={styles.save}>
       {saving ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.saveText}>Tallenna tiedot</Text>}
     </Pressable>
+
+    <Text style={[styles.label, styles.sectionLabel]}>VAIHDA SALASANA</Text>
+    <TextInput value={password} onChangeText={setPassword} secureTextEntry placeholder="Uusi salasana, vähintään 8 merkkiä" placeholderTextColor={colors.muted} style={styles.input} />
+    <TextInput value={confirmation} onChangeText={setConfirmation} secureTextEntry placeholder="Kirjoita salasana uudelleen" placeholderTextColor={colors.muted} style={[styles.input, styles.inputSpacing]} />
+    {passwordMessage ? <Text style={passwordSaved ? styles.success : styles.error}>{passwordMessage}</Text> : null}
+    <Pressable onPress={() => void savePassword()} disabled={savingPassword} style={styles.save}>
+      {savingPassword ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.saveText}>Vaihda salasana</Text>}
+    </Pressable>
   </View>;
 }
 
@@ -174,4 +203,6 @@ const styles = StyleSheet.create({
   error: { color: colors.coral, fontSize: 13, lineHeight: 19, marginTop: 16 },
   save: { backgroundColor: colors.green, borderRadius: 13, padding: 16, alignItems: "center", marginTop: 22 },
   saveText: { color: colors.surface, fontSize: 15, fontWeight: "800" },
+  sectionLabel: { marginTop: 34 },
+  inputSpacing: { marginTop: 10 },
 });
