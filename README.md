@@ -2,7 +2,12 @@
 
 Mobiili- ja verkkosovellus padelin harrastesarjojen järjestämiseen. Pelaajat ilmoittautuvat sarjoihin joukkueena, sopivat otteluajat oman lohkonsa chatissa, kirjaavat tulokset ja seuraavat sarjataulukoita. Järjestäjä hallitsee sarjoja, kierroksia ja lohkoja samasta sovelluksesta.
 
-Verkkoversio on käytössä osoitteessa [tähtiliiga.fi](https://tähtiliiga.fi). Android- ja iOS-versiot ovat tulossa Google Playhin ja App Storeen.
+Verkkoversio on käytössä osoitteessa [tähtiliiga.fi](https://tähtiliiga.fi), ja sillä on yli 60 rekisteröitynyttä käyttäjää. Android- ja iOS-versiot ovat tulossa Google Playhin ja App Storeen.
+
+<p>
+  <img src="docs/etusivu.png" alt="Etusivu: oma joukkue ja lohkon otteluparit" width="300">
+  <img src="docs/liiga.png" alt="Sarjataulukko" width="300">
+</p>
 
 ## Ominaisuudet
 
