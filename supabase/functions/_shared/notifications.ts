@@ -49,15 +49,16 @@ export async function resolveRecipientIds(target: NotificationTarget, excludeUse
 }
 
 // Columns of notification_preferences, one per kind of notification.
-export type NotificationCategory = "group_messages" | "qualification_messages" | "community_messages" | "admin_notifications";
+export type NotificationCategory = "group_messages" | "qualification_messages" | "community_messages" | "round_starts";
 export type MutableThread = { type: "group" | "qualification" | "community"; id: string };
 
-// Drops users who muted everything, this kind of notification, or (when
-// given) this one chat thread. Users without a preferences row get all.
-export async function filterMutedRecipients(userIds: string[], category: NotificationCategory, thread?: MutableThread): Promise<string[]> {
+// Drops users who muted everything, this kind of notification (when given;
+// admin notifications have no category of their own), or this one chat
+// thread (when given). Users without a preferences row get all.
+export async function filterMutedRecipients(userIds: string[], category?: NotificationCategory, thread?: MutableThread): Promise<string[]> {
   if (userIds.length === 0) return userIds;
   const [{ data: preferenceRows, error: preferenceError }, { data: mutedRows, error: mutedError }] = await Promise.all([
-    supabaseAdmin.from("notification_preferences").select(`user_id, muted_all, ${category}`).in("user_id", userIds),
+    supabaseAdmin.from("notification_preferences").select(category ? `user_id, muted_all, ${category}` : "user_id, muted_all").in("user_id", userIds),
     thread
       ? supabaseAdmin.from("muted_conversations").select("user_id").eq("thread_type", thread.type).eq("thread_id", thread.id).in("user_id", userIds)
       : Promise.resolve({ data: [] as { user_id: string }[], error: null }),
@@ -65,7 +66,7 @@ export async function filterMutedRecipients(userIds: string[], category: Notific
   if (preferenceError) console.warn("[push] notification_preferences query failed:", preferenceError);
   if (mutedError) console.warn("[push] muted_conversations query failed:", mutedError);
   const muted = new Set<string>([
-    ...((preferenceRows ?? []) as unknown as Record<string, unknown>[]).filter((row) => row.muted_all === true || row[category] === false).map((row) => row.user_id as string),
+    ...((preferenceRows ?? []) as unknown as Record<string, unknown>[]).filter((row) => row.muted_all === true || (category !== undefined && row[category] === false)).map((row) => row.user_id as string),
     ...((mutedRows ?? []) as { user_id: string }[]).map((row) => row.user_id),
   ]);
   return userIds.filter((id) => !muted.has(id));

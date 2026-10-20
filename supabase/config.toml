@@ -10,6 +10,9 @@ verify_jwt = false
 [functions.notify-qualification-message]
 verify_jwt = false
 
+[functions.notify-round-started]
+verify_jwt = false
+
 [auth]
 additional_redirect_urls = []
 site_url = "http://localhost:3000"

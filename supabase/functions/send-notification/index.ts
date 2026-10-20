@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
     return new Response("Missing title, body or target", { status: 400, headers: corsHeaders });
   }
 
-  const recipients = await filterMutedRecipients(await resolveRecipientIds(payload.target, payload.target.excludeUserId), "admin_notifications");
+  const recipients = await filterMutedRecipients(await resolveRecipientIds(payload.target, payload.target.excludeUserId));
   const sent = await sendExpoPush(recipients, { title: payload.title.trim(), body: payload.body.trim(), data: payload.data });
 
   return new Response(JSON.stringify({ sent, recipients: recipients.length }), { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } });
