@@ -72,16 +72,16 @@ $$;
 revoke all on function public.send_round_reminders() from public;
 
 -- rls_auto_enable_trigger would try to enable RLS on pg_cron's own tables
--- (see 088 for the same workaround with pg_net).
-alter event trigger rls_auto_enable_trigger disable;
-
+-- (see 088 for the same workaround with pg_net). Not every project has it.
 do $$
+declare
+  has_rls_trigger boolean := exists (select 1 from pg_event_trigger where evtname = 'rls_auto_enable_trigger');
 begin
   if not exists (select 1 from pg_extension where extname = 'pg_cron') then
+    if has_rls_trigger then execute 'alter event trigger rls_auto_enable_trigger disable'; end if;
     create extension pg_cron with schema pg_catalog;
+    if has_rls_trigger then execute 'alter event trigger rls_auto_enable_trigger enable'; end if;
   end if;
 end $$;
-
-alter event trigger rls_auto_enable_trigger enable;
 
 select cron.schedule('send-round-reminders', '0 * * * *', 'select public.send_round_reminders()');
