@@ -405,7 +405,7 @@ export default function ChatTabScreen() {
         scrollRef.current?.scrollTo({ y: Math.max(0, event.nativeEvent.layout.y - 12), animated: false });
         setScrollTargetId(null);
       }} {...(Platform.OS === "web" && message.own ? { onContextMenu: (event: { preventDefault: () => void }) => { event.preventDefault(); openMessageActions(message); } } : {})}>
-        <Text style={styles.sender}>{message.name} <Text style={styles.team}>· {message.sub}</Text></Text>
+        {message.own ? null : <Text style={styles.sender}>{message.name} <Text style={styles.team}>· {message.sub}</Text></Text>}
         <Text style={styles.body}>{message.body}<Text style={styles.time}>  {message.time}</Text></Text>
       </Pressable>)}
     </ScrollView>
