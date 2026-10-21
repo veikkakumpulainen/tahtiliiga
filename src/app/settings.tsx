@@ -10,14 +10,15 @@ import { supabase } from "../lib/supabase";
 import { colors } from "../theme";
 
 // Columns of notification_preferences; a missing row means everything is on.
-type Preferences = { muted_all: boolean; round_starts: boolean; match_reminders: boolean; group_messages: boolean; qualification_messages: boolean; community_messages: boolean };
-const defaultPreferences: Preferences = { muted_all: false, round_starts: true, match_reminders: true, group_messages: true, qualification_messages: true, community_messages: true };
-const categoryRows: [keyof Preferences, string][] = [
-  ["round_starts", "Kierrosten alkaminen"],
-  ["match_reminders", "Muistutus sopimattomista otteluista (kapteenit)"],
-  ["group_messages", "Lohkochatin viestit"],
-  ["qualification_messages", "Karsintachatin viestit"],
-  ["community_messages", "Tiedotteet"],
+type Preferences = { muted_all: boolean; round_starts: boolean; match_reminders: boolean; group_messages: boolean; qualification_messages: boolean; direct_messages: boolean; community_messages: boolean };
+const defaultPreferences: Preferences = { muted_all: false, round_starts: true, match_reminders: true, group_messages: true, qualification_messages: true, direct_messages: true, community_messages: true };
+// A row can drive several columns: "Chat-viestit" covers every chat except
+// Tiedotteet, so it's on only when all of its columns are on.
+const categoryRows: [string, (keyof Preferences)[], string][] = [
+  ["round_starts", ["round_starts"], "Kierrosten alkaminen"],
+  ["match_reminders", ["match_reminders"], "Muistutus sopimattomista otteluista (kapteenit)"],
+  ["chat_messages", ["group_messages", "qualification_messages", "direct_messages"], "Chat-viestit"],
+  ["community_messages", ["community_messages"], "Tiedotteet"],
 ];
 
 // The theme is dark, so the off-state thumb needs a light colour to show
@@ -37,17 +38,17 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     if (!supabase || !session?.user.id) return;
-    void supabase.from("notification_preferences").select("muted_all, round_starts, match_reminders, group_messages, qualification_messages, community_messages").eq("user_id", session.user.id).maybeSingle().then(({ data }) => {
+    void supabase.from("notification_preferences").select("muted_all, round_starts, match_reminders, group_messages, qualification_messages, direct_messages, community_messages").eq("user_id", session.user.id).maybeSingle().then(({ data }) => {
       if (data) setPreferences(data as Preferences);
       setLoadingPreferences(false);
     });
   }, [session?.user.id]);
 
   // Saves at once; a failed save puts the switch back.
-  const setPreference = async (key: keyof Preferences, value: boolean) => {
+  const setPreference = async (keys: (keyof Preferences)[], value: boolean) => {
     if (!supabase || !session?.user.id) return;
     const previous = preferences;
-    const next = { ...preferences, [key]: value };
+    const next = { ...preferences, ...Object.fromEntries(keys.map((key) => [key, value])) };
     setPreferences(next);
     setPreferencesError("");
     const { error } = await supabase.from("notification_preferences").upsert({ user_id: session.user.id, ...next });
@@ -70,12 +71,15 @@ export default function SettingsScreen() {
         {loadingPreferences ? <ActivityIndicator color={colors.green} style={styles.sectionLoading} /> : <View style={styles.card}>
           <View style={styles.switchRow}>
             <Text style={styles.switchLabelStrong}>Hiljennä kaikki ilmoitukset</Text>
-            <Switch value={preferences.muted_all} onValueChange={(value) => void setPreference("muted_all", value)} {...switchColors(preferences.muted_all)} />
+            <Switch value={preferences.muted_all} onValueChange={(value) => void setPreference(["muted_all"], value)} {...switchColors(preferences.muted_all)} />
           </View>
-          {categoryRows.map(([key, label]) => <View key={key} style={[styles.switchRow, styles.switchRowBorder]}>
-            <Text style={[styles.switchLabel, preferences.muted_all && styles.switchLabelDisabled]}>{label}</Text>
-            <Switch value={!preferences.muted_all && preferences[key]} disabled={preferences.muted_all} onValueChange={(value) => void setPreference(key, value)} {...switchColors(!preferences.muted_all && preferences[key])} />
-          </View>)}
+          {categoryRows.map(([rowKey, keys, label]) => {
+            const on = !preferences.muted_all && keys.every((key) => preferences[key]);
+            return <View key={rowKey} style={[styles.switchRow, styles.switchRowBorder]}>
+              <Text style={[styles.switchLabel, preferences.muted_all && styles.switchLabelDisabled]}>{label}</Text>
+              <Switch value={on} disabled={preferences.muted_all} onValueChange={(value) => void setPreference(keys, value)} {...switchColors(on)} />
+            </View>;
+          })}
         </View>}
         {preferencesError ? <Text style={styles.error}>{preferencesError}</Text> : null}
         <Text style={styles.hint}>Yksittäisen keskustelun voit hiljentää Chat-välilehdellä pitämällä keskustelua pohjassa{Platform.OS === "web" ? " tai klikkaamalla sitä hiiren oikealla painikkeella" : ""}. Ilmoitukset tulevat puhelimen sovellukseen.</Text>

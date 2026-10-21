@@ -26,7 +26,7 @@ async function findUnread(rows: Record<string, MessageRow[]>, keyPrefix: string,
   return unread;
 }
 
-export type ChatNotifyEvent = { group_id?: string; league_id?: string; match_id?: string; message_id: string; receivedAt: number };
+export type ChatNotifyEvent = { group_id?: string; league_id?: string; match_id?: string; direct_id?: string; message_id: string; receivedAt: number };
 export type ChatDeleteEvent = { messageIds: string[]; receivedAt: number };
 
 type ChatNotifyContextValue = {
@@ -35,9 +35,11 @@ type ChatNotifyContextValue = {
   unreadGroupIds: Set<string>;
   unreadLeagueIds: Set<string>;
   unreadQualificationMatchIds: Set<string>;
+  unreadDirectIds: Set<string>;
   markGroupRead: (groupId: string) => void;
   markLeagueRead: (leagueId: string) => void;
   markQualificationMatchRead: (matchId: string) => void;
+  markDirectRead: (conversationId: string) => void;
 };
 
 const emptySet = new Set<string>();
@@ -47,9 +49,11 @@ const ChatNotifyContext = createContext<ChatNotifyContextValue>({
   unreadGroupIds: emptySet,
   unreadLeagueIds: emptySet,
   unreadQualificationMatchIds: emptySet,
+  unreadDirectIds: emptySet,
   markGroupRead: () => {},
   markLeagueRead: () => {},
   markQualificationMatchRead: () => {},
+  markDirectRead: () => {},
 });
 
 // group_messages/community_messages SELECT is only granted through the
@@ -79,21 +83,23 @@ export function ChatNotifyProvider({ children }: { children: ReactNode }) {
   const [unreadGroupIds, setUnreadGroupIds] = useState<Set<string>>(new Set());
   const [unreadLeagueIds, setUnreadLeagueIds] = useState<Set<string>>(new Set());
   const [unreadQualificationMatchIds, setUnreadQualificationMatchIds] = useState<Set<string>>(new Set());
+  const [unreadDirectIds, setUnreadDirectIds] = useState<Set<string>>(new Set());
 
   const refresh = useCallback(async () => {
-    if (!supabase || !userId) { setUnreadGroupIds(new Set()); setUnreadLeagueIds(new Set()); setUnreadQualificationMatchIds(new Set()); return; }
+    if (!supabase || !userId) { setUnreadGroupIds(new Set()); setUnreadLeagueIds(new Set()); setUnreadQualificationMatchIds(new Set()); setUnreadDirectIds(new Set()); return; }
     const client = supabase;
     const { data: membershipData } = await client.from("team_members").select("team_id, teams(id, league_id)").eq("user_id", userId).eq("status", "active");
     const memberships = (membershipData ?? []) as unknown as { teams?: { id: string; league_id: string } | { id: string; league_id: string }[] | null }[];
     const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : []);
     const teamIds = teamRows.map((team) => team.id);
     const leagueIds = [...new Set(teamRows.map((team) => team.league_id))];
-    if (!teamIds.length) { setUnreadGroupIds(new Set()); setUnreadLeagueIds(new Set()); setUnreadQualificationMatchIds(new Set()); return; }
+    if (!teamIds.length) { setUnreadGroupIds(new Set()); setUnreadLeagueIds(new Set()); setUnreadQualificationMatchIds(new Set()); setUnreadDirectIds(new Set()); return; }
 
-    const [{ data: leagueRows }, { data: groupRows }, { data: qualificationMatchRows }] = await Promise.all([
+    const [{ data: leagueRows }, { data: groupRows }, { data: qualificationMatchRows }, { data: directRows }] = await Promise.all([
       leagueIds.length ? client.from("leagues").select("id, status").in("id", leagueIds) : Promise.resolve({ data: [] }),
       client.from("group_teams").select("group_id, groups(id, league_id)").in("team_id", teamIds),
       client.from("matches").select("id, league_rounds!inner(round_type, status)").or(`home_team_id.in.(${teamIds.join(",")}),away_team_id.in.(${teamIds.join(",")})`).eq("league_rounds.round_type", "qualification").eq("league_rounds.status", "active"),
+      client.from("direct_conversations").select("id"),
     ]);
     const ongoingLeagueIds = new Set((leagueRows ?? []).filter((league) => league.status === "ongoing").map((league) => league.id));
     const groupRelations = (groupRows ?? []) as unknown as { group_id: string; groups: { id: string; league_id: string } | { id: string; league_id: string }[] | null }[];
@@ -102,16 +108,19 @@ export function ChatNotifyProvider({ children }: { children: ReactNode }) {
       return group && ongoingLeagueIds.has(group.league_id) ? row.group_id : null;
     }).filter((id): id is string => Boolean(id)))];
     const qualificationMatchIds = [...new Set((qualificationMatchRows ?? []).map((row) => row.id as string))];
+    const directIds = (directRows ?? []).map((row) => row.id as string);
 
-    const [{ data: groupMessages }, { data: communityMessages }, { data: qualificationMessages }] = await Promise.all([
+    const [{ data: groupMessages }, { data: communityMessages }, { data: qualificationMessages }, { data: directMessages }] = await Promise.all([
       groupIds.length ? client.from("group_messages").select("group_id, user_id, created_at").in("group_id", groupIds) : Promise.resolve({ data: [] }),
       leagueIds.length ? client.from("community_messages").select("league_id, user_id, created_at").in("league_id", leagueIds) : Promise.resolve({ data: [] }),
       qualificationMatchIds.length ? client.from("qualification_messages").select("match_id, user_id, created_at").in("match_id", qualificationMatchIds) : Promise.resolve({ data: [] }),
+      directIds.length ? client.from("direct_messages").select("conversation_id, user_id, created_at").in("conversation_id", directIds) : Promise.resolve({ data: [] }),
     ]);
 
     setUnreadGroupIds(await findUnread(groupBy((groupMessages ?? []) as (MessageRow & { group_id: string })[], "group_id"), "group-chat-read", userId));
     setUnreadLeagueIds(await findUnread(groupBy((communityMessages ?? []) as (MessageRow & { league_id: string })[], "league_id"), "community-chat-read", userId));
     setUnreadQualificationMatchIds(await findUnread(groupBy((qualificationMessages ?? []) as (MessageRow & { match_id: string })[], "match_id"), "qualification-chat-read", userId));
+    setUnreadDirectIds(await findUnread(groupBy((directMessages ?? []) as (MessageRow & { conversation_id: string })[], "conversation_id"), "direct-chat-read", userId));
   }, [userId]);
 
   useEffect(() => { void refresh(); }, [refresh, pathname]);
@@ -130,11 +139,12 @@ export function ChatNotifyProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
       channel = client.channel(`user-notify:${userId}`, { config: { private: true } });
       channel.on("broadcast", { event: "unread_chat" }, ({ payload }) => {
-        const data = payload as { group_id?: string; league_id?: string; match_id?: string; message_id: string };
+        const data = payload as { group_id?: string; league_id?: string; match_id?: string; direct_id?: string; message_id: string };
         setLastNotify({ ...data, receivedAt: Date.now() });
         if (data.group_id) setUnreadGroupIds((current) => current.has(data.group_id!) ? current : new Set(current).add(data.group_id!));
         if (data.league_id) setUnreadLeagueIds((current) => current.has(data.league_id!) ? current : new Set(current).add(data.league_id!));
         if (data.match_id) setUnreadQualificationMatchIds((current) => current.has(data.match_id!) ? current : new Set(current).add(data.match_id!));
+        if (data.direct_id) setUnreadDirectIds((current) => current.has(data.direct_id!) ? current : new Set(current).add(data.direct_id!));
       });
       // Deletions (121_chat_message_delete_broadcast.sql): the open chat drops
       // the ids in place, and the unread dots are recomputed in case the
@@ -164,7 +174,12 @@ export function ChatNotifyProvider({ children }: { children: ReactNode }) {
     setUnreadQualificationMatchIds((current) => { if (!current.has(matchId)) return current; const next = new Set(current); next.delete(matchId); return next; });
   }, [userId]);
 
-  return <ChatNotifyContext.Provider value={{ lastNotify, lastDeleted, unreadGroupIds, unreadLeagueIds, unreadQualificationMatchIds, markGroupRead, markLeagueRead, markQualificationMatchRead }}>{children}</ChatNotifyContext.Provider>;
+  const markDirectRead = useCallback((conversationId: string) => {
+    if (userId) void AsyncStorage.setItem(`direct-chat-read-${userId}-${conversationId}`, new Date().toISOString());
+    setUnreadDirectIds((current) => { if (!current.has(conversationId)) return current; const next = new Set(current); next.delete(conversationId); return next; });
+  }, [userId]);
+
+  return <ChatNotifyContext.Provider value={{ lastNotify, lastDeleted, unreadGroupIds, unreadLeagueIds, unreadQualificationMatchIds, unreadDirectIds, markGroupRead, markLeagueRead, markQualificationMatchRead, markDirectRead }}>{children}</ChatNotifyContext.Provider>;
 }
 
 export function useChatNotify() {

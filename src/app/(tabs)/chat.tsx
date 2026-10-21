@@ -14,13 +14,20 @@ const categoryLabels: Record<string, string> = { avoin: "Avoin", mixty: "Mixty" 
 type Message = { id: string; name: string; sub: string; body: string; time: string; own: boolean };
 type GroupMessageRow = { id: string; message: string; created_at: string; user_id: string; sender_first_name: string; sender_last_name: string; team_name: string };
 type CommunityMessageRow = { id: string; message: string; created_at: string; user_id: string; sender_first_name: string; sender_last_name: string };
-type ThreadType = "group" | "qualification" | "community";
-const messageTables: Record<ThreadType, string> = { group: "group_messages", qualification: "qualification_messages", community: "community_messages" };
-const threadIcons: Record<ThreadType, keyof typeof Ionicons.glyphMap> = { community: "megaphone-outline", group: "people-outline", qualification: "flash-outline" };
-const typeOrder: Record<ThreadType, number> = { community: 0, group: 1, qualification: 2 };
+type ThreadType = "group" | "qualification" | "direct" | "community";
+const messageTables: Record<ThreadType, string> = { group: "group_messages", qualification: "qualification_messages", direct: "direct_messages", community: "community_messages" };
+const threadIcons: Record<ThreadType, keyof typeof Ionicons.glyphMap> = { community: "megaphone-outline", group: "people-outline", qualification: "flash-outline", direct: "chatbubble-outline" };
+const typeOrder: Record<ThreadType, number> = { community: 0, group: 1, qualification: 2, direct: 3 };
+const lastMessageIdKeys: Record<ThreadType, string> = { group: "group_id", qualification: "match_id", direct: "conversation_id", community: "league_id" };
 
-// One row in the chat list. `id` is the group, league or match id the
-// thread's messages hang off, depending on `type`.
+type DirectConversationRow = { id: string; league_id: string; league_name: string; group_name: string; category: string; include_teams: boolean; own_team_id: string; other_team_id: string; other_team_name: string; other_captain_first_name: string; other_captain_last_name: string };
+// A team the user captains whose lohko chat is open, i.e. one they can start
+// private conversations from.
+type ComposeTeam = { teamId: string; teamName: string; groupId: string; title: string; leagueId: string };
+type CaptainChoice = { teamId: string; teamName: string; captainName: string };
+
+// One row in the chat list. `id` is the group, league, match or direct
+// conversation id the thread's messages hang off, depending on `type`.
 type Conversation = {
   key: string;
   type: ThreadType;
@@ -33,10 +40,13 @@ type Conversation = {
   adminOnly: boolean;
   opponentTeamId?: string;
   note?: string;
+  // Direct conversations: the two teams and whether all their members are in.
+  ownTeamId?: string;
+  includeTeams?: boolean;
 };
 type LastMessage = { message: string; created_at: string; user_id: string };
 
-type MembershipTeam = { id: string; name: string; league_id: string; category: string; leagues: { name: string; status: string } | { name: string; status: string }[] | null };
+type MembershipTeam = { id: string; name: string; league_id: string; category: string; captain_id: string; leagues: { name: string; status: string } | { name: string; status: string }[] | null };
 const one = <T,>(value: T | T[] | null | undefined) => (Array.isArray(value) ? value[0] : value) ?? null;
 
 function toMessage(id: string, name: string, sub: string, body: string, createdAt: string, own: boolean): Message {
@@ -53,8 +63,9 @@ function formatListTime(createdAt: string) {
 
 export default function ChatTabScreen() {
   const { session } = useAuth();
-  const { lastNotify, lastDeleted, unreadGroupIds, unreadLeagueIds, unreadQualificationMatchIds, markGroupRead, markLeagueRead, markQualificationMatchRead } = useChatNotify();
+  const { lastNotify, lastDeleted, unreadGroupIds, unreadLeagueIds, unreadQualificationMatchIds, unreadDirectIds, markGroupRead, markLeagueRead, markQualificationMatchRead, markDirectRead } = useChatNotify();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [composeTeams, setComposeTeams] = useState<ComposeTeam[]>([]);
   const [lastMessages, setLastMessages] = useState<Record<string, LastMessage>>({});
   // Conversation keys whose push notifications this user has muted.
   const [mutedKeys, setMutedKeys] = useState<Set<string>>(new Set());
@@ -69,20 +80,23 @@ export default function ChatTabScreen() {
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [scrollTargetId, setScrollTargetId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
-  const { groupId: targetGroupId } = useLocalSearchParams<{ groupId?: string }>();
+  const { groupId: targetGroupId, directId: targetDirectId } = useLocalSearchParams<{ groupId?: string; directId?: string }>();
   const appliedGroupParam = useRef<string | null>(null);
+  const appliedDirectParam = useRef<string | null>(null);
 
   // Builds the list from the user's active team memberships: every league
   // they're registered in gets its Tiedotteet thread; a running league adds
   // the team's lohko chat, which a qualification round replaces with a chat
   // against the qualification opponent (only for teams that have such a match).
+  // Private conversations between teams of the same lohko come on top.
   const loadConversations = useCallback(async () => {
     if (!supabase || !session?.user.id) return;
     const client = supabase;
     const userId = session.user.id;
-    const [{ data: membershipData }, { data: adminData }] = await Promise.all([
-      client.from("team_members").select("teams(id, name, league_id, category, leagues(name, status))").eq("user_id", userId).eq("status", "active"),
+    const [{ data: membershipData }, { data: adminData }, { data: directData }] = await Promise.all([
+      client.from("team_members").select("teams(id, name, league_id, category, captain_id, leagues(name, status))").eq("user_id", userId).eq("status", "active"),
       client.rpc("is_admin"),
+      client.rpc("get_my_direct_conversations"),
     ]);
     const admin = adminData === true;
     const teams = ((membershipData ?? []) as unknown as { teams: MembershipTeam | MembershipTeam[] | null }[])
@@ -118,6 +132,7 @@ export default function ChatTabScreen() {
       next.push({ key: `community:${team.league_id}`, type: "community", id: team.league_id, leagueId: team.league_id, title: "Tiedotteet", subtitle: team.league?.name ?? "", canCompose: admin, adminOnly: false });
     }
     const ownGroupIds = new Set<string>();
+    const nextComposeTeams: ComposeTeam[] = [];
     for (const team of teams) {
       const leagueName = team.league?.name ?? "";
       const category = categoryLabels[team.category] ?? team.category;
@@ -132,6 +147,16 @@ export default function ChatTabScreen() {
       if (!group || team.league?.status !== "ongoing" || qualificationLeagueIds.has(team.league_id)) continue;
       ownGroupIds.add(group.id);
       next.push({ key: `group:${group.id}`, type: "group", id: group.id, leagueId: team.league_id, title: `${group.name} · ${category}`, subtitle: leagueName, canCompose: true, adminOnly: false });
+      if (team.captain_id === userId) nextComposeTeams.push({ teamId: team.id, teamName: team.name, groupId: group.id, title: `${group.name} · ${category}`, leagueId: team.league_id });
+    }
+    for (const row of (directData ?? []) as DirectConversationRow[]) {
+      const captainName = `${row.other_captain_first_name} ${row.other_captain_last_name}`;
+      next.push({
+        key: `direct:${row.id}`, type: "direct", id: row.id, leagueId: row.league_id,
+        title: row.include_teams ? row.other_team_name : `${captainName} · ${row.other_team_name}`,
+        subtitle: `${row.group_name} · ${row.league_name}`,
+        canCompose: true, adminOnly: false, opponentTeamId: row.other_team_id, ownTeamId: row.own_team_id, includeTeams: row.include_teams,
+      });
     }
     for (const league of (adminLeagueRows ?? []) as { id: string; name: string }[]) {
       if (ownLeagueIds.has(league.id)) continue;
@@ -145,22 +170,24 @@ export default function ChatTabScreen() {
     }
 
     const idsOf = (type: ThreadType) => next.filter((conversation) => conversation.type === type).map((conversation) => conversation.id);
-    const [groupIds, leagueIds, matchIds] = [idsOf("group"), idsOf("community"), idsOf("qualification")];
-    const [{ data: groupMessages }, { data: communityMessages }, { data: qualificationMessages }, { data: mutedRows }] = await Promise.all([
+    const [groupIds, leagueIds, matchIds, directIds] = [idsOf("group"), idsOf("community"), idsOf("qualification"), idsOf("direct")];
+    const [{ data: groupMessages }, { data: communityMessages }, { data: qualificationMessages }, { data: directMessages }, { data: mutedRows }] = await Promise.all([
       groupIds.length ? client.from("group_messages").select("group_id, user_id, message, created_at").in("group_id", groupIds).order("created_at", { ascending: false }).limit(1000) : empty,
       leagueIds.length ? client.from("community_messages").select("league_id, user_id, message, created_at").in("league_id", leagueIds).order("created_at", { ascending: false }).limit(1000) : empty,
       matchIds.length ? client.from("qualification_messages").select("match_id, user_id, message, created_at").in("match_id", matchIds).order("created_at", { ascending: false }).limit(1000) : empty,
+      directIds.length ? client.from("direct_messages").select("conversation_id, user_id, message, created_at").in("conversation_id", directIds).order("created_at", { ascending: false }).limit(1000) : empty,
       client.from("muted_conversations").select("thread_type, thread_id").eq("user_id", userId),
     ]);
     setMutedKeys(new Set(((mutedRows ?? []) as { thread_type: string; thread_id: string }[]).map((row) => `${row.thread_type}:${row.thread_id}`)));
     const latest: Record<string, LastMessage> = {};
-    const collect = (rows: unknown[] | null, type: ThreadType, idKey: string) => {
+    const collect = (rows: unknown[] | null, type: ThreadType) => {
       // Rows arrive newest first, so the first one seen per thread is its latest.
-      for (const row of (rows ?? []) as (LastMessage & Record<string, string>)[]) latest[`${type}:${row[idKey]}`] ??= row;
+      for (const row of (rows ?? []) as (LastMessage & Record<string, string>)[]) latest[`${type}:${row[lastMessageIdKeys[type]]}`] ??= row;
     };
-    collect(groupMessages, "group", "group_id");
-    collect(communityMessages, "community", "league_id");
-    collect(qualificationMessages, "qualification", "match_id");
+    collect(groupMessages, "group");
+    collect(communityMessages, "community");
+    collect(qualificationMessages, "qualification");
+    collect(directMessages, "direct");
 
     // Newest activity first, like a messaging app; threads without messages
     // keep their natural order after them.
@@ -168,6 +195,7 @@ export default function ChatTabScreen() {
       (latest[right.key]?.created_at ?? "").localeCompare(latest[left.key]?.created_at ?? "") || typeOrder[left.type] - typeOrder[right.type];
     setConversations([...next.filter((conversation) => !conversation.adminOnly).sort(byActivity), ...next.filter((conversation) => conversation.adminOnly).sort(byActivity)]);
     setLastMessages(latest);
+    setComposeTeams(nextComposeTeams);
     setLoadingList(false);
   }, [session?.user.id]);
 
@@ -186,6 +214,14 @@ export default function ChatTabScreen() {
     setOpenKey(`group:${targetGroupId}`);
   }, [targetGroupId, conversations]);
 
+  // ...and one for a private message with ?directId=...
+  useEffect(() => {
+    if (!targetDirectId || appliedDirectParam.current === targetDirectId) return;
+    if (!conversations.some((conversation) => conversation.key === `direct:${targetDirectId}`)) return;
+    appliedDirectParam.current = targetDirectId;
+    setOpenKey(`direct:${targetDirectId}`);
+  }, [targetDirectId, conversations]);
+
   // Android's back button returns from a thread to the list.
   const closeThread = useCallback(() => { setOpenKey(null); setShowMembers(false); setGroupMembers([]); setDraft(""); setError(""); }, []);
 
@@ -202,6 +238,11 @@ export default function ChatTabScreen() {
     if (openConversation.type === "qualification") {
       const { data } = await supabase.rpc("get_league_team_rosters", { target_league_id: openConversation.leagueId });
       setGroupMembers(((data ?? []) as (TeamRosterRow & { team_id: string })[]).filter((row) => row.team_id === openConversation.opponentTeamId));
+    } else if (openConversation.type === "direct") {
+      // Only the captains until the teams are added (see direct_conversation_participants).
+      const { data } = await supabase.rpc("get_league_team_rosters", { target_league_id: openConversation.leagueId });
+      setGroupMembers(((data ?? []) as TeamRosterRow[]).filter((row) => (row.team_id === openConversation.ownTeamId || row.team_id === openConversation.opponentTeamId)
+        && (openConversation.includeTeams ? row.status === "active" : row.is_captain)));
     } else {
       const { data } = await supabase.rpc("get_group_members", { target_group_id: openConversation.id });
       setGroupMembers((data ?? []) as TeamRosterRow[]);
@@ -233,6 +274,18 @@ export default function ChatTabScreen() {
     markQualificationMatchRead(matchId);
   }, [session?.user.id, markQualificationMatchRead]);
 
+  const loadDirectMessages = useCallback(async (conversationId: string) => {
+    if (!supabase || !session?.user.id) return;
+    const userId = session.user.id;
+    const { data } = await supabase.rpc("get_direct_messages", { target_conversation_id: conversationId });
+    const rows = (data ?? []) as unknown as GroupMessageRow[];
+    const lastRead = await AsyncStorage.getItem(`direct-chat-read-${userId}-${conversationId}`);
+    const firstUnread = rows.find((item) => item.user_id !== userId && (!lastRead || item.created_at > lastRead));
+    setScrollTargetId((firstUnread ?? rows[rows.length - 1])?.id ?? null);
+    setMessages(rows.map((item) => toMessage(item.id, item.user_id === userId ? "Sinä" : `${item.sender_first_name} ${item.sender_last_name}`, item.team_name ?? "", item.message, item.created_at, item.user_id === userId)));
+    markDirectRead(conversationId);
+  }, [session?.user.id, markDirectRead]);
+
   const loadCommunityMessages = useCallback(async (leagueId: string) => {
     if (!supabase || !session?.user.id) return;
     const userId = session.user.id;
@@ -248,8 +301,9 @@ export default function ChatTabScreen() {
   const loadThread = useCallback(async (conversation: Conversation) => {
     if (conversation.type === "group") await loadLohkoMessages(conversation.id);
     else if (conversation.type === "qualification") await loadQualificationMessages(conversation.id);
+    else if (conversation.type === "direct") await loadDirectMessages(conversation.id);
     else await loadCommunityMessages(conversation.id);
-  }, [loadLohkoMessages, loadQualificationMessages, loadCommunityMessages]);
+  }, [loadLohkoMessages, loadQualificationMessages, loadDirectMessages, loadCommunityMessages]);
 
   // Tab screens stay mounted in the background, so loading a thread (which
   // marks it read) must only happen while this tab is actually open -
@@ -281,7 +335,9 @@ export default function ChatTabScreen() {
   useEffect(() => {
     if (!lastNotify || !isFocused) return;
     if (!openConversation) { void loadConversations(); return; }
-    const notifiedId = openConversation.type === "group" ? lastNotify.group_id : openConversation.type === "qualification" ? lastNotify.match_id : lastNotify.league_id;
+    const notifiedId = openConversation.type === "group" ? lastNotify.group_id
+      : openConversation.type === "qualification" ? lastNotify.match_id
+        : openConversation.type === "direct" ? lastNotify.direct_id : lastNotify.league_id;
     if (notifiedId === openConversation.id) void loadThread(openConversation);
     // Only a new ping should trigger this; reruns on list reloads would loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -329,7 +385,9 @@ export default function ChatTabScreen() {
       ? await supabase.from("group_messages").insert({ group_id: openConversation.id, user_id: userId, message: value })
       : openConversation.type === "qualification"
         ? await supabase.from("qualification_messages").insert({ match_id: openConversation.id, user_id: userId, message: value })
-        : await supabase.from("community_messages").insert({ league_id: openConversation.id, user_id: userId, message: value });
+        : openConversation.type === "direct"
+          ? await supabase.from("direct_messages").insert({ conversation_id: openConversation.id, user_id: userId, message: value })
+          : await supabase.from("community_messages").insert({ league_id: openConversation.id, user_id: userId, message: value });
     if (insertError) { setError("Viestin lähetys epäonnistui. Yritä uudelleen."); return; }
     // The DB trigger that pings other members skips the sender, so refetch
     // directly here instead of waiting on a notify event that won't arrive.
@@ -367,7 +425,56 @@ export default function ChatTabScreen() {
 
   const isUnread = (conversation: Conversation) => conversation.type === "group" ? unreadGroupIds.has(conversation.id)
     : conversation.type === "qualification" ? unreadQualificationMatchIds.has(conversation.id)
-      : unreadLeagueIds.has(conversation.id);
+      : conversation.type === "direct" ? unreadDirectIds.has(conversation.id)
+        : unreadLeagueIds.has(conversation.id);
+
+  // "Uusi keskustelu": a captain picks another captain in their lohko. The
+  // server returns the existing conversation if the teams already have one.
+  const [showNewConversation, setShowNewConversation] = useState(false);
+  const [captainChoices, setCaptainChoices] = useState<(CaptainChoice & { composeTeam: ComposeTeam })[]>([]);
+  const [loadingChoices, setLoadingChoices] = useState(false);
+  const [startingTeamId, setStartingTeamId] = useState<string | null>(null);
+  const [newConversationError, setNewConversationError] = useState("");
+
+  const openNewConversation = async () => {
+    if (!supabase) return;
+    const client = supabase;
+    setShowNewConversation(true); setNewConversationError(""); setLoadingChoices(true);
+    const results = await Promise.all(composeTeams.map(async (composeTeam) => {
+      const { data } = await client.rpc("get_group_members", { target_group_id: composeTeam.groupId });
+      return ((data ?? []) as TeamRosterRow[]).filter((row) => row.is_captain && row.team_id !== composeTeam.teamId)
+        .map((row) => ({ teamId: row.team_id, teamName: row.team_name, captainName: `${row.first_name} ${row.last_name}`, composeTeam }));
+    }));
+    setCaptainChoices(results.flat());
+    setLoadingChoices(false);
+  };
+
+  const startConversation = async (choice: CaptainChoice & { composeTeam: ComposeTeam }) => {
+    if (!supabase) return;
+    setStartingTeamId(choice.teamId); setNewConversationError("");
+    const { data, error: startError } = await supabase.rpc("start_direct_conversation", { own_team_id: choice.composeTeam.teamId, other_team_id: choice.teamId });
+    if (startError || !data) { setStartingTeamId(null); setNewConversationError("Keskustelun avaaminen epäonnistui. Yritä uudelleen."); return; }
+    await loadConversations();
+    setStartingTeamId(null);
+    setShowNewConversation(false);
+    setOpenKey(`direct:${data as string}`);
+  };
+
+  const existingDirectKey = (choice: CaptainChoice & { composeTeam: ComposeTeam }) => conversations.find((conversation) => conversation.type === "direct"
+    && conversation.ownTeamId === choice.composeTeam.teamId && conversation.opponentTeamId === choice.teamId)?.key;
+
+  // Opens the conversation to every member of both teams. One-way.
+  const [includingTeams, setIncludingTeams] = useState(false);
+  const [includeError, setIncludeError] = useState("");
+  const includeTeams = async () => {
+    if (!supabase || !openConversation) return;
+    setIncludingTeams(true); setIncludeError("");
+    const { error: includeSaveError } = await supabase.rpc("include_teams_in_direct_conversation", { target_conversation_id: openConversation.id });
+    setIncludingTeams(false);
+    if (includeSaveError) { setIncludeError("Jäsenten lisäys epäonnistui. Yritä uudelleen."); return; }
+    setShowMembers(false);
+    await loadConversations();
+  };
 
   const renderRow = (conversation: Conversation) => {
     const last = lastMessages[conversation.key];
@@ -384,7 +491,8 @@ export default function ChatTabScreen() {
           {mutedKeys.has(conversation.key) ? <Ionicons name="notifications-off-outline" size={14} color={colors.muted} accessibilityLabel="Hiljennetty" /> : null}
           {last ? <Text style={[styles.rowTime, unread && styles.rowTimeUnread]}>{formatListTime(last.created_at)}</Text> : null}
         </View>
-        {last ? <Text style={styles.rowLeague} numberOfLines={1}>{conversation.subtitle}</Text> : null}
+        {/* Admins see many leagues' threads, so only their rows keep the league line. */}
+        {conversation.adminOnly ? <Text style={styles.rowLeague} numberOfLines={1}>{conversation.subtitle}</Text> : null}
         <View style={styles.rowBottom}>
           <Text style={[styles.rowPreview, unread && styles.rowPreviewUnread]} numberOfLines={1}>{last ? preview : "Ei vielä viestejä"}</Text>
           {unread ? <View style={styles.unreadDot} /> : null}
@@ -399,11 +507,12 @@ export default function ChatTabScreen() {
     community: ["Tiedotteet", "Tiedotteisiin liigan järjestäjä lähettää koko liigaa koskevia infoja."],
     group: ["Lohkochat", "Tämä on lohkochat, jossa on kaikki teidän lohkon joukkueiden pelaajat. Lohkochatissa voit sopia pelit lohkosi joukkueita vastaan. Uusi lohkochat avautuu aina, kun uusi kierros alkaa."],
     qualification: ["Karsintachat", "Tässä chatissa on teidän ja karsintavastustajan joukkue. Voit sopia pelin ajankohdan täällä."],
+    direct: ["Yksityiskeskustelu", "Tämä on kahden joukkueen kapteenien välinen keskustelu. Jäsenet-painikkeesta voit lisätä keskusteluun myös molempien joukkueiden pelaajat. Keskustelu poistuu, kun uusi kierros alkaa."],
   };
 
   if (!openConversation) return <View style={styles.page}>
     <ScreenHeader />
-    {loadingList ? <ActivityIndicator color={colors.green} style={styles.listLoading} /> : <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+    {loadingList ? <ActivityIndicator color={colors.green} style={styles.listLoading} /> : <ScrollView contentContainerStyle={[styles.list, composeTeams.length > 0 && styles.listWithNewConversation]} showsVerticalScrollIndicator={false}>
       {conversations.length === 0 ? <View style={styles.emptyState}><Text style={styles.emptyText}>Kun ilmoittaudut liigaan, sen tiedotteet näkyvät täällä. Lohkochat avautuu, kun kierros alkaa.</Text></View> : null}
       {ownConversations.map(renderRow)}
       {adminConversations.length > 0 ? <>
@@ -411,6 +520,11 @@ export default function ChatTabScreen() {
         {adminConversations.map(renderRow)}
       </> : null}
     </ScrollView>}
+    {/* Floats in the bottom right corner, just above the tab bar. */}
+    {!loadingList && composeTeams.length > 0 ? <Pressable onPress={() => void openNewConversation()} accessibilityRole="button" style={({ pressed }) => [styles.newConversation, pressed && styles.newConversationPressed]}>
+      <Ionicons name="create-outline" size={18} color={colors.lime} />
+      <Text style={styles.newConversationText}>Uusi keskustelu</Text>
+    </Pressable> : null}
     <Modal visible={!!actionConversation} transparent animationType="fade" onRequestClose={() => setActionConversation(null)}>
       <Pressable style={styles.membersBackdrop} onPress={() => setActionConversation(null)}>
         <Pressable style={styles.membersModal} onPress={(event) => event.stopPropagation()}>
@@ -423,6 +537,31 @@ export default function ChatTabScreen() {
             </>}
           </Pressable>
           {muteError ? <Text style={styles.actionError}>{muteError}</Text> : null}
+        </Pressable>
+      </Pressable>
+    </Modal>
+    <Modal visible={showNewConversation} transparent animationType="fade" onRequestClose={() => setShowNewConversation(false)}>
+      <Pressable style={styles.membersBackdrop} onPress={() => setShowNewConversation(false)}>
+        <Pressable style={styles.membersModal} onPress={(event) => event.stopPropagation()}>
+          <View style={styles.membersHeader}>
+            <Text style={styles.membersTitle}>Uusi keskustelu</Text>
+            <Pressable onPress={() => setShowNewConversation(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.membersClose}>×</Text></Pressable>
+          </View>
+          <Text style={styles.choiceHint}>Valitse lohkosi joukkueen kapteeni, jolle haluat lähettää yksityisviestin.</Text>
+          {loadingChoices ? <ActivityIndicator color={colors.green} style={styles.membersLoading} /> : <ScrollView showsVerticalScrollIndicator={false}>
+            {captainChoices.length === 0 ? <Text style={styles.choiceHint}>Lohkossasi ei ole muita joukkueita.</Text> : null}
+            {captainChoices.map((choice) => {
+              const existing = existingDirectKey(choice);
+              return <Pressable key={`${choice.composeTeam.teamId}:${choice.teamId}`} disabled={startingTeamId !== null} onPress={() => { if (!existing) { void startConversation(choice); return; } setShowNewConversation(false); setOpenKey(existing); }} style={({ pressed }) => [styles.choiceRow, pressed && styles.rowPressed]}>
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowTitle} numberOfLines={1}>{choice.captainName}</Text>
+                  <Text style={styles.rowLeague} numberOfLines={1}>{choice.teamName}{composeTeams.length > 1 ? ` · ${choice.composeTeam.title}` : ""}</Text>
+                </View>
+                {startingTeamId === choice.teamId ? <ActivityIndicator color={colors.green} /> : existing ? <Text style={styles.choiceExisting}>Avaa</Text> : <Ionicons name="chevron-forward" size={18} color={colors.muted} />}
+              </Pressable>;
+            })}
+          </ScrollView>}
+          {newConversationError ? <Text style={styles.actionError}>{newConversationError}</Text> : null}
         </Pressable>
       </Pressable>
     </Modal>
@@ -477,12 +616,22 @@ export default function ChatTabScreen() {
       <Pressable style={styles.membersBackdrop} onPress={() => setShowMembers(false)}>
         <Pressable style={styles.membersModal} onPress={(event) => event.stopPropagation()}>
           <View style={styles.membersHeader}>
-            <Text style={styles.membersTitle}>{openConversation.type === "qualification" ? "Vastustajan pelaajat" : "Lohkon joukkueet"}</Text>
+            <Text style={styles.membersTitle}>{openConversation.type === "qualification" ? "Vastustajan pelaajat" : openConversation.type === "direct" ? "Keskustelun jäsenet" : "Lohkon joukkueet"}</Text>
             <Pressable onPress={() => setShowMembers(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.membersClose}>×</Text></Pressable>
           </View>
           {loadingMembers ? <ActivityIndicator color={colors.green} style={styles.membersLoading} /> : <ScrollView showsVerticalScrollIndicator={false}>
             <TeamRosterList teams={groupRosterByTeam(groupMembers)} compact />
           </ScrollView>}
+          {openConversation.type === "direct" && !openConversation.includeTeams ? <>
+            <Pressable disabled={includingTeams} onPress={() => void includeTeams()} style={[styles.muteButton, styles.includeButton]}>
+              {includingTeams ? <ActivityIndicator color={colors.green} /> : <>
+                <Ionicons name="person-add-outline" size={18} color={colors.green} />
+                <Text style={styles.muteButtonText}>Lisää joukkueiden jäsenet</Text>
+              </>}
+            </Pressable>
+            <Text style={styles.choiceHint}>Molempien joukkueiden kaikki pelaajat pääsevät keskusteluun ja näkevät myös aiemmat viestit. Lisäystä ei voi perua.</Text>
+            {includeError ? <Text style={styles.actionError}>{includeError}</Text> : null}
+          </> : null}
         </Pressable>
       </Pressable>
     </Modal>
@@ -575,4 +724,13 @@ const styles = StyleSheet.create({
   actionSubtitle: { color: colors.greenBright, fontSize: 12, fontWeight: "700", marginTop: 2, marginBottom: 14 },
   muteButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 13, borderWidth: 1, borderColor: colors.green, paddingVertical: 13 },
   muteButtonText: { color: colors.green, fontWeight: "800" },
+  includeButton: { marginTop: 14 },
+  newConversation: { position: "absolute", right: 18, bottom: 18, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 24, backgroundColor: colors.green, paddingHorizontal: 18, paddingVertical: 13, ...shadow },
+  // Room under the last row so the floating button doesn't cover it.
+  listWithNewConversation: { paddingBottom: 90 },
+  newConversationPressed: { backgroundColor: colors.greenBright },
+  newConversationText: { color: colors.lime, fontWeight: "800" },
+  choiceHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 6, marginBottom: 6 },
+  choiceRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.line },
+  choiceExisting: { color: colors.greenBright, fontWeight: "800", fontSize: 12 },
 });

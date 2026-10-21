@@ -49,8 +49,8 @@ export async function resolveRecipientIds(target: NotificationTarget, excludeUse
 }
 
 // Columns of notification_preferences, one per kind of notification.
-export type NotificationCategory = "group_messages" | "qualification_messages" | "community_messages" | "round_starts" | "match_reminders";
-export type MutableThread = { type: "group" | "qualification" | "community"; id: string };
+export type NotificationCategory = "group_messages" | "qualification_messages" | "direct_messages" | "community_messages" | "round_starts" | "match_reminders";
+export type MutableThread = { type: "group" | "qualification" | "direct" | "community"; id: string };
 
 // Drops users who muted everything, this kind of notification (when given;
 // admin notifications have no category of their own), or this one chat
