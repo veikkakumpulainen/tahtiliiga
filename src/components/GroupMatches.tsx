@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "expo-router";
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { formatFinnishDate, formatFinnishDateTime } from "../lib/dates";
 import { supabase } from "../lib/supabase";
 import { colors, shadow } from "../theme";
@@ -63,6 +63,9 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
   const [venue, setVenue] = useState("");
   const [venueOptions, setVenueOptions] = useState<string[]>([]);
   const [venuePickerVisible, setVenuePickerVisible] = useState(false);
+  // The league's halls that have a booking link, for "Katso vapaat vuorot".
+  const [bookingHalls, setBookingHalls] = useState<{ name: string; url: string }[]>([]);
+  const [bookingVisible, setBookingVisible] = useState(false);
   const [setScores, setSetScores] = useState<SetScore[]>(emptySetScores());
   const [resultMode, setResultMode] = useState<"sets" | "walkover" | "double_walkover">("sets");
   const [walkoverWinnerId, setWalkoverWinnerId] = useState<string | null>(null);
@@ -216,8 +219,12 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
       }
     });
     setVenue(match.venue ?? "");
-    const { data: venueRows } = await supabase?.from("league_venues").select("name").eq("league_id", match.leagueId).order("name") ?? { data: [] };
-    setVenueOptions((venueRows ?? []).map((row) => row.name as string));
+    const { data: hallRows } = await supabase?.from("league_halls").select("padel_halls(name, booking_url)").eq("league_id", match.leagueId) ?? { data: [] };
+    const halls = ((hallRows ?? []) as unknown as { padel_halls: { name: string; booking_url: string | null } | { name: string; booking_url: string | null }[] | null }[])
+      .flatMap((row) => Array.isArray(row.padel_halls) ? row.padel_halls : row.padel_halls ? [row.padel_halls] : [])
+      .sort((a, b) => a.name.localeCompare(b.name, "fi"));
+    setVenueOptions(halls.map((hall) => hall.name));
+    setBookingHalls(halls.flatMap((hall) => hall.booking_url ? [{ name: hall.name, url: hall.booking_url }] : []));
     setSetScores(readSetScores(match.setScores));
     setResultMode(match.walkoverWinnerId ? "walkover" : match.doubleWalkover ? "double_walkover" : "sets");
     setWalkoverWinnerId(match.walkoverWinnerId ?? null);
@@ -558,6 +565,7 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
           <Pressable onPress={() => setEditorSection("result")} style={[styles.mode, editorSection === "result" && styles.modeSelected]}><Text style={[styles.modeText, editorSection === "result" && styles.modeTextSelected]}>Tulos</Text></Pressable>
         </View>
         {editorSection === "details" ? <>
+        {bookingHalls.length > 0 ? <Pressable onPress={() => setBookingVisible(true)} style={styles.bookingButton}><Text style={styles.bookingButtonText}>Katso vapaat vuorot</Text></Pressable> : null}
         <Text style={styles.fieldLabel}>OTTELUN AJANKOHTA</Text>
         <View style={styles.dateTimeRow}>
           <Pressable style={styles.dateTimeField} onPress={() => setCalendarVisible(true)}><Text style={styles.dateTimeText}>{pickedDate ? `${String(pickedDate.day).padStart(2, "0")}.${String(pickedDate.month + 1).padStart(2, "0")}.${pickedDate.year}` : "Valitse päivä"}</Text></Pressable>
@@ -637,6 +645,20 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
         </Pressable>
       </Pressable>
     </Modal>
+    <Modal visible={bookingVisible} transparent animationType="fade" onRequestClose={() => setBookingVisible(false)}>
+      <Pressable style={styles.pickerBackdrop} onPress={() => setBookingVisible(false)}>
+        <Pressable style={styles.timeCard} onPress={(event) => event.stopPropagation()}>
+          <Text style={styles.calendarTitle}>Vapaat vuorot</Text>
+          <Text style={styles.bookingHint}>Hallin varaussivu aukeaa selaimeen.</Text>
+          <ScrollView style={styles.timeList}>
+            {bookingHalls.map((hall) => <Pressable key={hall.name} style={styles.bookingHall} onPress={() => { setBookingVisible(false); void Linking.openURL(hall.url); }}>
+              <Text style={styles.timeSlotText}>{hall.name}</Text>
+              <Text style={styles.bookingArrow}>↗</Text>
+            </Pressable>)}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
   </View>;
 }
 
@@ -695,4 +717,9 @@ const styles = StyleSheet.create({
   timeSlotSelected: { backgroundColor: colors.green },
   timeSlotText: { color: colors.ink, fontSize: 15, fontWeight: "700" },
   timeSlotTextSelected: { color: colors.surface },
+  bookingButton: { borderWidth: 1, borderColor: colors.green, borderRadius: 11, paddingVertical: 11, alignItems: "center", marginTop: 13 },
+  bookingButtonText: { color: colors.green, fontWeight: "800", fontSize: 13 },
+  bookingHint: { color: colors.muted, fontSize: 12, textAlign: "center", marginTop: 4 },
+  bookingHall: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: colors.line },
+  bookingArrow: { color: colors.greenBright, fontSize: 16, fontWeight: "800" },
 });

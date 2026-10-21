@@ -2,6 +2,7 @@ import { router as expoRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import AdminCityPicker from "../../components/AdminCityPicker";
+import AdminLeagueHallPicker from "../../components/AdminLeagueHallPicker";
 import AdminLeagueInfoField from "../../components/AdminLeagueInfoField";
 import ScreenHeader from "../../components/ScreenHeader";
 import { useAuth } from "../../hooks/useAuth";
@@ -27,20 +28,13 @@ export default function CreateLeagueScreen() {
   const [opensKnown, setOpensKnown] = useState(true);
   const [opensDate, setOpensDate] = useState("");
   const [rounds, setRounds] = useState<RoundForm[]>([{ name: "", startDate: "", endDate: "", roundType: "regular" }]);
-  const [venues, setVenues] = useState<string[]>([""]);
+  // Starts as every hall in the chosen city; the admin can drop some.
+  const [hallIds, setHallIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const updateVenue = (index: number, value: string) => {
-    setVenues((current) => current.map((venue, venueIndex) => venueIndex === index ? value : venue));
-  };
-
-  const addVenue = () => {
-    setVenues((current) => [...current, ""]);
-  };
-
-  const removeVenue = (index: number) => {
-    setVenues((current) => current.length > 1 ? current.filter((_, venueIndex) => venueIndex !== index) : current);
+  const toggleHall = (hallId: string, selected: boolean) => {
+    setHallIds((current) => { const next = new Set(current); if (selected) next.add(hallId); else next.delete(hallId); return next; });
   };
 
   const updateRound = (index: number, key: keyof RoundForm, value: string) => {
@@ -108,8 +102,6 @@ export default function CreateLeagueScreen() {
       return;
     }
 
-    const venueNames = [...new Set(venues.map((venue) => venue.trim()).filter(Boolean))];
-
     setSaving(true);
     setError("");
     const { data: league, error: leagueError } = await supabase.from("leagues").insert({
@@ -142,11 +134,11 @@ export default function CreateLeagueScreen() {
       return;
     }
 
-    if (venueNames.length > 0) {
-      const { error: venuesError } = await supabase.from("league_venues").insert(venueNames.map((venueName) => ({ league_id: league.id, name: venueName })));
+    if (hallIds.size > 0) {
+      const { error: hallsError } = await supabase.from("league_halls").insert([...hallIds].map((hallId) => ({ league_id: league.id, hall_id: hallId })));
       setSaving(false);
-      if (venuesError) {
-        setError(`Liiga luotiin, mutta pelipaikkojen tallennus epäonnistui: ${venuesError.message}`);
+      if (hallsError) {
+        setError(`Liiga luotiin, mutta hallien tallennus epäonnistui: ${hallsError.message}`);
         return;
       }
     } else {
@@ -203,11 +195,9 @@ export default function CreateLeagueScreen() {
       </View>
     </View>)}
 
-    <View style={styles.roundHeading}><Text style={styles.roundTitle}>Pelipaikat</Text><Pressable onPress={addVenue} style={styles.addRound} accessibilityRole="button" accessibilityLabel="Lisää pelipaikka"><Text style={styles.addRoundText}>+</Text></Pressable></View>
-    {venues.map((venue, index) => <View key={index} style={styles.round}>
-      {venues.length > 1 ? <View style={styles.roundTop}><Pressable onPress={() => removeVenue(index)}><Text style={styles.removeRound}>Poista</Text></Pressable></View> : null}
-      <TextInput value={venue} onChangeText={(value) => updateVenue(index, value)} placeholder="Esim. Padel Center" placeholderTextColor={colors.muted} style={styles.roundInput} />
-    </View>)}
+    <View style={styles.roundHeading}><Text style={styles.roundTitle}>Padelhallit</Text></View>
+    <Text style={styles.hint}>Kaupungin kaikki hallit ovat valmiiksi valittuina. Hallit näkyvät pelaajille pelipaikkoina ja vapaiden vuorojen listassa.</Text>
+    <AdminLeagueHallPicker cityId={cityId} selectedIds={hallIds} onToggle={toggleHall} onLoaded={(halls) => setHallIds(new Set(halls.map((hall) => hall.id)))} style={styles.hallPicker} />
 
     {error ? <Text style={styles.error}>{error}</Text> : null}
     <Pressable style={styles.button} onPress={() => void save()} disabled={saving}>{saving ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.buttonText}>Luo liiga</Text>}</Pressable>
@@ -223,6 +213,7 @@ const styles = StyleSheet.create({
   label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 20, marginHorizontal: 22, marginBottom: 7 },
   input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, color: colors.ink, padding: 14, marginHorizontal: 22 },
   fieldBlock: { marginHorizontal: 22 },
+  hallPicker: { marginHorizontal: 22, marginTop: 12 },
   hint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginHorizontal: 22, marginTop: 10 },
   publishRow: { flexDirection: "row", gap: 8, marginHorizontal: 22, marginTop: 8 },
   roundHeading: { marginTop: 28, marginHorizontal: 22, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },

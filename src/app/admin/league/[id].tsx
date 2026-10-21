@@ -2,6 +2,7 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Fragment, useCallback, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import AdminCityPicker from "../../../components/AdminCityPicker";
+import AdminLeagueHallPicker from "../../../components/AdminLeagueHallPicker";
 import AdminLeagueInfoField from "../../../components/AdminLeagueInfoField";
 import ScreenHeader from "../../../components/ScreenHeader";
 import { useAppScreenRestriction } from "../../../hooks/useAppScreenRestriction";
@@ -12,7 +13,6 @@ import { colors } from "../../../theme";
 import GroupMatches from "../../../components/GroupMatches";
 
 type League = { id: string; name: string; status: string; start_date: string; end_date: string | null; registration_deadline: string | null; registration_opens_at: string | null; city_id: string; info_text: string | null };
-type Venue = { id: string; name: string };
 type Group = { id: string; name: string; status: string; category: string };
 type Team = { id: string; name: string; skill_level: string; skill_description: string | null; category: string };
 const teamSkillLevelOrder = ["A", "B", "C", "D", "E", "Aloittelija"] as const;
@@ -73,13 +73,7 @@ const roundStyles = StyleSheet.create({
 });
 
 const venueStyles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.mint, borderRadius: 10, padding: 12, marginHorizontal: 22, marginTop: 8 },
-  name: { color: colors.ink, fontSize: 13, fontWeight: "700" },
-  remove: { color: colors.coral, fontSize: 12, fontWeight: "800" },
-  addRow: { flexDirection: "row", gap: 8, alignItems: "center", marginHorizontal: 22, marginTop: 10 },
-  addInput: { flex: 1 },
-  addButton: { backgroundColor: colors.green, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 13 },
-  addButtonText: { color: colors.surface, fontWeight: "800", fontSize: 12 },
+  picker: { marginTop: 2 },
 });
 
 const rosterStyles = StyleSheet.create({
@@ -126,8 +120,7 @@ export default function LeagueManagementScreen() {
   const [opensKnown, setOpensKnown] = useState(true);
   const [cityId, setCityId] = useState<string | null>(null);
   const [infoText, setInfoText] = useState("");
-  const [venues, setVenues] = useState<Venue[]>([]);
-  const [newVenueName, setNewVenueName] = useState("");
+  const [hallIds, setHallIds] = useState<Set<string>>(new Set());
   const [rounds, setRounds] = useState<LeagueRound[]>([]);
   const [newRound, setNewRound] = useState({ name: "", startDate: "", endDate: "", roundType: "regular" as LeagueRound["round_type"] });
   const [addingRound, setAddingRound] = useState(false);
@@ -159,21 +152,21 @@ export default function LeagueManagementScreen() {
   const load = async () => {
     if (!supabase || !id) return;
     const client = supabase;
-    const [{ data: leagueData }, { data: groupData }, { data: teamData }, { data: roundData }, { data: venueData }] = await Promise.all([
+    const [{ data: leagueData }, { data: groupData }, { data: teamData }, { data: roundData }, { data: hallData }] = await Promise.all([
       client.from("leagues").select("id,name,status,start_date,end_date,registration_deadline,registration_opens_at,city_id,info_text").eq("id", id).single(),
       client.from("groups").select("id,name,status,category").eq("league_id", id),
       client.from("teams").select("id,name,skill_level,skill_description,category").eq("league_id", id).order("name"),
       client.from("league_rounds").select("id,name,start_date,end_date,round_type,status").eq("league_id", id).order("start_date"),
-      client.from("league_venues").select("id,name").eq("league_id", id).order("name"),
+      client.from("league_halls").select("hall_id").eq("league_id", id),
     ]);
     const groupIds = (groupData ?? []).map((group) => group.id);
     const { data: assignmentData } = groupIds.length ? await client.from("group_teams").select("id,group_id,team_id").in("group_id", groupIds) : { data: [] };
-    setLeague(leagueData); setStartDate(formatFinnishDate(leagueData?.start_date)); setEndDate(leagueData?.end_date ? formatFinnishDate(leagueData.end_date) : ""); setDeadline(leagueData?.registration_deadline ? formatFinnishDate(leagueData.registration_deadline) : ""); setOpensDate(leagueData?.registration_opens_at ? formatFinnishDate(leagueData.registration_opens_at) : ""); setOpensKnown(leagueData?.status !== "upcoming" || !!leagueData?.registration_opens_at); setCityId(leagueData?.city_id ?? null); setInfoText(leagueData?.info_text ?? ""); setVenues(venueData ?? []); setRounds(roundData ?? []); setGroups((groupData ?? []).slice().sort((a, b) => categoryOrder.indexOf(a.category as typeof categoryOrder[number]) - categoryOrder.indexOf(b.category as typeof categoryOrder[number]) || a.name.localeCompare(b.name, "fi", { numeric: true }))); setTeams((teamData ?? []).slice().sort((a, b) => categoryOrder.indexOf(a.category as typeof categoryOrder[number]) - categoryOrder.indexOf(b.category as typeof categoryOrder[number]) || teamSkillLevelOrder.indexOf(a.skill_level as typeof teamSkillLevelOrder[number]) - teamSkillLevelOrder.indexOf(b.skill_level as typeof teamSkillLevelOrder[number]) || a.name.localeCompare(b.name))); setAssignments(assignmentData ?? []); setLoading(false);
+    setLeague(leagueData); setStartDate(formatFinnishDate(leagueData?.start_date)); setEndDate(leagueData?.end_date ? formatFinnishDate(leagueData.end_date) : ""); setDeadline(leagueData?.registration_deadline ? formatFinnishDate(leagueData.registration_deadline) : ""); setOpensDate(leagueData?.registration_opens_at ? formatFinnishDate(leagueData.registration_opens_at) : ""); setOpensKnown(leagueData?.status !== "upcoming" || !!leagueData?.registration_opens_at); setCityId(leagueData?.city_id ?? null); setInfoText(leagueData?.info_text ?? ""); setHallIds(new Set((hallData ?? []).map((row) => row.hall_id as string))); setRounds(roundData ?? []); setGroups((groupData ?? []).slice().sort((a, b) => categoryOrder.indexOf(a.category as typeof categoryOrder[number]) - categoryOrder.indexOf(b.category as typeof categoryOrder[number]) || a.name.localeCompare(b.name, "fi", { numeric: true }))); setTeams((teamData ?? []).slice().sort((a, b) => categoryOrder.indexOf(a.category as typeof categoryOrder[number]) - categoryOrder.indexOf(b.category as typeof categoryOrder[number]) || teamSkillLevelOrder.indexOf(a.skill_level as typeof teamSkillLevelOrder[number]) - teamSkillLevelOrder.indexOf(b.skill_level as typeof teamSkillLevelOrder[number]) || a.name.localeCompare(b.name))); setAssignments(assignmentData ?? []); setLoading(false);
   };
   useFocusEffect(useCallback(() => { void load(); }, [id]));
   const saveChanges = async () => { if (!supabase || !league) return; const start = parseFinnishDate(startDate); const end = parseFinnishDate(endDate); const registrationDeadline = deadline.trim() ? parseFinnishDate(deadline) : null; const registrationOpensAt = opensKnown && opensDate.trim() ? parseFinnishDate(opensDate) : null; if (!start || !end) { setMessage("Anna liigan alku- ja loppupäivä muodossa D.M.YYYY."); return; } if (end < start) { setMessage("Liigan loppupäivä ei voi olla ennen aloituspäivää."); return; } if (deadline.trim() && !registrationDeadline) { setMessage("Anna deadline muodossa D.M.YYYY."); return; } if (registrationDeadline && registrationDeadline > start) { setMessage("Deadline ei voi olla liigan alkamispäivän jälkeen."); return; } if (opensKnown && opensDate.trim() && !registrationOpensAt) { setMessage("Anna ilmoittautumisen avautumispäivä muodossa D.M.YYYY."); return; } if (registrationOpensAt && registrationOpensAt > start) { setMessage("Ilmoittautumisen avautuminen ei voi olla liigan alkamispäivän jälkeen."); return; } const outOfRangeRound = rounds.find((round) => round.start_date < start || round.end_date > end); if (outOfRangeRound) { setMessage(`Liigan päivämäärien tulee sisältää kaikki kierrokset. Kierros "${outOfRangeRound.name}" on ${formatFinnishDate(outOfRangeRound.start_date)} - ${formatFinnishDate(outOfRangeRound.end_date)}. Muokkaa tai poista kierros ensin.`); return; } const { error } = await supabase.from("leagues").update({ name: league.name.trim(), city_id: cityId ?? league.city_id, info_text: infoText.trim() || null, start_date: start, end_date: end, registration_deadline: registrationDeadline, registration_opens_at: registrationOpensAt }).eq("id", league.id); if (error) setMessage(error.message.includes("round dates") ? "Liigan päivämäärien tulee sisältää kaikki kierrokset. Muokkaa tai poista kierrokset, jotka jäävät uusien päivämäärien ulkopuolelle." : `Tallennus epäonnistui: ${error.message}`); else { setLeague({ ...league, city_id: cityId ?? league.city_id, info_text: infoText.trim() || null, start_date: start, end_date: end, registration_deadline: registrationDeadline, registration_opens_at: registrationOpensAt }); setMessage("Liigan muutokset tallennettu."); } };
-  const addVenue = async () => { if (!supabase || !league || !newVenueName.trim()) return; const { error } = await supabase.from("league_venues").insert({ league_id: league.id, name: newVenueName.trim() }); if (error) { setMessage(`Pelipaikan lisäys epäonnistui: ${error.message}`); return; } setNewVenueName(""); await load(); };
-  const removeVenue = async (venueId: string) => { if (!supabase) return; const { error } = await supabase.from("league_venues").delete().eq("id", venueId); if (error) { setMessage(`Pelipaikan poisto epäonnistui: ${error.message}`); return; } await load(); };
+  // Saved at once, like the rest of this screen's lists.
+  const toggleHall = async (hallId: string, selected: boolean) => { if (!supabase || !league) return; const { error } = selected ? await supabase.from("league_halls").insert({ league_id: league.id, hall_id: hallId }) : await supabase.from("league_halls").delete().eq("league_id", league.id).eq("hall_id", hallId); if (error) { setMessage(`Hallin ${selected ? "lisäys" : "poisto"} epäonnistui: ${error.message}`); return; } setHallIds((current) => { const next = new Set(current); if (selected) next.add(hallId); else next.delete(hallId); return next; }); };
   const createRound = async () => { if (!supabase || !league) return; const start = parseFinnishDate(newRound.startDate); const end = parseFinnishDate(newRound.endDate); const leagueStart = parseFinnishDate(startDate); const leagueEnd = parseFinnishDate(endDate); if (!newRound.name.trim() || !start || !end) { setMessage("Anna kierrokselle nimi sekä alku- ja loppupäivä."); return; } if (!leagueStart || !leagueEnd || start < leagueStart || end > leagueEnd || end < start) { setMessage("Kierroksen päivämäärien tulee olla liigan päivämäärien sisällä."); return; } const { error } = await supabase.from("league_rounds").insert({ league_id: league.id, name: newRound.name.trim(), start_date: start, end_date: end, round_type: newRound.roundType }); if (error) { setMessage(`Kierroksen lisäys epäonnistui: ${error.message}`); return; } setNewRound({ name: "", startDate: "", endDate: "", roundType: "regular" }); setAddingRound(false); await load(); };
   const startEditingRound = (round: LeagueRound) => { setAddingRound(false); setEditingRound(round); setRoundForm({ name: round.name, startDate: formatFinnishDate(round.start_date), endDate: formatFinnishDate(round.end_date) }); };
   const updateRound = async () => { if (!supabase || !league || !editingRound) return; const start = parseFinnishDate(roundForm.startDate); const end = parseFinnishDate(roundForm.endDate); const leagueStart = parseFinnishDate(startDate); const leagueEnd = parseFinnishDate(endDate); if (!roundForm.name.trim() || !start || !end) { setMessage("Anna kierrokselle nimi sekä alku- ja loppupäivä."); return; } if (!leagueStart || !leagueEnd || start < leagueStart || end > leagueEnd || end < start) { setMessage("Kierroksen päivämäärien tulee olla liigan päivämäärien sisällä."); return; } const { error } = await supabase.from("league_rounds").update({ name: roundForm.name.trim(), start_date: start, end_date: end }).eq("id", editingRound.id); if (error) { setMessage(`Kierroksen muokkaus epäonnistui: ${error.message}`); return; } setEditingRound(null); setMessage("Kierroksen muutokset tallennettu."); await load(); };
@@ -265,15 +258,9 @@ export default function LeagueManagementScreen() {
 <Pressable onPress={() => void saveChanges()} style={styles.save}>
 <Text style={styles.saveText}>Tallenna muutokset</Text>
 </Pressable>
-<Text style={styles.sectionTitle}>Pelipaikat</Text>
-{venues.map((venue) => <View key={venue.id} style={venueStyles.row}>
-  <Text style={venueStyles.name}>{venue.name}</Text>
-  <Pressable onPress={() => void removeVenue(venue.id)}><Text style={venueStyles.remove}>Poista</Text></Pressable>
-</View>)}
-<View style={venueStyles.addRow}>
-  <TextInput value={newVenueName} onChangeText={setNewVenueName} placeholder="Uusi pelipaikka" placeholderTextColor={colors.muted} style={[styles.input, venueStyles.addInput]} />
-  <Pressable onPress={() => void addVenue()} style={venueStyles.addButton}><Text style={venueStyles.addButtonText}>Lisää</Text></Pressable>
-</View>
+<Text style={styles.sectionTitle}>Padelhallit</Text>
+<Text style={styles.hint}>Valitut hallit kuuluvat liigaan. Napauta hallia lisätäksesi tai poistaaksesi sen.</Text>
+<AdminLeagueHallPicker cityId={league.city_id} selectedIds={hallIds} onToggle={(hallId, selected) => void toggleHall(hallId, selected)} style={venueStyles.picker} />
 <Text style={styles.status}>Tila: {statusLabels[league.status] ?? league.status}</Text>
 {league.status === "upcoming" ? <>
 <Text style={styles.message}>{league.registration_opens_at ? `Käyttäjät näkevät liigan ja ilmoittautumisen avautumispäivän (${formatFinnishDate(league.registration_opens_at)}), mutta eivät voi vielä ilmoittautua.` : "Käyttäjät näkevät liigan tulevana, mutta eivät voi vielä ilmoittautua. Aseta yllä ilmoittautumisen avautumispäivä, jotta se näkyy heille."}</Text>

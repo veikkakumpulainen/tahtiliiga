@@ -26,6 +26,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
           <Stack.Screen name="admin" />
           <Stack.Screen name="admin/create-league" />
+          <Stack.Screen name="admin/halls" />
           <Stack.Screen name="admin/league/[id]" />
           <Stack.Screen name="league/[id]/register" />
           <Stack.Screen name="profile/edit" />
