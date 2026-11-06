@@ -26,7 +26,7 @@ async function findUnread(rows: Record<string, MessageRow[]>, keyPrefix: string,
   return unread;
 }
 
-export type ChatNotifyEvent = { group_id?: string; league_id?: string; match_id?: string; direct_id?: string; message_id: string; receivedAt: number };
+export type ChatNotifyEvent = { group_id?: string; league_id?: string; match_id?: string; direct_id?: string; admin_chat_id?: string; message_id: string; receivedAt: number };
 export type ChatDeleteEvent = { messageIds: string[]; receivedAt: number };
 
 type ChatNotifyContextValue = {
@@ -36,10 +36,12 @@ type ChatNotifyContextValue = {
   unreadLeagueIds: Set<string>;
   unreadQualificationMatchIds: Set<string>;
   unreadDirectIds: Set<string>;
+  unreadAdminChatIds: Set<string>;
   markGroupRead: (groupId: string) => void;
   markLeagueRead: (leagueId: string) => void;
   markQualificationMatchRead: (matchId: string) => void;
   markDirectRead: (conversationId: string) => void;
+  markAdminChatRead: (conversationId: string) => void;
 };
 
 const emptySet = new Set<string>();
@@ -50,10 +52,12 @@ const ChatNotifyContext = createContext<ChatNotifyContextValue>({
   unreadLeagueIds: emptySet,
   unreadQualificationMatchIds: emptySet,
   unreadDirectIds: emptySet,
+  unreadAdminChatIds: emptySet,
   markGroupRead: () => {},
   markLeagueRead: () => {},
   markQualificationMatchRead: () => {},
   markDirectRead: () => {},
+  markAdminChatRead: () => {},
 });
 
 // group_messages/community_messages SELECT is only granted through the
@@ -84,11 +88,18 @@ export function ChatNotifyProvider({ children }: { children: ReactNode }) {
   const [unreadLeagueIds, setUnreadLeagueIds] = useState<Set<string>>(new Set());
   const [unreadQualificationMatchIds, setUnreadQualificationMatchIds] = useState<Set<string>>(new Set());
   const [unreadDirectIds, setUnreadDirectIds] = useState<Set<string>>(new Set());
+  const [unreadAdminChatIds, setUnreadAdminChatIds] = useState<Set<string>>(new Set());
 
   const refresh = useCallback(async () => {
-    if (!supabase || !userId) { setUnreadGroupIds(new Set()); setUnreadLeagueIds(new Set()); setUnreadQualificationMatchIds(new Set()); setUnreadDirectIds(new Set()); return; }
+    if (!supabase || !userId) { setUnreadGroupIds(new Set()); setUnreadLeagueIds(new Set()); setUnreadQualificationMatchIds(new Set()); setUnreadDirectIds(new Set()); setUnreadAdminChatIds(new Set()); return; }
     const client = supabase;
-    const { data: membershipData } = await client.from("team_members").select("team_id, teams(id, league_id)").eq("user_id", userId).eq("status", "active");
+    // Admin conversations don't depend on team membership (the admin may
+    // message anyone), so they're counted before the no-teams early return.
+    const [{ data: membershipData }, { data: adminMessages }] = await Promise.all([
+      client.from("team_members").select("team_id, teams(id, league_id)").eq("user_id", userId).eq("status", "active"),
+      client.from("admin_messages").select("conversation_id, user_id, created_at"),
+    ]);
+    setUnreadAdminChatIds(await findUnread(groupBy((adminMessages ?? []) as (MessageRow & { conversation_id: string })[], "conversation_id"), "admin-chat-read", userId));
     const memberships = (membershipData ?? []) as unknown as { teams?: { id: string; league_id: string } | { id: string; league_id: string }[] | null }[];
     const teamRows = memberships.flatMap((membership) => Array.isArray(membership.teams) ? membership.teams : membership.teams ? [membership.teams] : []);
     const teamIds = teamRows.map((team) => team.id);
@@ -139,12 +150,13 @@ export function ChatNotifyProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
       channel = client.channel(`user-notify:${userId}`, { config: { private: true } });
       channel.on("broadcast", { event: "unread_chat" }, ({ payload }) => {
-        const data = payload as { group_id?: string; league_id?: string; match_id?: string; direct_id?: string; message_id: string };
+        const data = payload as { group_id?: string; league_id?: string; match_id?: string; direct_id?: string; admin_chat_id?: string; message_id: string };
         setLastNotify({ ...data, receivedAt: Date.now() });
         if (data.group_id) setUnreadGroupIds((current) => current.has(data.group_id!) ? current : new Set(current).add(data.group_id!));
         if (data.league_id) setUnreadLeagueIds((current) => current.has(data.league_id!) ? current : new Set(current).add(data.league_id!));
         if (data.match_id) setUnreadQualificationMatchIds((current) => current.has(data.match_id!) ? current : new Set(current).add(data.match_id!));
         if (data.direct_id) setUnreadDirectIds((current) => current.has(data.direct_id!) ? current : new Set(current).add(data.direct_id!));
+        if (data.admin_chat_id) setUnreadAdminChatIds((current) => current.has(data.admin_chat_id!) ? current : new Set(current).add(data.admin_chat_id!));
       });
       // Deletions (121_chat_message_delete_broadcast.sql): the open chat drops
       // the ids in place, and the unread dots are recomputed in case the
@@ -179,7 +191,12 @@ export function ChatNotifyProvider({ children }: { children: ReactNode }) {
     setUnreadDirectIds((current) => { if (!current.has(conversationId)) return current; const next = new Set(current); next.delete(conversationId); return next; });
   }, [userId]);
 
-  return <ChatNotifyContext.Provider value={{ lastNotify, lastDeleted, unreadGroupIds, unreadLeagueIds, unreadQualificationMatchIds, unreadDirectIds, markGroupRead, markLeagueRead, markQualificationMatchRead, markDirectRead }}>{children}</ChatNotifyContext.Provider>;
+  const markAdminChatRead = useCallback((conversationId: string) => {
+    if (userId) void AsyncStorage.setItem(`admin-chat-read-${userId}-${conversationId}`, new Date().toISOString());
+    setUnreadAdminChatIds((current) => { if (!current.has(conversationId)) return current; const next = new Set(current); next.delete(conversationId); return next; });
+  }, [userId]);
+
+  return <ChatNotifyContext.Provider value={{ lastNotify, lastDeleted, unreadGroupIds, unreadLeagueIds, unreadQualificationMatchIds, unreadDirectIds, unreadAdminChatIds, markGroupRead, markLeagueRead, markQualificationMatchRead, markDirectRead, markAdminChatRead }}>{children}</ChatNotifyContext.Provider>;
 }
 
 export function useChatNotify() {

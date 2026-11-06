@@ -14,11 +14,18 @@ const categoryLabels: Record<string, string> = { avoin: "Avoin", mixty: "Mixty" 
 type Message = { id: string; name: string; sub: string; body: string; time: string; own: boolean };
 type GroupMessageRow = { id: string; message: string; created_at: string; user_id: string; sender_first_name: string; sender_last_name: string; team_name: string };
 type CommunityMessageRow = { id: string; message: string; created_at: string; user_id: string; sender_first_name: string; sender_last_name: string };
-type ThreadType = "group" | "qualification" | "direct" | "community";
-const messageTables: Record<ThreadType, string> = { group: "group_messages", qualification: "qualification_messages", direct: "direct_messages", community: "community_messages" };
-const threadIcons: Record<ThreadType, keyof typeof Ionicons.glyphMap> = { community: "megaphone-outline", group: "people-outline", qualification: "flash-outline", direct: "chatbubble-outline" };
-const typeOrder: Record<ThreadType, number> = { community: 0, group: 1, qualification: 2, direct: 3 };
-const lastMessageIdKeys: Record<ThreadType, string> = { group: "group_id", qualification: "match_id", direct: "conversation_id", community: "league_id" };
+type AdminMessageRow = { id: string; message: string; created_at: string; user_id: string; sender_first_name: string; sender_last_name: string; sender_is_admin: boolean };
+type ThreadType = "group" | "qualification" | "direct" | "community" | "admin";
+const messageTables: Record<ThreadType, string> = { group: "group_messages", qualification: "qualification_messages", direct: "direct_messages", community: "community_messages", admin: "admin_messages" };
+const threadIcons: Record<ThreadType, keyof typeof Ionicons.glyphMap> = { community: "megaphone-outline", group: "people-outline", qualification: "flash-outline", direct: "chatbubble-outline", admin: "shield-checkmark-outline" };
+const typeOrder: Record<ThreadType, number> = { community: 0, group: 1, qualification: 2, direct: 3, admin: 4 };
+const lastMessageIdKeys: Record<ThreadType, string> = { group: "group_id", qualification: "match_id", direct: "conversation_id", community: "league_id", admin: "conversation_id" };
+
+// Admin conversations (132_admin_conversations.sql): an admin messages one
+// or more people they pick from a search.
+type AdminConversationRow = { id: string; created_at: string; other_names: string; member_count: number };
+type AdminMemberRow = { user_id: string; first_name: string; last_name: string; player_code: number | null; is_admin: boolean };
+type PersonResult = { id: string; first_name: string; last_name: string; player_code: number | null };
 
 type DirectConversationRow = { id: string; league_id: string; league_name: string; group_name: string; category: string; include_teams: boolean; own_team_id: string; other_team_id: string; other_team_name: string; other_captain_first_name: string; other_captain_last_name: string };
 // A team the user captains whose lohko chat is open, i.e. one they can start
@@ -63,8 +70,9 @@ function formatListTime(createdAt: string) {
 
 export default function ChatTabScreen() {
   const { session } = useAuth();
-  const { lastNotify, lastDeleted, unreadGroupIds, unreadLeagueIds, unreadQualificationMatchIds, unreadDirectIds, markGroupRead, markLeagueRead, markQualificationMatchRead, markDirectRead } = useChatNotify();
+  const { lastNotify, lastDeleted, unreadGroupIds, unreadLeagueIds, unreadQualificationMatchIds, unreadDirectIds, unreadAdminChatIds, markGroupRead, markLeagueRead, markQualificationMatchRead, markDirectRead, markAdminChatRead } = useChatNotify();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [composeTeams, setComposeTeams] = useState<ComposeTeam[]>([]);
   const [lastMessages, setLastMessages] = useState<Record<string, LastMessage>>({});
   // Conversation keys whose push notifications this user has muted.
@@ -77,28 +85,34 @@ export default function ChatTabScreen() {
   const [showMembers, setShowMembers] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [groupMembers, setGroupMembers] = useState<TeamRosterRow[]>([]);
+  const [adminMembers, setAdminMembers] = useState<AdminMemberRow[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [scrollTargetId, setScrollTargetId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
-  const { groupId: targetGroupId, directId: targetDirectId } = useLocalSearchParams<{ groupId?: string; directId?: string }>();
+  const { groupId: targetGroupId, directId: targetDirectId, adminChatId: targetAdminChatId } = useLocalSearchParams<{ groupId?: string; directId?: string; adminChatId?: string }>();
   const appliedGroupParam = useRef<string | null>(null);
   const appliedDirectParam = useRef<string | null>(null);
+  const appliedAdminChatParam = useRef<string | null>(null);
 
   // Builds the list from the user's active team memberships: every league
   // they're registered in gets its Tiedotteet thread; a running league adds
   // the team's lohko chat, which a qualification round replaces with a chat
   // against the qualification opponent (only for teams that have such a match).
-  // Private conversations between teams of the same lohko come on top.
+  // Private conversations between teams of the same lohko come on top, and
+  // admin conversations for anyone an admin has messaged. Admins also get
+  // every unfinished league's Tiedotteet.
   const loadConversations = useCallback(async () => {
     if (!supabase || !session?.user.id) return;
     const client = supabase;
     const userId = session.user.id;
-    const [{ data: membershipData }, { data: adminData }, { data: directData }] = await Promise.all([
+    const [{ data: membershipData }, { data: adminData }, { data: directData }, { data: adminConversationData }] = await Promise.all([
       client.from("team_members").select("teams(id, name, league_id, category, captain_id, leagues(name, status))").eq("user_id", userId).eq("status", "active"),
       client.rpc("is_admin"),
       client.rpc("get_my_direct_conversations"),
+      client.rpc("get_my_admin_conversations"),
     ]);
     const admin = adminData === true;
+    setIsAdmin(admin);
     const teams = ((membershipData ?? []) as unknown as { teams: MembershipTeam | MembershipTeam[] | null }[])
       .flatMap((row) => Array.isArray(row.teams) ? row.teams : row.teams ? [row.teams] : [])
       .map((team) => ({ ...team, league: one(team.leagues) }));
@@ -106,14 +120,13 @@ export default function ChatTabScreen() {
     const ongoingLeagueIds = [...new Set(teams.filter((team) => team.league?.status === "ongoing").map((team) => team.league_id))];
     const empty = Promise.resolve({ data: [] as unknown[] });
 
-    const [{ data: groupRows }, { data: qualificationRoundRows }, { data: qualificationMatchRows }, { data: adminLeagueRows }, { data: adminGroupRows }] = await Promise.all([
+    const [{ data: groupRows }, { data: qualificationRoundRows }, { data: qualificationMatchRows }, { data: adminLeagueRows }] = await Promise.all([
       teamIds.length ? client.from("group_teams").select("team_id, groups(id, name)").in("team_id", teamIds) : empty,
       ongoingLeagueIds.length ? client.from("league_rounds").select("league_id").in("league_id", ongoingLeagueIds).eq("round_type", "qualification").eq("status", "active") : empty,
       teamIds.length ? client.from("matches").select("id, home_team_id, away_team_id, league_rounds!inner(round_type, status)")
         .or(`home_team_id.in.(${teamIds.join(",")}),away_team_id.in.(${teamIds.join(",")})`)
         .eq("league_rounds.round_type", "qualification").eq("league_rounds.status", "active") : empty,
       admin ? client.from("leagues").select("id, name").neq("status", "finished") : empty,
-      admin ? client.from("groups").select("id, name, category, league_id, leagues!inner(name, status)").eq("leagues.status", "ongoing").order("name") : empty,
     ]);
 
     const groupByTeamId = new Map(((groupRows ?? []) as { team_id: string; groups: { id: string; name: string } | { id: string; name: string }[] | null }[])
@@ -131,7 +144,6 @@ export default function ChatTabScreen() {
       ownLeagueIds.add(team.league_id);
       next.push({ key: `community:${team.league_id}`, type: "community", id: team.league_id, leagueId: team.league_id, title: "Tiedotteet", subtitle: team.league?.name ?? "", canCompose: admin, adminOnly: false });
     }
-    const ownGroupIds = new Set<string>();
     const nextComposeTeams: ComposeTeam[] = [];
     for (const team of teams) {
       const leagueName = team.league?.name ?? "";
@@ -145,7 +157,6 @@ export default function ChatTabScreen() {
       const group = groupByTeamId.get(team.id);
       // The lohko chat is closed while a qualification round runs.
       if (!group || team.league?.status !== "ongoing" || qualificationLeagueIds.has(team.league_id)) continue;
-      ownGroupIds.add(group.id);
       next.push({ key: `group:${group.id}`, type: "group", id: group.id, leagueId: team.league_id, title: `${group.name} · ${category}`, subtitle: leagueName, canCompose: true, adminOnly: false });
       if (team.captain_id === userId) nextComposeTeams.push({ teamId: team.id, teamName: team.name, groupId: group.id, title: `${group.name} · ${category}`, leagueId: team.league_id });
     }
@@ -158,24 +169,28 @@ export default function ChatTabScreen() {
         canCompose: true, adminOnly: false, opponentTeamId: row.other_team_id, ownTeamId: row.own_team_id, includeTeams: row.include_teams,
       });
     }
+    for (const row of (adminConversationData ?? []) as AdminConversationRow[]) {
+      // The admin sees who they're talking to; the other side sees "Ylläpito".
+      next.push({
+        key: `admin:${row.id}`, type: "admin", id: row.id, leagueId: "",
+        title: admin ? row.other_names || "Keskustelu" : "Ylläpito",
+        subtitle: admin ? (row.member_count > 2 ? `${row.member_count - 1} henkilöä` : "Yksityiskeskustelu") : row.other_names,
+        canCompose: true, adminOnly: false,
+      });
+    }
     for (const league of (adminLeagueRows ?? []) as { id: string; name: string }[]) {
       if (ownLeagueIds.has(league.id)) continue;
       next.push({ key: `community:${league.id}`, type: "community", id: league.id, leagueId: league.id, title: "Tiedotteet", subtitle: league.name, canCompose: true, adminOnly: true });
     }
-    // Admins can read any running lohko, but the group_messages insert
-    // policy requires actual team membership in the group.
-    for (const group of (adminGroupRows ?? []) as { id: string; name: string; category: string; league_id: string; leagues: { name: string } | { name: string }[] | null }[]) {
-      if (ownGroupIds.has(group.id)) continue;
-      next.push({ key: `group:${group.id}`, type: "group", id: group.id, leagueId: group.league_id, title: `${group.name} · ${categoryLabels[group.category] ?? group.category}`, subtitle: one(group.leagues)?.name ?? "", canCompose: false, adminOnly: true, note: "Ylläpito näkee lohkon viestit, mutta ei ole sen jäsen." });
-    }
 
     const idsOf = (type: ThreadType) => next.filter((conversation) => conversation.type === type).map((conversation) => conversation.id);
-    const [groupIds, leagueIds, matchIds, directIds] = [idsOf("group"), idsOf("community"), idsOf("qualification"), idsOf("direct")];
-    const [{ data: groupMessages }, { data: communityMessages }, { data: qualificationMessages }, { data: directMessages }, { data: mutedRows }] = await Promise.all([
+    const [groupIds, leagueIds, matchIds, directIds, adminChatIds] = [idsOf("group"), idsOf("community"), idsOf("qualification"), idsOf("direct"), idsOf("admin")];
+    const [{ data: groupMessages }, { data: communityMessages }, { data: qualificationMessages }, { data: directMessages }, { data: adminMessages }, { data: mutedRows }] = await Promise.all([
       groupIds.length ? client.from("group_messages").select("group_id, user_id, message, created_at").in("group_id", groupIds).order("created_at", { ascending: false }).limit(1000) : empty,
       leagueIds.length ? client.from("community_messages").select("league_id, user_id, message, created_at").in("league_id", leagueIds).order("created_at", { ascending: false }).limit(1000) : empty,
       matchIds.length ? client.from("qualification_messages").select("match_id, user_id, message, created_at").in("match_id", matchIds).order("created_at", { ascending: false }).limit(1000) : empty,
       directIds.length ? client.from("direct_messages").select("conversation_id, user_id, message, created_at").in("conversation_id", directIds).order("created_at", { ascending: false }).limit(1000) : empty,
+      adminChatIds.length ? client.from("admin_messages").select("conversation_id, user_id, message, created_at").in("conversation_id", adminChatIds).order("created_at", { ascending: false }).limit(1000) : empty,
       client.from("muted_conversations").select("thread_type, thread_id").eq("user_id", userId),
     ]);
     setMutedKeys(new Set(((mutedRows ?? []) as { thread_type: string; thread_id: string }[]).map((row) => `${row.thread_type}:${row.thread_id}`)));
@@ -188,12 +203,13 @@ export default function ChatTabScreen() {
     collect(communityMessages, "community");
     collect(qualificationMessages, "qualification");
     collect(directMessages, "direct");
+    collect(adminMessages, "admin");
 
     // Newest activity first, like a messaging app; threads without messages
     // keep their natural order after them.
     const byActivity = (left: Conversation, right: Conversation) =>
       (latest[right.key]?.created_at ?? "").localeCompare(latest[left.key]?.created_at ?? "") || typeOrder[left.type] - typeOrder[right.type];
-    setConversations([...next.filter((conversation) => !conversation.adminOnly).sort(byActivity), ...next.filter((conversation) => conversation.adminOnly).sort(byActivity)]);
+    setConversations(next.sort(byActivity));
     setLastMessages(latest);
     setComposeTeams(nextComposeTeams);
     setLoadingList(false);
@@ -222,8 +238,16 @@ export default function ChatTabScreen() {
     setOpenKey(`direct:${targetDirectId}`);
   }, [targetDirectId, conversations]);
 
+  // ...and one for an admin conversation with ?adminChatId=...
+  useEffect(() => {
+    if (!targetAdminChatId || appliedAdminChatParam.current === targetAdminChatId) return;
+    if (!conversations.some((conversation) => conversation.key === `admin:${targetAdminChatId}`)) return;
+    appliedAdminChatParam.current = targetAdminChatId;
+    setOpenKey(`admin:${targetAdminChatId}`);
+  }, [targetAdminChatId, conversations]);
+
   // Android's back button returns from a thread to the list.
-  const closeThread = useCallback(() => { setOpenKey(null); setShowMembers(false); setGroupMembers([]); setDraft(""); setError(""); }, []);
+  const closeThread = useCallback(() => { setOpenKey(null); setShowMembers(false); setGroupMembers([]); setAdminMembers([]); setDraft(""); setError(""); }, []);
 
   useEffect(() => {
     if (!openThreadKey) return;
@@ -231,11 +255,19 @@ export default function ChatTabScreen() {
     return () => subscription.remove();
   }, [openThreadKey, closeThread]);
 
+  const loadAdminMembers = async (conversationId: string) => {
+    if (!supabase) return;
+    const { data } = await supabase.rpc("get_admin_conversation_members", { target_conversation_id: conversationId });
+    setAdminMembers((data ?? []) as AdminMemberRow[]);
+  };
+
   const openMembers = async () => {
     if (!supabase || !openConversation) return;
     setShowMembers(true);
     setLoadingMembers(true);
-    if (openConversation.type === "qualification") {
+    if (openConversation.type === "admin") {
+      await loadAdminMembers(openConversation.id);
+    } else if (openConversation.type === "qualification") {
       const { data } = await supabase.rpc("get_league_team_rosters", { target_league_id: openConversation.leagueId });
       setGroupMembers(((data ?? []) as (TeamRosterRow & { team_id: string })[]).filter((row) => row.team_id === openConversation.opponentTeamId));
     } else if (openConversation.type === "direct") {
@@ -298,12 +330,25 @@ export default function ChatTabScreen() {
     markLeagueRead(leagueId);
   }, [session?.user.id, markLeagueRead]);
 
+  const loadAdminMessages = useCallback(async (conversationId: string) => {
+    if (!supabase || !session?.user.id) return;
+    const userId = session.user.id;
+    const { data } = await supabase.rpc("get_admin_messages", { target_conversation_id: conversationId });
+    const rows = (data ?? []) as unknown as AdminMessageRow[];
+    const lastRead = await AsyncStorage.getItem(`admin-chat-read-${userId}-${conversationId}`);
+    const firstUnread = rows.find((item) => item.user_id !== userId && (!lastRead || item.created_at > lastRead));
+    setScrollTargetId((firstUnread ?? rows[rows.length - 1])?.id ?? null);
+    setMessages(rows.map((item) => toMessage(item.id, item.user_id === userId ? "Sinä" : `${item.sender_first_name} ${item.sender_last_name}`, item.sender_is_admin ? "Ylläpito" : "", item.message, item.created_at, item.user_id === userId)));
+    markAdminChatRead(conversationId);
+  }, [session?.user.id, markAdminChatRead]);
+
   const loadThread = useCallback(async (conversation: Conversation) => {
     if (conversation.type === "group") await loadLohkoMessages(conversation.id);
     else if (conversation.type === "qualification") await loadQualificationMessages(conversation.id);
     else if (conversation.type === "direct") await loadDirectMessages(conversation.id);
+    else if (conversation.type === "admin") await loadAdminMessages(conversation.id);
     else await loadCommunityMessages(conversation.id);
-  }, [loadLohkoMessages, loadQualificationMessages, loadDirectMessages, loadCommunityMessages]);
+  }, [loadLohkoMessages, loadQualificationMessages, loadDirectMessages, loadAdminMessages, loadCommunityMessages]);
 
   // Tab screens stay mounted in the background, so loading a thread (which
   // marks it read) must only happen while this tab is actually open -
@@ -337,7 +382,8 @@ export default function ChatTabScreen() {
     if (!openConversation) { void loadConversations(); return; }
     const notifiedId = openConversation.type === "group" ? lastNotify.group_id
       : openConversation.type === "qualification" ? lastNotify.match_id
-        : openConversation.type === "direct" ? lastNotify.direct_id : lastNotify.league_id;
+        : openConversation.type === "direct" ? lastNotify.direct_id
+          : openConversation.type === "admin" ? lastNotify.admin_chat_id : lastNotify.league_id;
     if (notifiedId === openConversation.id) void loadThread(openConversation);
     // Only a new ping should trigger this; reruns on list reloads would loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -387,7 +433,9 @@ export default function ChatTabScreen() {
         ? await supabase.from("qualification_messages").insert({ match_id: openConversation.id, user_id: userId, message: value })
         : openConversation.type === "direct"
           ? await supabase.from("direct_messages").insert({ conversation_id: openConversation.id, user_id: userId, message: value })
-          : await supabase.from("community_messages").insert({ league_id: openConversation.id, user_id: userId, message: value });
+          : openConversation.type === "admin"
+            ? await supabase.from("admin_messages").insert({ conversation_id: openConversation.id, user_id: userId, message: value })
+            : await supabase.from("community_messages").insert({ league_id: openConversation.id, user_id: userId, message: value });
     if (insertError) { setError("Viestin lähetys epäonnistui. Yritä uudelleen."); return; }
     // The DB trigger that pings other members skips the sender, so refetch
     // directly here instead of waiting on a notify event that won't arrive.
@@ -426,7 +474,8 @@ export default function ChatTabScreen() {
   const isUnread = (conversation: Conversation) => conversation.type === "group" ? unreadGroupIds.has(conversation.id)
     : conversation.type === "qualification" ? unreadQualificationMatchIds.has(conversation.id)
       : conversation.type === "direct" ? unreadDirectIds.has(conversation.id)
-        : unreadLeagueIds.has(conversation.id);
+        : conversation.type === "admin" ? unreadAdminChatIds.has(conversation.id)
+          : unreadLeagueIds.has(conversation.id);
 
   // "Uusi keskustelu": a captain picks another captain in their lohko. The
   // server returns the existing conversation if the teams already have one.
@@ -476,6 +525,93 @@ export default function ChatTabScreen() {
     await loadConversations();
   };
 
+  // Admin's person picker: "new" starts a conversation with everyone picked,
+  // "add" adds them to the open admin conversation.
+  const [pickerMode, setPickerMode] = useState<"new" | "add" | null>(null);
+  const [personQuery, setPersonQuery] = useState("");
+  const [personResults, setPersonResults] = useState<PersonResult[]>([]);
+  const [pickedPeople, setPickedPeople] = useState<PersonResult[]>([]);
+  const [pickerBusy, setPickerBusy] = useState(false);
+  const [pickerError, setPickerError] = useState("");
+
+  const openPicker = (mode: "new" | "add") => {
+    setShowMembers(false);
+    setPickerMode(mode); setPersonQuery(""); setPersonResults([]); setPickedPeople([]); setPickerError("");
+  };
+
+  // A player code (#12) searches from one digit, a name from two letters.
+  const personSearch = personQuery.trim();
+  const personSearchable = /^#?\d+$/.test(personSearch) || personSearch.length >= 2;
+  useEffect(() => {
+    const query = personQuery.trim();
+    if (!pickerMode || !supabase || !personSearchable) return;
+    const client = supabase;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void client.rpc("search_players_for_admin_chat", { search_query: query }).then(({ data }) => { if (!cancelled) setPersonResults((data ?? []) as PersonResult[]); });
+    }, 250);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [personQuery, personSearchable, pickerMode]);
+
+  const togglePerson = (person: PersonResult) => setPickedPeople((current) => current.some((picked) => picked.id === person.id)
+    ? current.filter((picked) => picked.id !== person.id) : [...current, person]);
+
+  const confirmPicker = async () => {
+    if (!supabase || pickedPeople.length === 0) return;
+    const memberIds = pickedPeople.map((person) => person.id);
+    setPickerBusy(true); setPickerError("");
+    if (pickerMode === "add" && openConversation) {
+      const { error: addError } = await supabase.rpc("add_admin_conversation_members", { target_conversation_id: openConversation.id, member_ids: memberIds });
+      setPickerBusy(false);
+      if (addError) { setPickerError("Henkilöiden lisäys epäonnistui. Yritä uudelleen."); return; }
+      setPickerMode(null);
+      await loadConversations();
+      return;
+    }
+    const { data, error: startError } = await supabase.rpc("start_admin_conversation", { member_ids: memberIds });
+    if (startError || !data) { setPickerBusy(false); setPickerError("Keskustelun avaaminen epäonnistui. Yritä uudelleen."); return; }
+    await loadConversations();
+    setPickerBusy(false);
+    setPickerMode(null);
+    setOpenKey(`admin:${data as string}`);
+  };
+
+  const existingMemberIds = new Set(pickerMode === "add" ? adminMembers.map((member) => member.user_id) : []);
+  const renderPicker = () => <Modal visible={pickerMode !== null} transparent animationType="fade" onRequestClose={() => setPickerMode(null)}>
+    <Pressable style={styles.membersBackdrop} onPress={() => setPickerMode(null)}>
+      <Pressable style={styles.membersModal} onPress={(event) => event.stopPropagation()}>
+        <View style={styles.membersHeader}>
+          <Text style={styles.membersTitle}>{pickerMode === "add" ? "Lisää henkilöitä" : "Uusi keskustelu"}</Text>
+          <Pressable onPress={() => setPickerMode(null)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.membersClose}>×</Text></Pressable>
+        </View>
+        <Text style={styles.choiceHint}>Hae henkilöitä nimellä tai pelaajakoodilla. Voit valita useamman henkilön.</Text>
+        <TextInput value={personQuery} onChangeText={setPersonQuery} placeholder="Nimi tai #koodi" placeholderTextColor="#8A978F" autoCorrect={false} autoCapitalize="none" style={styles.searchInput} />
+        {pickedPeople.length > 0 ? <View style={styles.pickedList}>
+          {pickedPeople.map((person) => <Pressable key={person.id} onPress={() => togglePerson(person)} style={styles.pickedChip}>
+            <Text style={styles.pickedChipText}>{person.first_name} {person.last_name}</Text>
+            <Ionicons name="close" size={14} color={colors.green} />
+          </Pressable>)}
+        </View> : null}
+        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {(personSearchable ? personResults : []).filter((person) => !existingMemberIds.has(person.id)).map((person) => {
+            const picked = pickedPeople.some((item) => item.id === person.id);
+            return <Pressable key={person.id} onPress={() => togglePerson(person)} style={({ pressed }) => [styles.choiceRow, pressed && styles.rowPressed]}>
+              <View style={styles.rowBody}>
+                <Text style={styles.rowTitle} numberOfLines={1}>{person.first_name} {person.last_name}</Text>
+                {person.player_code ? <Text style={styles.rowLeague}>#{person.player_code}</Text> : null}
+              </View>
+              <Ionicons name={picked ? "checkmark-circle" : "add-circle-outline"} size={22} color={picked ? colors.greenBright : colors.muted} />
+            </Pressable>;
+          })}
+        </ScrollView>
+        <Pressable disabled={pickerBusy || pickedPeople.length === 0} onPress={() => void confirmPicker()} style={[styles.muteButton, styles.includeButton, pickedPeople.length === 0 && styles.sendEmpty]}>
+          {pickerBusy ? <ActivityIndicator color={colors.green} /> : <Text style={styles.muteButtonText}>{pickerMode === "add" ? "Lisää keskusteluun" : "Aloita keskustelu"}</Text>}
+        </Pressable>
+        {pickerError ? <Text style={styles.actionError}>{pickerError}</Text> : null}
+      </Pressable>
+    </Pressable>
+  </Modal>;
+
   const renderRow = (conversation: Conversation) => {
     const last = lastMessages[conversation.key];
     const unread = isUnread(conversation);
@@ -491,8 +627,8 @@ export default function ChatTabScreen() {
           {mutedKeys.has(conversation.key) ? <Ionicons name="notifications-off-outline" size={14} color={colors.muted} accessibilityLabel="Hiljennetty" /> : null}
           {last ? <Text style={[styles.rowTime, unread && styles.rowTimeUnread]}>{formatListTime(last.created_at)}</Text> : null}
         </View>
-        {/* Admins see many leagues' threads, so only their rows keep the league line. */}
-        {conversation.adminOnly ? <Text style={styles.rowLeague} numberOfLines={1}>{conversation.subtitle}</Text> : null}
+        {/* Admins see many leagues' Tiedotteet, so those rows keep the league line. */}
+        {conversation.adminOnly || (isAdmin && conversation.type === "community") ? <Text style={styles.rowLeague} numberOfLines={1}>{conversation.subtitle}</Text> : null}
         <View style={styles.rowBottom}>
           <Text style={[styles.rowPreview, unread && styles.rowPreviewUnread]} numberOfLines={1}>{last ? preview : "Ei vielä viestejä"}</Text>
           {unread ? <View style={styles.unreadDot} /> : null}
@@ -501,9 +637,9 @@ export default function ChatTabScreen() {
     </Pressable>;
   };
 
-  const ownConversations = conversations.filter((conversation) => !conversation.adminOnly);
-  const adminConversations = conversations.filter((conversation) => conversation.adminOnly);
+  const showNewConversationButton = isAdmin || composeTeams.length > 0;
   const infoTexts: Record<ThreadType, [string, string]> = {
+    admin: ["Ylläpidon keskustelu", "Tämä on keskustelu liigan ylläpidon kanssa. Viestit näkyvät vain keskustelun jäsenille."],
     community: ["Tiedotteet", "Tiedotteisiin liigan järjestäjä lähettää koko liigaa koskevia infoja."],
     group: ["Lohkochat", "Tämä on lohkochat, jossa on kaikki teidän lohkon joukkueiden pelaajat. Lohkochatissa voit sopia pelit lohkosi joukkueita vastaan. Uusi lohkochat avautuu aina, kun uusi kierros alkaa."],
     qualification: ["Karsintachat", "Tässä chatissa on teidän ja karsintavastustajan joukkue. Voit sopia pelin ajankohdan täällä."],
@@ -512,16 +648,13 @@ export default function ChatTabScreen() {
 
   if (!openConversation) return <View style={styles.page}>
     <ScreenHeader />
-    {loadingList ? <ActivityIndicator color={colors.green} style={styles.listLoading} /> : <ScrollView contentContainerStyle={[styles.list, composeTeams.length > 0 && styles.listWithNewConversation]} showsVerticalScrollIndicator={false}>
+    {loadingList ? <ActivityIndicator color={colors.green} style={styles.listLoading} /> : <ScrollView contentContainerStyle={[styles.list, showNewConversationButton && styles.listWithNewConversation]} showsVerticalScrollIndicator={false}>
       {conversations.length === 0 ? <View style={styles.emptyState}><Text style={styles.emptyText}>Kun ilmoittaudut liigaan, sen tiedotteet näkyvät täällä. Lohkochat avautuu, kun kierros alkaa.</Text></View> : null}
-      {ownConversations.map(renderRow)}
-      {adminConversations.length > 0 ? <>
-        <Text style={styles.sectionTitle}>YLLÄPITO</Text>
-        {adminConversations.map(renderRow)}
-      </> : null}
+      {conversations.map(renderRow)}
     </ScrollView>}
-    {/* Floats in the bottom right corner, just above the tab bar. */}
-    {!loadingList && composeTeams.length > 0 ? <Pressable onPress={() => void openNewConversation()} accessibilityRole="button" style={({ pressed }) => [styles.newConversation, pressed && styles.newConversationPressed]}>
+    {/* Floats in the bottom right corner, just above the tab bar. Admins pick
+        anyone to message; captains pick another captain in their lohko. */}
+    {!loadingList && showNewConversationButton ? <Pressable onPress={() => isAdmin ? openPicker("new") : void openNewConversation()} accessibilityRole="button" style={({ pressed }) => [styles.newConversation, pressed && styles.newConversationPressed]}>
       <Ionicons name="create-outline" size={18} color={colors.lime} />
       <Text style={styles.newConversationText}>Uusi keskustelu</Text>
     </Pressable> : null}
@@ -565,6 +698,7 @@ export default function ChatTabScreen() {
         </Pressable>
       </Pressable>
     </Modal>
+    {renderPicker()}
   </View>;
 
   return <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -590,7 +724,7 @@ export default function ChatTabScreen() {
         scrollRef.current?.scrollTo({ y: Math.max(0, event.nativeEvent.layout.y - 12), animated: false });
         setScrollTargetId(null);
       }} {...(Platform.OS === "web" && message.own ? { onContextMenu: (event: { preventDefault: () => void }) => { event.preventDefault(); openMessageActions(message); } } : {})}>
-        {message.own ? null : <Text style={styles.sender}>{message.name} <Text style={styles.team}>· {message.sub}</Text></Text>}
+        {message.own ? null : <Text style={styles.sender}>{message.name}{message.sub ? <Text style={styles.team}> · {message.sub}</Text> : null}</Text>}
         <Text style={styles.body}>{message.body}<Text style={styles.time}>  {message.time}</Text></Text>
       </Pressable>)}
     </ScrollView>
@@ -616,12 +750,21 @@ export default function ChatTabScreen() {
       <Pressable style={styles.membersBackdrop} onPress={() => setShowMembers(false)}>
         <Pressable style={styles.membersModal} onPress={(event) => event.stopPropagation()}>
           <View style={styles.membersHeader}>
-            <Text style={styles.membersTitle}>{openConversation.type === "qualification" ? "Vastustajan pelaajat" : openConversation.type === "direct" ? "Keskustelun jäsenet" : "Lohkon joukkueet"}</Text>
+            <Text style={styles.membersTitle}>{openConversation.type === "qualification" ? "Vastustajan pelaajat" : openConversation.type === "direct" || openConversation.type === "admin" ? "Keskustelun jäsenet" : "Lohkon joukkueet"}</Text>
             <Pressable onPress={() => setShowMembers(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.membersClose}>×</Text></Pressable>
           </View>
           {loadingMembers ? <ActivityIndicator color={colors.green} style={styles.membersLoading} /> : <ScrollView showsVerticalScrollIndicator={false}>
-            <TeamRosterList teams={groupRosterByTeam(groupMembers)} compact />
+            {openConversation.type === "admin" ? adminMembers.map((member) => <View key={member.user_id} style={styles.choiceRow}>
+              <View style={styles.rowBody}>
+                <Text style={styles.rowTitle} numberOfLines={1}>{member.user_id === session?.user.id ? "Sinä" : `${member.first_name} ${member.last_name}`}</Text>
+                {member.is_admin ? <Text style={styles.rowLeague}>Ylläpito</Text> : member.player_code ? <Text style={styles.rowLeague}>#{member.player_code}</Text> : null}
+              </View>
+            </View>) : <TeamRosterList teams={groupRosterByTeam(groupMembers)} compact />}
           </ScrollView>}
+          {openConversation.type === "admin" && isAdmin ? <Pressable onPress={() => openPicker("add")} style={[styles.muteButton, styles.includeButton]}>
+            <Ionicons name="person-add-outline" size={18} color={colors.green} />
+            <Text style={styles.muteButtonText}>Lisää henkilöitä</Text>
+          </Pressable> : null}
           {openConversation.type === "direct" && !openConversation.includeTeams ? <>
             <Pressable disabled={includingTeams} onPress={() => void includeTeams()} style={[styles.muteButton, styles.includeButton]}>
               {includingTeams ? <ActivityIndicator color={colors.green} /> : <>
@@ -656,6 +799,7 @@ export default function ChatTabScreen() {
         </Pressable>
       </Pressable>
     </Modal>
+    {renderPicker()}
   </KeyboardAvoidingView>;
 }
 
@@ -733,4 +877,8 @@ const styles = StyleSheet.create({
   choiceHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 6, marginBottom: 6 },
   choiceRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.line },
   choiceExisting: { color: colors.greenBright, fontWeight: "800", fontSize: 12 },
+  searchInput: { color: colors.ink, fontSize: 14, borderRadius: 13, backgroundColor: colors.canvas, paddingHorizontal: 14, paddingVertical: 11, marginTop: 4, ...(Platform.OS === "web" ? { outlineStyle: "none" } as object : {}) },
+  pickedList: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
+  pickedChip: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 14, borderWidth: 1, borderColor: colors.green, paddingHorizontal: 10, paddingVertical: 5 },
+  pickedChipText: { color: colors.green, fontSize: 12, fontWeight: "700" },
 });

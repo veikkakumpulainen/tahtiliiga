@@ -13,6 +13,9 @@ verify_jwt = false
 [functions.notify-direct-message]
 verify_jwt = false
 
+[functions.notify-admin-message]
+verify_jwt = false
+
 [functions.notify-round-started]
 verify_jwt = false
 
