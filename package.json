@@ -50,6 +50,7 @@
     "web": "expo start --web",
     "build:web": "expo export --platform web",
     "lint": "expo lint",
+    "test:db": "supabase test db",
     "db:dev": "echo Linking + pushing migrations to tahtiliiga-dev... && supabase link --project-ref kysmpllacnnaltxoqrul && supabase db push",
     "db:prod": "echo Linking + pushing migrations to PRODUCTION (tahtiliiga)... && supabase link --project-ref onmrikfysxqkzlnhlepv && supabase db push",
     "functions:deploy:dev": "echo Linking to tahtiliiga-dev and deploying function... && supabase link --project-ref kysmpllacnnaltxoqrul && supabase functions deploy",

@@ -1,0 +1,217 @@
+-- Shared test helpers, included from every *.test.sql with \ir. Each test
+-- file runs inside its own transaction that is rolled back at the end, so
+-- everything created here disappears after the file.
+--
+-- Data is created as the postgres superuser (bypassing RLS); a test switches
+-- to a real user with tests.authenticate_as(...) and back with `reset role`.
+
+create extension if not exists pgtap with schema extensions;
+set search_path = public, extensions;
+
+create schema if not exists tests;
+grant usage on schema tests to anon, authenticated;
+
+-- A confirmed user with a profile (the on_auth_user_created trigger creates it).
+create or replace function tests.create_user(email text, first_name text default 'Testi', last_name text default 'Pelaaja', gender text default 'male', is_admin boolean default false)
+returns uuid
+language plpgsql
+as $$
+declare
+  user_id uuid := gen_random_uuid();
+begin
+  insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, email_confirmed_at, created_at, updated_at)
+  values (user_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', email,
+    jsonb_build_object('first_name', first_name, 'last_name', last_name, 'gender', gender), now(), now(), now());
+  update public.profiles set email_verified_at = now(), role = case when is_admin then 'admin' else 'user' end where id = user_id;
+  return user_id;
+end;
+$$;
+
+-- Runs one statement as this user, the way the app does through PostgREST
+-- (null user = not logged in), and returns the error message or null if it
+-- succeeded. pgTAP's own bookkeeping lives in postgres-owned temp tables the
+-- user roles can't touch, so assertions stay outside, as postgres. Pass ids
+-- into the statement with format(..., %L).
+create or replace function tests.run_as(user_id uuid, statement text)
+returns text
+language plpgsql
+as $$
+begin
+  perform set_config('request.jwt.claims', case when user_id is null then json_build_object('role', 'anon') else json_build_object('sub', user_id, 'role', 'authenticated') end::text, true);
+  perform set_config('role', case when user_id is null then 'anon' else 'authenticated' end, true);
+  execute statement;
+  reset role;
+  return null;
+exception when others then
+  return sqlerrm;
+end;
+$$;
+
+-- Runs a query as this user and returns its rows as a jsonb array.
+create or replace function tests.query_as(user_id uuid, query text)
+returns jsonb
+language plpgsql
+as $$
+declare
+  result jsonb;
+begin
+  perform set_config('request.jwt.claims', case when user_id is null then json_build_object('role', 'anon') else json_build_object('sub', user_id, 'role', 'authenticated') end::text, true);
+  perform set_config('role', case when user_id is null then 'anon' else 'authenticated' end, true);
+  execute format('select coalesce(jsonb_agg(row_to_json(q)), ''[]''::jsonb) from (%s) q', query) into result;
+  reset role;
+  return result;
+end;
+$$;
+
+-- Number of rows a query returns for this user (e.g. what RLS lets them see).
+create or replace function tests.count_as(user_id uuid, query text)
+returns integer
+language sql
+as $$ select jsonb_array_length(tests.query_as(user_id, query)); $$;
+
+-- An ongoing league for the whole of 2026, without automatic group allocation.
+create or replace function tests.create_league(created_by uuid, league_status text default 'ongoing')
+returns uuid
+language plpgsql
+as $$
+declare
+  city uuid;
+  league_id uuid;
+begin
+  insert into public.cities (name) values ('Testikaupunki ' || gen_random_uuid()) returning id into city;
+  insert into public.leagues (name, start_date, end_date, registration_deadline, status, created_by, city_id, automatic_group_allocation)
+  values ('Testiliiga', '2026-01-01', '2026-12-31', '2026-01-01', league_status, created_by, city, false)
+  returning id into league_id;
+  return league_id;
+end;
+$$;
+
+-- A team whose first member is the captain; every member is active.
+create or replace function tests.create_team(league_id uuid, name text, member_ids uuid[], category text default 'avoin', skill_level text default 'C')
+returns uuid
+language plpgsql
+as $$
+declare
+  team_id uuid;
+begin
+  insert into public.teams (league_id, name, skill_level, captain_id, created_by, category)
+  values (league_id, name, skill_level, member_ids[1], member_ids[1], category)
+  returning id into team_id;
+  insert into public.team_members (team_id, user_id, is_captain, status)
+  select team_id, member_id, member_id = member_ids[1], 'active' from unnest(member_ids) member_id;
+  return team_id;
+end;
+$$;
+
+-- A team of two fresh players; the captain's email is <prefix>-1@test.fi.
+create or replace function tests.create_team_with_players(league_id uuid, name text, prefix text, category text default 'avoin')
+returns uuid
+language plpgsql
+as $$
+begin
+  return tests.create_team(league_id, name, array[
+    tests.create_user(prefix || '-1@test.fi', name, 'Kapteeni', 'male'),
+    tests.create_user(prefix || '-2@test.fi', name, 'Pelaaja', 'female')
+  ], category);
+end;
+$$;
+
+create or replace function tests.create_group(league_id uuid, name text, team_ids uuid[], category text default 'avoin')
+returns uuid
+language plpgsql
+as $$
+declare
+  group_id uuid;
+begin
+  insert into public.groups (league_id, name, category, status) values (league_id, name, category, 'published') returning id into group_id;
+  insert into public.group_teams (group_id, team_id) select group_id, team_id from unnest(team_ids) team_id;
+  return group_id;
+end;
+$$;
+
+create or replace function tests.create_round(league_id uuid, name text, round_type text, start_date date, end_date date)
+returns uuid
+language plpgsql
+as $$
+declare
+  round_id uuid;
+begin
+  insert into public.league_rounds (league_id, name, round_type, status, start_date, end_date)
+  values (league_id, name, round_type, 'draft', start_date, end_date)
+  returning id into round_id;
+  return round_id;
+end;
+$$;
+
+create or replace function tests.team_id(team_name text)
+returns uuid
+language sql
+as $$ select id from public.teams where name = team_name; $$;
+
+create or replace function tests.group_id(team_name text)
+returns uuid
+language sql
+as $$ select group_team.group_id from public.group_teams group_team join public.teams team on team.id = group_team.team_id where team.name = team_name; $$;
+
+create or replace function tests.match_between(round_id uuid, first_team text, second_team text)
+returns uuid
+language sql
+as $$
+  select match.id from public.matches match
+  where match.league_round_id = round_id
+    and tests.team_id(first_team) in (match.home_team_id, match.away_team_id)
+    and tests.team_id(second_team) in (match.home_team_id, match.away_team_id);
+$$;
+
+-- Records a result directly (as an admin would), from the named winner's
+-- point of view: winner_sets - loser_sets, e.g. 2-1 or 3-0.
+create or replace function tests.record_result(round_id uuid, winner text, loser text, winner_sets integer, loser_sets integer, walkover boolean default false)
+returns void
+language plpgsql
+as $$
+declare
+  target public.matches%rowtype;
+  winner_is_home boolean;
+begin
+  select * into target from public.matches where id = tests.match_between(round_id, winner, loser);
+  if not found then raise exception 'No match between % and %', winner, loser; end if;
+  winner_is_home := target.home_team_id = tests.team_id(winner);
+  update public.matches set
+    status = 'completed',
+    home_score = case when winner_is_home then winner_sets else loser_sets end,
+    away_score = case when winner_is_home then loser_sets else winner_sets end,
+    set_scores = (
+      select jsonb_agg(jsonb_build_object('home', case when (n <= winner_sets) = winner_is_home then 6 else 3 end, 'away', case when (n <= winner_sets) = winner_is_home then 3 else 6 end))
+      from generate_series(1, winner_sets + loser_sets) n
+    ),
+    walkover_winner_id = case when walkover then tests.team_id(winner) end
+  where id = target.id;
+end;
+$$;
+
+-- Plays every match of a round so that the team whose name sorts first wins
+-- 2-1. In a group of four this ranks the teams in name order.
+create or replace function tests.play_round_in_name_order(round_id uuid)
+returns void
+language plpgsql
+as $$
+declare
+  target record;
+begin
+  for target in
+    select home.name as home_name, away.name as away_name
+    from public.matches match
+    join public.teams home on home.id = match.home_team_id
+    join public.teams away on away.id = match.away_team_id
+    where match.league_round_id = round_id
+  loop
+    if target.home_name < target.away_name then
+      perform tests.record_result(round_id, target.home_name, target.away_name, 2, 1);
+    else
+      perform tests.record_result(round_id, target.away_name, target.home_name, 2, 1);
+    end if;
+  end loop;
+end;
+$$;
+
+grant execute on all functions in schema tests to anon, authenticated;
