@@ -41,7 +41,7 @@ as $$
     'select public.save_match_details(%L, null, null, %s, %s, %L::jsonb, null, %L, %L::uuid[], %L::uuid[], %L, %L)',
     ctx.trio_match,
     case when trio_home then 2 else 1 end, case when trio_home then 1 else 2 end,
-    '[{"home":6,"away":3},{"home":3,"away":6},{"home":6,"away":4}]', 'completed',
+    case when trio_home then '[{"home":6,"away":3},{"home":3,"away":6},{"home":6,"away":4}]' else '[{"home":3,"away":6},{"home":6,"away":3},{"home":4,"away":6}]' end, 'completed',
     case when trio_home then lineup else array[]::uuid[] end, case when trio_home then array[]::uuid[] else lineup end,
     case when trio_home then substitute_id end, case when trio_home then null else substitute_id end))
   from ctx, lateral (select home_team_id = tests.team_id('Trio') as trio_home from public.matches where id = ctx.trio_match) side;
