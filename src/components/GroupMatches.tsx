@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect } from "expo-router";
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { formatFinnishDate, formatFinnishDateTime } from "../lib/dates";
@@ -60,6 +60,7 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
   // players know which days the match has to be played on.
   const [roundRange, setRoundRange] = useState<{ start: string; end: string } | null>(null);
   const [timeVisible, setTimeVisible] = useState(false);
+  const timeListRef = useRef<ScrollView>(null);
   const [venue, setVenue] = useState("");
   const [venueOptions, setVenueOptions] = useState<string[]>([]);
   const [venuePickerVisible, setVenuePickerVisible] = useState(false);
@@ -566,10 +567,10 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
         </View>
         {editorSection === "details" ? <>
         {bookingHalls.length > 0 ? <Pressable onPress={() => setBookingVisible(true)} style={styles.bookingButton}><Text style={styles.bookingButtonText}>Katso vapaat vuorot</Text></Pressable> : null}
-        <Text style={styles.fieldLabel}>OTTELUN AJANKOHTA</Text>
+        <Text style={styles.fieldLabel}>MERKITSE OTTELU MUISTIIN SOVELLUKSEEN</Text>
         <View style={styles.dateTimeRow}>
           <Pressable style={styles.dateTimeField} onPress={() => setCalendarVisible(true)}><Text style={styles.dateTimeText}>{pickedDate ? `${String(pickedDate.day).padStart(2, "0")}.${String(pickedDate.month + 1).padStart(2, "0")}.${pickedDate.year}` : "Valitse päivä"}</Text></Pressable>
-          <Pressable style={styles.dateTimeField} onPress={() => setTimeVisible(true)}><Text style={styles.dateTimeText}>{pickedTime ?? "Valitse aika"}</Text></Pressable>
+          <Pressable style={styles.dateTimeField} onPress={() => setTimeVisible(true)}><Text style={styles.dateTimeText}>{pickedTime ?? "Ottelun aloitusaika"}</Text></Pressable>
         </View>
         <Text style={styles.fieldLabel}>PELIPAIKKA</Text>
         {venueOptions.length > 0 ? <Pressable style={styles.dateTimeField} onPress={() => setVenuePickerVisible(true)}><Text style={styles.dateTimeText}>{venue || "Valitse pelipaikka"}</Text></Pressable> : <TextInput value={venue} onChangeText={setVenue} placeholder="Esim. Padel Center" placeholderTextColor={colors.muted} style={styles.input} />}
@@ -612,7 +613,7 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
               const inRound = roundRange ? isoDay >= roundRange.start && isoDay <= roundRange.end : null;
               // Keyed per month so switching months mounts fresh day views;
               // reusing them let Android drop the round shape after a restyle.
-              return <Pressable key={isoDay} style={styles.calendarCell} onPress={() => { setPickedDate({ year: calendarMonth.year, month: calendarMonth.month, day }); setCalendarVisible(false); }}>
+              return <Pressable key={isoDay} style={styles.calendarCell} disabled={inRound === false} onPress={() => { setPickedDate({ year: calendarMonth.year, month: calendarMonth.month, day }); setCalendarVisible(false); }}>
                 <View style={[styles.calendarDay, inRound && styles.calendarDayInRound, isSelected && styles.calendarDaySelected]}><Text style={[styles.calendarDayText, inRound === false && styles.calendarDayTextOutside, inRound && styles.calendarDayTextInRound, isSelected && styles.calendarDayTextSelected]}>{day}</Text></View>
               </Pressable>;
             })}
@@ -624,9 +625,9 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
     <Modal visible={timeVisible} transparent animationType="fade" onRequestClose={() => setTimeVisible(false)}>
       <Pressable style={styles.pickerBackdrop} onPress={() => setTimeVisible(false)}>
         <Pressable style={styles.timeCard} onPress={(event) => event.stopPropagation()}>
-          <Text style={styles.calendarTitle}>Valitse kellonaika</Text>
-          <ScrollView style={styles.timeList}>
-            {timeSlots.map((slot) => <Pressable key={slot} style={[styles.timeSlot, pickedTime === slot && styles.timeSlotSelected]} onPress={() => { setPickedTime(slot); setTimeVisible(false); }}>
+          <Text style={styles.calendarTitle}>Ottelun aloitusaika</Text>
+          <ScrollView ref={timeListRef} style={styles.timeList}>
+            {timeSlots.map((slot) => <Pressable key={slot} onLayout={slot === (pickedTime ?? "06:00") ? (event) => timeListRef.current?.scrollTo({ y: event.nativeEvent.layout.y, animated: false }) : undefined} style={[styles.timeSlot, pickedTime === slot && styles.timeSlotSelected]} onPress={() => { setPickedTime(slot); setTimeVisible(false); }}>
               <Text style={[styles.timeSlotText, pickedTime === slot && styles.timeSlotTextSelected]}>{slot}</Text>
             </Pressable>)}
           </ScrollView>
