@@ -1,6 +1,6 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useFocusEffect } from "expo-router";
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import ScreenHeader from "../../components/ScreenHeader";
 import TeamRosterList, { groupRosterByTeam, type TeamRosterRow } from "../../components/TeamRosterList";
 import { useSelectedLeague } from "../../context/SelectedLeagueContext";
@@ -12,6 +12,9 @@ import { colors, shadow } from "../../theme";
 type League = { id: string; name: string; status: string };
 type Standing = { group_id: string; group_name: string; team_id: string; team_name: string; played: number; wins: number; losses: number; points: number; rank_position?: number };
 const categories = [["avoin", "Avoin"], ["mixty", "Mixty"]] as const;
+const viewOptions = [["groups", "Lohkot"], ["total", "Kokonaistilanne"]] as const;
+const categoryLabel = (value: string) => categories.find(([key]) => key === value)?.[1] ?? value;
+const viewLabel = (value: string) => viewOptions.find(([key]) => key === value)?.[1] ?? value;
 
 type Movement = "promoted" | "relegated" | "qualifies" | null;
 
@@ -194,6 +197,19 @@ export default function LeaguesScreen() {
     setPendingScrollGroupId(ownGroupId);
     setOwnGroupLayoutPass((current) => current + 1);
   }, [wantsOwnGroupScroll, standingsView, ownGroupId, groupIds.join(",")]);
+  // Divisions that actually have teams in this league; with only one, the
+  // division switch is hidden and that division is shown.
+  const leagueCategories = useMemo(() => [...new Set(rosterRows.map((row) => row.category))], [rosterRows]);
+  useEffect(() => { if (leagueCategories.length === 1 && category !== leagueCategories[0]) setCategory(leagueCategories[0]); }, [leagueCategories, category]);
+  const [viewPickerVisible, setViewPickerVisible] = useState(false);
+  const ongoing = league?.status === "ongoing";
+  const visibleCategories = leagueCategories.length > 0 ? categories.filter(([value]) => leagueCategories.includes(value)) : [...categories];
+  const selectView = (nextCategory: string, nextView: typeof standingsView) => {
+    setViewPickerVisible(false);
+    setCategory(nextCategory);
+    setStandingsView(nextView);
+    if (nextView === "groups") requestOwnGroupScroll(); else scrollRef.current?.scrollTo({ y: 0, animated: true });
+  };
   const categoryTeams = groupRosterByTeam(rosterRows.filter((row) => row.category === category));
   const groupNumbers = standings.map((standing) => groupNumberOf(standing.group_name)).filter((value): value is number => value !== null);
   const topGroupNumber = groupNumbers.length ? Math.min(...groupNumbers) : null;
@@ -226,16 +242,32 @@ export default function LeaguesScreen() {
       </View> : <>
         <View style={styles.fixedHeader}>
           {!session || selectedLeague?.id === league.id ? null : <Text style={styles.leagueName}>{league.name}</Text>}
-          <View style={[styles.categoryRow, (!session || selectedLeague?.id === league.id) && styles.categoryRowNoLeagueName]}>
-            {categories.map(([value, label]) => <Pressable key={value} onPress={() => { setCategory(value); if (standingsView === "groups") requestOwnGroupScroll(); else scrollRef.current?.scrollTo({ y: 0, animated: true }); }} style={[styles.categoryButton, category === value && styles.categoryButtonSelected]}>
-              <Text style={[styles.categoryText, category === value && styles.categoryTextSelected]}>{label}</Text>
-            </Pressable>)}
-          </View>
-          {league.status === "ongoing" ? <View style={styles.viewSelector}>
-            <Pressable onPress={() => { setStandingsView("groups"); requestOwnGroupScroll(); }} style={[styles.viewButton, standingsView === "groups" && styles.viewButtonSelected]}><Text style={[styles.viewButtonText, standingsView === "groups" && styles.viewButtonTextSelected]}>Lohkotilanne</Text></Pressable>
-            <Pressable onPress={() => { setStandingsView("total"); scrollRef.current?.scrollTo({ y: 0, animated: true }); }} style={[styles.viewButton, standingsView === "total" && styles.viewButtonSelected]}><Text style={[styles.viewButtonText, standingsView === "total" && styles.viewButtonTextSelected]}>Sarjan tilanne</Text></Pressable>
-          </View> : null}
+          {/* One button for both choices (division + view); opens a list of all combinations. */}
+          {visibleCategories.length * (ongoing ? viewOptions.length : 1) > 1 ? <Pressable onPress={() => setViewPickerVisible(true)} style={[styles.viewPickerButton, (!session || selectedLeague?.id === league.id) && styles.viewPickerButtonNoLeagueName]} accessibilityRole="button" accessibilityLabel="Vaihda näkymää">
+            <Text style={styles.viewPickerButtonText}>{[visibleCategories.length > 1 ? categoryLabel(category) : null, ongoing ? viewLabel(standingsView) : null].filter(Boolean).join(" · ")}</Text>
+            <Text style={styles.viewPickerChevron}>▾</Text>
+          </Pressable> : null}
         </View>
+        <Modal visible={viewPickerVisible} transparent animationType="fade" onRequestClose={() => setViewPickerVisible(false)}>
+          <Pressable style={styles.viewPickerBackdrop} onPress={() => setViewPickerVisible(false)}>
+            <Pressable style={styles.viewPickerCard} onPress={(event) => event.stopPropagation()}>
+              <Text style={styles.viewPickerTitle}>Valitse näkymä</Text>
+              {visibleCategories.map(([categoryValue, categoryText]) => <View key={categoryValue} style={styles.viewPickerGroup}>
+                {ongoing ? <>
+                  {visibleCategories.length > 1 ? <Text style={styles.viewPickerGroupLabel}>{categoryText.toUpperCase()}</Text> : null}
+                  {viewOptions.map(([viewValue, viewText]) => {
+                    const isSelected = category === categoryValue && standingsView === viewValue;
+                    return <Pressable key={viewValue} onPress={() => selectView(categoryValue, viewValue)} style={[styles.viewPickerOption, isSelected && styles.viewPickerOptionSelected]}>
+                      <Text style={[styles.viewPickerOptionText, isSelected && styles.viewPickerOptionTextSelected]}>{viewText}</Text>
+                    </Pressable>;
+                  })}
+                </> : <Pressable onPress={() => selectView(categoryValue, standingsView)} style={[styles.viewPickerOption, category === categoryValue && styles.viewPickerOptionSelected]}>
+                  <Text style={[styles.viewPickerOptionText, category === categoryValue && styles.viewPickerOptionTextSelected]}>{categoryText}</Text>
+                </Pressable>}
+              </View>)}
+            </Pressable>
+          </Pressable>
+        </Modal>
         <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.scrollBody}>
           {league.status !== "ongoing" ? (<>
@@ -302,17 +334,19 @@ const styles = StyleSheet.create({
   fixedHeader: { paddingHorizontal: 22, paddingTop: 27, paddingBottom: 4, backgroundColor: colors.canvas },
   scrollBody: { paddingHorizontal: 22, paddingTop: 16 },
   leagueName: { color: colors.ink, fontSize: 26, fontWeight: "800" },
-  categoryRow: { flexDirection: "row", gap: 8, marginTop: 18 },
-  categoryRowNoLeagueName: { marginTop: 0 },
-  categoryButton: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingVertical: 11, alignItems: "center", backgroundColor: colors.surface },
-  categoryButtonSelected: { backgroundColor: colors.green, borderColor: colors.green },
-  categoryText: { color: colors.ink, fontSize: 12, fontWeight: "900", textAlign: "center" },
-  categoryTextSelected: { color: colors.surface },
-  viewSelector: { flexDirection: "row", gap: 8, marginTop: 18 },
-  viewButton: { borderWidth: 1, borderColor: colors.line, borderRadius: 10, flex: 1, paddingVertical: 11, alignItems: "center", backgroundColor: colors.surface },
-  viewButtonSelected: { backgroundColor: colors.green, borderColor: colors.green },
-  viewButtonText: { color: colors.ink, fontSize: 12, fontWeight: "800" },
-  viewButtonTextSelected: { color: colors.surface },
+  viewPickerButton: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 18, borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingVertical: 11, paddingHorizontal: 14, backgroundColor: colors.surface },
+  viewPickerButtonNoLeagueName: { marginTop: 0 },
+  viewPickerButtonText: { color: colors.ink, fontSize: 14, fontWeight: "800" },
+  viewPickerChevron: { color: colors.muted, fontSize: 14, fontWeight: "800" },
+  viewPickerBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", padding: 24 },
+  viewPickerCard: { backgroundColor: colors.surface, borderRadius: 16, padding: 18, width: "100%", maxWidth: 420, alignSelf: "center" },
+  viewPickerTitle: { color: colors.ink, fontSize: 16, fontWeight: "900", marginBottom: 6 },
+  viewPickerGroup: { marginTop: 10 },
+  viewPickerGroupLabel: { color: colors.muted, fontSize: 11, fontWeight: "900", letterSpacing: 0.5, marginBottom: 6 },
+  viewPickerOption: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.line, marginBottom: 6 },
+  viewPickerOptionSelected: { backgroundColor: colors.green, borderColor: colors.green },
+  viewPickerOptionText: { color: colors.ink, fontSize: 14, fontWeight: "800" },
+  viewPickerOptionTextSelected: { color: colors.surface },
   loading: { marginTop: 30 },
   groupSection: { marginTop: 20 },
   groupName: { color: colors.green, fontSize: 15, fontWeight: "900", marginBottom: 8 },
