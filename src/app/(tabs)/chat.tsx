@@ -89,9 +89,10 @@ export default function ChatTabScreen() {
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [scrollTargetId, setScrollTargetId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
-  const { groupId: targetGroupId, directId: targetDirectId, adminChatId: targetAdminChatId } = useLocalSearchParams<{ groupId?: string; directId?: string; adminChatId?: string }>();
+  const { groupId: targetGroupId, directId: targetDirectId, adminChatId: targetAdminChatId, qualificationMatchId: targetQualificationMatchId, openAt: targetOpenAt } = useLocalSearchParams<{ groupId?: string; directId?: string; adminChatId?: string; qualificationMatchId?: string; openAt?: string }>();
   const appliedGroupParam = useRef<string | null>(null);
   const appliedDirectParam = useRef<string | null>(null);
+  const appliedQualificationParam = useRef<string | null>(null);
   const appliedAdminChatParam = useRef<string | null>(null);
 
   // Builds the list from the user's active team memberships: every league
@@ -205,10 +206,12 @@ export default function ChatTabScreen() {
     collect(directMessages, "direct");
     collect(adminMessages, "admin");
 
-    // Newest activity first, like a messaging app; threads without messages
-    // keep their natural order after them.
+    // Tiedotteet is pinned to the top; the rest go newest activity first,
+    // like a messaging app, and threads without messages keep their natural
+    // order after them.
     const byActivity = (left: Conversation, right: Conversation) =>
-      (latest[right.key]?.created_at ?? "").localeCompare(latest[left.key]?.created_at ?? "") || typeOrder[left.type] - typeOrder[right.type];
+      Number(right.type === "community") - Number(left.type === "community")
+      || (latest[right.key]?.created_at ?? "").localeCompare(latest[left.key]?.created_at ?? "") || typeOrder[left.type] - typeOrder[right.type];
     setConversations(next.sort(byActivity));
     setLastMessages(latest);
     setComposeTeams(nextComposeTeams);
@@ -230,13 +233,25 @@ export default function ChatTabScreen() {
     setOpenKey(`group:${targetGroupId}`);
   }, [targetGroupId, conversations]);
 
-  // ...and one for a private message with ?directId=...
+  // ...and one for a private message with ?directId=... (also the home
+  // screen's match card chat button, which adds ?openAt=<timestamp> so
+  // tapping it again for the same opponent reopens the thread).
   useEffect(() => {
-    if (!targetDirectId || appliedDirectParam.current === targetDirectId) return;
+    const applyKey = `${targetDirectId}:${targetOpenAt ?? ""}`;
+    if (!targetDirectId || appliedDirectParam.current === applyKey) return;
     if (!conversations.some((conversation) => conversation.key === `direct:${targetDirectId}`)) return;
-    appliedDirectParam.current = targetDirectId;
+    appliedDirectParam.current = applyKey;
     setOpenKey(`direct:${targetDirectId}`);
-  }, [targetDirectId, conversations]);
+  }, [targetDirectId, targetOpenAt, conversations]);
+
+  // ...and the match card chat button for a qualification match: ?qualificationMatchId=...
+  useEffect(() => {
+    const applyKey = `${targetQualificationMatchId}:${targetOpenAt ?? ""}`;
+    if (!targetQualificationMatchId || appliedQualificationParam.current === applyKey) return;
+    if (!conversations.some((conversation) => conversation.key === `qualification:${targetQualificationMatchId}`)) return;
+    appliedQualificationParam.current = applyKey;
+    setOpenKey(`qualification:${targetQualificationMatchId}`);
+  }, [targetQualificationMatchId, targetOpenAt, conversations]);
 
   // ...and one for an admin conversation with ?adminChatId=...
   useEffect(() => {

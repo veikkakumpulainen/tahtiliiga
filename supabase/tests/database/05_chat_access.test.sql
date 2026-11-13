@@ -2,7 +2,7 @@
 -- näkyvät vain osallistujille.
 begin;
 \ir helpers.psql
-select plan(16);
+select plan(18);
 
 create temp table ctx as
 select tests.create_user('admin@test.fi', 'Ylla', 'Pito', 'male', true) as admin_id;
@@ -18,6 +18,10 @@ update ctx set round_id = tests.create_round(league_id, 'Kierros 1', 'regular', 
   captain_b = (select captain_id from public.teams where name = 'Bb'),
   captain_c = (select captain_id from public.teams where name = 'Cc');
 select tests.run_as(admin_id, format('select public.start_regular_round(%L)', round_id)) from ctx;
+
+-- Kierroksen alkaessa kapteeneille syntyy keskustelu jokaisen lohkon muun kapteenin kanssa
+select is(tests.count_as(captain_a, 'select * from public.get_my_direct_conversations()'), 1, 'starting a regular round creates a conversation with each other captain in the lohko') from ctx;
+select is(tests.count_as(captain_c, 'select * from public.get_my_direct_conversations()'), 0, 'a team alone in its lohko gets no conversation') from ctx;
 
 -- Kapteenien yksityiskeskustelu
 select isnt(tests.run_as(member_a, format('select public.start_direct_conversation(%L, %L)', tests.team_id('Aa'), tests.team_id('Bb'))), null, 'only the captain can start a private conversation') from ctx;
