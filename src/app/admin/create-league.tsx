@@ -6,6 +6,7 @@ import AdminLeagueHallPicker from "../../components/AdminLeagueHallPicker";
 import AdminLeagueInfoField from "../../components/AdminLeagueInfoField";
 import ScreenHeader from "../../components/ScreenHeader";
 import { useAuth } from "../../hooks/useAuth";
+import { useAppColumn } from "../../hooks/useAppColumn";
 import { useAppScreenRestriction } from "../../hooks/useAppScreenRestriction";
 import { parseFinnishDate } from "../../lib/dates";
 import { supabase } from "../../lib/supabase";
@@ -17,6 +18,7 @@ const router = { ...expoRouter, back: () => expoRouter.replace("/admin" as never
 
 export default function CreateLeagueScreen() {
   useAppScreenRestriction();
+  const appColumn = useAppColumn();
   const { session } = useAuth();
   const [name, setName] = useState("");
   const [cityId, setCityId] = useState<string | null>(null);
@@ -147,7 +149,7 @@ export default function CreateLeagueScreen() {
     router.replace(`/admin/league/${league.id}` as never);
   };
 
-  return <View style={styles.page}>
+  return <View style={[styles.page, appColumn]}>
     <ScreenHeader />
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
     <Text style={styles.label}>LIIGAN NIMI</Text>
@@ -185,9 +187,12 @@ export default function CreateLeagueScreen() {
     <View style={styles.roundHeading}><Text style={styles.roundTitle}>Kierrokset</Text><Pressable onPress={addRound} style={styles.addRound} accessibilityRole="button" accessibilityLabel="Lisää kierros"><Text style={styles.addRoundText}>+</Text></Pressable></View>
     {rounds.map((round, index) => <View key={index} style={styles.round}>
       {rounds.length > 1 ? <View style={styles.roundTop}><Pressable onPress={() => removeRound(index)}><Text style={styles.removeRound}>Poista</Text></Pressable></View> : null}
+      <Text style={styles.roundTypeLabel}>KIERROKSEN NIMI</Text>
       <TextInput value={round.name} onChangeText={(value) => updateRound(index, "name", value)} placeholder="Kierroksen nimi" placeholderTextColor={colors.muted} style={styles.roundInput} />
-      <TextInput value={round.startDate} onChangeText={(value) => updateRound(index, "startDate", value)} placeholder="Alkaa D.M.YYYY" placeholderTextColor={colors.muted} style={styles.roundInput} />
-      <TextInput value={round.endDate} onChangeText={(value) => updateRound(index, "endDate", value)} placeholder="Päättyy D.M.YYYY" placeholderTextColor={colors.muted} style={styles.roundInput} />
+      <Text style={styles.roundTypeLabel}>KIERROS ALKAA</Text>
+      <TextInput value={round.startDate} onChangeText={(value) => updateRound(index, "startDate", value)} placeholder="D.M.YYYY" placeholderTextColor={colors.muted} style={styles.roundInput} />
+      <Text style={styles.roundTypeLabel}>KIERROS PÄÄTTYY</Text>
+      <TextInput value={round.endDate} onChangeText={(value) => updateRound(index, "endDate", value)} placeholder="D.M.YYYY" placeholderTextColor={colors.muted} style={styles.roundInput} />
       <Text style={styles.roundTypeLabel}>KIERROKSEN TYYPPI</Text>
       <View style={styles.roundTypes}>
         <Pressable onPress={() => updateRound(index, "roundType", "regular")} style={[styles.roundType, round.roundType === "regular" && styles.roundTypeSelected]}><Text style={[styles.roundTypeText, round.roundType === "regular" && styles.roundTypeTextSelected]}>Tavallinen</Text></Pressable>

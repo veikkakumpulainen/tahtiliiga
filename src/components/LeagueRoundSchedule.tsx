@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   buttonText: { color: colors.green, fontSize: 13, fontWeight: "800" },
   arrow: { color: colors.green, fontSize: 18, marginLeft: "auto" },
   backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
-  modal: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 22, paddingBottom: 34 },
+  modal: { width: "100%", maxWidth: 640, alignSelf: "center", backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 22, paddingBottom: 34 },
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 16, marginBottom: 14 },
   eyebrow: { color: colors.greenBright, fontSize: 10, letterSpacing: 1, fontWeight: "900" },
   title: { color: colors.ink, fontSize: 23, fontWeight: "800", marginTop: 4 },

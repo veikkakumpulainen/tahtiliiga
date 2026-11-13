@@ -4,6 +4,7 @@ import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, Te
 import AdminCityPicker from "../../components/AdminCityPicker";
 import ScreenHeader from "../../components/ScreenHeader";
 import { sortCitiesByName, useCity } from "../../context/CityContext";
+import { useAppColumn } from "../../hooks/useAppColumn";
 import { useAppScreenRestriction } from "../../hooks/useAppScreenRestriction";
 import { supabase } from "../../lib/supabase";
 import { colors } from "../../theme";
@@ -22,6 +23,7 @@ function normalizeBookingUrl(value: string) {
 // every league.
 export default function AdminHallsScreen() {
   useAppScreenRestriction();
+  const appColumn = useAppColumn();
   const { cities } = useCity();
   const [halls, setHalls] = useState<Hall[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,7 +77,7 @@ export default function AdminHallsScreen() {
 
   const citiesWithHalls = sortCitiesByName(cities).filter((city) => halls.some((hall) => hall.city_id === city.id));
 
-  return <View style={styles.page}>
+  return <View style={[styles.page, appColumn]}>
     <ScreenHeader />
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Pressable onPress={() => router.replace("/admin" as never)} style={styles.back}><Text style={styles.backText}>‹ Takaisin ylläpitoon</Text></Pressable>

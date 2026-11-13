@@ -22,7 +22,7 @@ export default function LeagueInfoModal({ visible, title, text, onClose }: { vis
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)" },
   backdropTap: { flex: 1 },
-  box: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "85%" },
+  box: { width: "100%", maxWidth: 640, alignSelf: "center", backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "85%" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 22, paddingTop: 22, paddingBottom: 8 },
   title: { color: colors.green, fontSize: 18, fontWeight: "800", flex: 1 },
   close: { color: colors.muted, fontSize: 24, fontWeight: "600", lineHeight: 24 },

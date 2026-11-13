@@ -4,7 +4,9 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, Text
 import AdminCityPicker from "../../../components/AdminCityPicker";
 import AdminLeagueHallPicker from "../../../components/AdminLeagueHallPicker";
 import AdminLeagueInfoField from "../../../components/AdminLeagueInfoField";
+import LoadingScreen from "../../../components/LoadingScreen";
 import ScreenHeader from "../../../components/ScreenHeader";
+import { useAppColumn } from "../../../hooks/useAppColumn";
 import { useAppScreenRestriction } from "../../../hooks/useAppScreenRestriction";
 import { supabase } from "../../../lib/supabase";
 import { formatFinnishDate, parseFinnishDate } from "../../../lib/dates";
@@ -108,6 +110,7 @@ const rosterStyles = StyleSheet.create({
 
 export default function LeagueManagementScreen() {
   useAppScreenRestriction();
+  const appColumn = useAppColumn();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [league, setLeague] = useState<League | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -224,14 +227,12 @@ export default function LeagueManagementScreen() {
   const updateRoster = async (removedUserId: string | null, addedUserId: string | null) => { if (!supabase || !managedTeam) return; const { error } = await supabase.rpc("admin_update_team_roster", { target_team_id: managedTeam.id, removed_user_id: removedUserId, added_user_id: addedUserId, new_captain_id: rosterCaptainId }); if (error) { setMessage(`Joukkueen pelaajien muokkaus epäonnistui: ${error.message}`); return; } if (!removedUserId && !addedUserId) { setManagedTeam(null); setRoster([]); setRosterCaptainId(null); setTeamSearch(""); setPlayerSearch(""); setPlayerSearchResults([]); } else await loadRoster(managedTeam); await load(); };
   const deleteManagedTeam = async () => { if (!supabase || !managedTeam) return; const { error } = await supabase.rpc("admin_delete_team", { target_team_id: managedTeam.id }); if (error) { setMessage(`Joukkueen poisto epäonnistui: ${error.message}`); return; } setManagedTeam(null); setRoster([]); setRosterCaptainId(null); setTeamSearch(""); setPlayerSearch(""); setPlayerSearchResults([]); setConfirmTeamDelete(false); await load(); };
   const deleteLeague = async () => { if (!supabase || !league) return; const { error } = await supabase.rpc("delete_league_with_data", { target_league_id: league.id }); if (error) setMessage(`Poisto epäonnistui: ${error.message}`); else router.replace("/admin" as never); };
-  if (loading) return <View style={styles.loading}>
-<ActivityIndicator color={colors.lime} />
-</View>;
-  if (!league) return <View style={styles.loading}>
+  if (loading) return <LoadingScreen />;
+  if (!league) return <View style={[styles.loading, appColumn]}>
 <Text style={styles.error}>Liigaa ei löytynyt.</Text>
 </View>;
   return <>
-<View style={styles.page}>
+<View style={[styles.page, appColumn]}>
 <ScreenHeader />
 <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 <View style={styles.body}>
@@ -241,14 +242,19 @@ export default function LeagueManagementScreen() {
 <Pressable onPress={() => router.push(`/admin/league/${league.id}/register-team` as never)} style={styles.secondary}>
 <Text style={styles.secondaryText}>Lisää joukkue liigaan</Text>
 </Pressable>
-<Text style={styles.sectionTitle}>Liigan tiedot</Text>
+<Text style={[styles.status, styles.statusTop]}>Tila: {statusLabels[league.status] ?? league.status}</Text>
+<Text style={[styles.sectionTitle, styles.sectionTitleAfterStatus]}>Liigan tiedot</Text>
+<Text style={styles.label}>LIIGAN NIMI</Text>
 <TextInput value={league.name} onChangeText={(value) => setLeague({ ...league, name: value })} placeholder="Liigan nimi" placeholderTextColor={colors.muted} style={styles.input} />
 <Text style={styles.label}>KAUPUNKI</Text>
 <AdminCityPicker value={cityId} onChange={setCityId} style={styles.cityPicker} /><Text style={styles.label}>LIIGAN INFO</Text>
 <AdminLeagueInfoField value={infoText} onChange={setInfoText} leagueName={league.name} style={styles.cityPicker} />
+<Text style={styles.label}>LIIGAN ALKAMISPÄIVÄ</Text>
 <TextInput value={startDate} onChangeText={setStartDate} placeholder="D.M.YYYY" placeholderTextColor={colors.muted} style={styles.input} />
-<TextInput value={endDate} onChangeText={setEndDate} placeholder="Liigan loppupäivä D.M.YYYY" placeholderTextColor={colors.muted} style={styles.input} />
-<TextInput value={deadline} onChangeText={setDeadline} placeholder="Deadline D.M.YYYY (valinnainen)" placeholderTextColor={colors.muted} style={styles.input} />
+<Text style={styles.label}>LIIGAN LOPPUPÄIVÄ</Text>
+<TextInput value={endDate} onChangeText={setEndDate} placeholder="D.M.YYYY" placeholderTextColor={colors.muted} style={styles.input} />
+<Text style={styles.label}>ILMOITTAUTUMISEN DEADLINE</Text>
+<TextInput value={deadline} onChangeText={setDeadline} placeholder="D.M.YYYY (valinnainen)" placeholderTextColor={colors.muted} style={styles.input} />
 <Text style={styles.label}>ILMOITTAUTUMISEN AVAUTUMISPÄIVÄ</Text>
 <View style={styles.publishRow}>
   <Pressable onPress={() => setOpensKnown(true)} style={[roundStyles.typeOption, opensKnown && roundStyles.typeOptionSelected]}><Text style={[roundStyles.typeOptionText, opensKnown && roundStyles.typeOptionTextSelected]}>Päivämäärä tiedossa</Text></Pressable>
@@ -261,7 +267,6 @@ export default function LeagueManagementScreen() {
 <Text style={styles.sectionTitle}>Padelhallit</Text>
 <Text style={styles.hint}>Valitut hallit kuuluvat liigaan. Napauta hallia lisätäksesi tai poistaaksesi sen.</Text>
 <AdminLeagueHallPicker cityId={league.city_id} selectedIds={hallIds} onToggle={(hallId, selected) => void toggleHall(hallId, selected)} style={venueStyles.picker} />
-<Text style={styles.status}>Tila: {statusLabels[league.status] ?? league.status}</Text>
 {league.status === "upcoming" ? <>
 <Text style={styles.message}>{league.registration_opens_at ? `Käyttäjät näkevät liigan ja ilmoittautumisen avautumispäivän (${formatFinnishDate(league.registration_opens_at)}), mutta eivät voi vielä ilmoittautua.` : "Käyttäjät näkevät liigan tulevana, mutta eivät voi vielä ilmoittautua. Aseta yllä ilmoittautumisen avautumispäivä, jotta se näkyy heille."}</Text>
 <Pressable onPress={() => void updateStatus("registration_open")} style={styles.start}>
@@ -288,18 +293,24 @@ export default function LeagueManagementScreen() {
 {league.status === "ongoing" && round.status === "draft" ? <Pressable onPress={() => void startRound(round)} style={roundStyles.start}><Text style={roundStyles.startText}>{round.round_type === "qualification" ? "Aloita karsintakierros" : "Aloita tavallinen kierros"}</Text></Pressable> : null}
 {league.status === "ongoing" && round.status === "active" ? <Pressable onPress={() => void completeRound(round)} style={roundStyles.complete}><Text style={roundStyles.completeText}>Päätä kierros ja käsittele tulokset</Text></Pressable> : null}
 {editingRound?.id === round.id ? <View style={roundStyles.editor}>
+<Text style={roundStyles.typeLabel}>KIERROKSEN NIMI</Text>
 <TextInput value={roundForm.name} onChangeText={(value) => setRoundForm((current) => ({ ...current, name: value }))} placeholder="Kierroksen nimi" placeholderTextColor={colors.muted} style={roundStyles.input} />
-<TextInput value={roundForm.startDate} onChangeText={(value) => setRoundForm((current) => ({ ...current, startDate: value }))} placeholder="Alkaa D.M.YYYY" placeholderTextColor={colors.muted} style={roundStyles.input} />
-<TextInput value={roundForm.endDate} onChangeText={(value) => setRoundForm((current) => ({ ...current, endDate: value }))} placeholder="Päättyy D.M.YYYY" placeholderTextColor={colors.muted} style={roundStyles.input} />
+<Text style={roundStyles.typeLabel}>KIERROS ALKAA</Text>
+<TextInput value={roundForm.startDate} onChangeText={(value) => setRoundForm((current) => ({ ...current, startDate: value }))} placeholder="D.M.YYYY" placeholderTextColor={colors.muted} style={roundStyles.input} />
+<Text style={roundStyles.typeLabel}>KIERROS PÄÄTTYY</Text>
+<TextInput value={roundForm.endDate} onChangeText={(value) => setRoundForm((current) => ({ ...current, endDate: value }))} placeholder="D.M.YYYY" placeholderTextColor={colors.muted} style={roundStyles.input} />
 <View style={roundStyles.actions}>
 <Pressable onPress={() => void updateRound()} style={roundStyles.save}><Text style={roundStyles.saveText}>Tallenna muutokset</Text></Pressable>
 <Pressable onPress={() => setEditingRound(null)} style={roundStyles.cancel}><Text style={roundStyles.cancelText}>Peruuta</Text></Pressable>
 </View>
 </View> : null}
 </View>)}{addingRound ? <View style={roundStyles.editor}>
+<Text style={roundStyles.typeLabel}>KIERROKSEN NIMI</Text>
 <TextInput value={newRound.name} onChangeText={(value) => setNewRound((current) => ({ ...current, name: value }))} placeholder="Kierroksen nimi" placeholderTextColor={colors.muted} style={roundStyles.input} />
-<TextInput value={newRound.startDate} onChangeText={(value) => setNewRound((current) => ({ ...current, startDate: value }))} placeholder="Alkaa D.M.YYYY" placeholderTextColor={colors.muted} style={roundStyles.input} />
-<TextInput value={newRound.endDate} onChangeText={(value) => setNewRound((current) => ({ ...current, endDate: value }))} placeholder="Päättyy D.M.YYYY" placeholderTextColor={colors.muted} style={roundStyles.input} />
+<Text style={roundStyles.typeLabel}>KIERROS ALKAA</Text>
+<TextInput value={newRound.startDate} onChangeText={(value) => setNewRound((current) => ({ ...current, startDate: value }))} placeholder="D.M.YYYY" placeholderTextColor={colors.muted} style={roundStyles.input} />
+<Text style={roundStyles.typeLabel}>KIERROS PÄÄTTYY</Text>
+<TextInput value={newRound.endDate} onChangeText={(value) => setNewRound((current) => ({ ...current, endDate: value }))} placeholder="D.M.YYYY" placeholderTextColor={colors.muted} style={roundStyles.input} />
 <Text style={roundStyles.typeLabel}>KIERROKSEN TYYPPI</Text>
 <View style={roundStyles.typeOptions}>
 <Pressable onPress={() => setNewRound((current) => ({ ...current, roundType: "regular" }))} style={[roundStyles.typeOption, newRound.roundType === "regular" && roundStyles.typeOptionSelected]}><Text style={[roundStyles.typeOptionText, newRound.roundType === "regular" && roundStyles.typeOptionTextSelected]}>Tavallinen</Text></Pressable>
@@ -387,4 +398,4 @@ export default function LeagueManagementScreen() {
 </>;
 }
 
-const styles = StyleSheet.create({ page: { flex: 1, backgroundColor: colors.canvas }, scroll: { flex: 1 }, content: { paddingBottom: 40 }, loading: { flex: 1, backgroundColor: colors.green, justifyContent: "center", alignItems: "center" }, body: { padding: 22 }, back: { paddingVertical: 8 }, backText: { color: colors.greenBright, fontWeight: "800" }, sectionTitle: { color: colors.ink, fontSize: 21, fontWeight: "800", marginTop: 24, marginBottom: 12 }, input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, color: colors.ink, padding: 13, marginBottom: 9 }, cityPicker: { marginBottom: 9 }, label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginBottom: 7 }, publishRow: { flexDirection: "row", gap: 8, marginBottom: 9 }, hint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginBottom: 9 }, inline: { flexDirection: "row", gap: 8 }, inlineInput: { flex: 1 }, small: { backgroundColor: colors.green, borderRadius: 12, paddingHorizontal: 16, justifyContent: "center", marginBottom: 9 }, smallText: { color: colors.surface, fontWeight: "800" }, save: { backgroundColor: colors.green, borderRadius: 12, padding: 15, alignItems: "center", marginTop: 7 }, saveText: { color: colors.surface, fontWeight: "800" }, secondary: { borderWidth: 1, borderColor: colors.green, borderRadius: 12, alignItems: "center", padding: 13 }, secondaryText: { color: colors.green, fontWeight: "800" }, primaryDisabled: { opacity: 0.5 }, status: { color: colors.muted, fontSize: 12, marginVertical: 8 }, message: { color: colors.greenBright, fontSize: 12, marginTop: 8 }, error: { color: colors.coral }, group: { backgroundColor: colors.mint, padding: 14, borderRadius: 15, marginBottom: 10 }, groupTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, groupName: { color: colors.ink, fontSize: 16, fontWeight: "800" }, delete: { color: colors.coral, fontSize: 12, fontWeight: "800" }, item: { backgroundColor: colors.surface, padding: 11, borderRadius: 10, marginTop: 7, flexDirection: "row", justifyContent: "space-between" }, itemText: { color: colors.ink, fontWeight: "700" }, add: { borderWidth: 1, borderColor: colors.line, padding: 9, borderRadius: 9, marginTop: 7 }, addText: { color: colors.greenBright, fontWeight: "800", fontSize: 12 }, start: { backgroundColor: colors.greenBright, borderRadius: 12, padding: 16, alignItems: "center", marginTop: 18 }, startText: { color: colors.surface, fontWeight: "900" }, deleteLeague: { marginTop: 14, borderWidth: 1, borderColor: colors.coral, borderRadius: 12, padding: 14, alignItems: "center" }, deleteLeagueText: { color: colors.coral, fontWeight: "800", fontSize: 13 }, categories: { flexDirection: "row", gap: 8, marginBottom: 12 }, categoryOption: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingVertical: 11, alignItems: "center", backgroundColor: colors.surface }, categoryOptionSelected: { backgroundColor: colors.green, borderColor: colors.green }, categoryOptionText: { color: colors.ink, fontWeight: "800", fontSize: 13 }, categoryOptionTextSelected: { color: colors.surface } });
+const styles = StyleSheet.create({ page: { flex: 1, backgroundColor: colors.canvas }, scroll: { flex: 1 }, content: { paddingBottom: 40 }, loading: { flex: 1, backgroundColor: colors.canvas, justifyContent: "center", alignItems: "center" }, body: { padding: 22 }, back: { paddingVertical: 8 }, backText: { color: colors.greenBright, fontWeight: "800" }, sectionTitle: { color: colors.ink, fontSize: 21, fontWeight: "800", marginTop: 24, marginBottom: 12 }, input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 12, color: colors.ink, padding: 13, marginBottom: 9 }, cityPicker: { marginBottom: 9 }, label: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: "900", marginTop: 6, marginBottom: 7 }, publishRow: { flexDirection: "row", gap: 8, marginBottom: 9 }, hint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginBottom: 9 }, inline: { flexDirection: "row", gap: 8 }, inlineInput: { flex: 1 }, small: { backgroundColor: colors.green, borderRadius: 12, paddingHorizontal: 16, justifyContent: "center", marginBottom: 9 }, smallText: { color: colors.surface, fontWeight: "800" }, save: { backgroundColor: colors.green, borderRadius: 12, padding: 15, alignItems: "center", marginTop: 7 }, saveText: { color: colors.surface, fontWeight: "800" }, secondary: { borderWidth: 1, borderColor: colors.green, borderRadius: 12, alignItems: "center", padding: 13 }, secondaryText: { color: colors.green, fontWeight: "800" }, primaryDisabled: { opacity: 0.5 }, status: { color: colors.muted, fontSize: 12, marginVertical: 8 }, statusTop: { marginTop: 20, marginBottom: 0 }, sectionTitleAfterStatus: { marginTop: 4 }, message: { color: colors.greenBright, fontSize: 12, marginTop: 8 }, error: { color: colors.coral }, group: { backgroundColor: colors.mint, padding: 14, borderRadius: 15, marginBottom: 10 }, groupTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, groupName: { color: colors.ink, fontSize: 16, fontWeight: "800" }, delete: { color: colors.coral, fontSize: 12, fontWeight: "800" }, item: { backgroundColor: colors.surface, padding: 11, borderRadius: 10, marginTop: 7, flexDirection: "row", justifyContent: "space-between" }, itemText: { color: colors.ink, fontWeight: "700" }, add: { borderWidth: 1, borderColor: colors.line, padding: 9, borderRadius: 9, marginTop: 7 }, addText: { color: colors.greenBright, fontWeight: "800", fontSize: 12 }, start: { backgroundColor: colors.greenBright, borderRadius: 12, padding: 16, alignItems: "center", marginTop: 18 }, startText: { color: colors.surface, fontWeight: "900" }, deleteLeague: { marginTop: 14, borderWidth: 1, borderColor: colors.coral, borderRadius: 12, padding: 14, alignItems: "center" }, deleteLeagueText: { color: colors.coral, fontWeight: "800", fontSize: 13 }, categories: { flexDirection: "row", gap: 8, marginBottom: 12 }, categoryOption: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingVertical: 11, alignItems: "center", backgroundColor: colors.surface }, categoryOptionSelected: { backgroundColor: colors.green, borderColor: colors.green }, categoryOptionText: { color: colors.ink, fontWeight: "800", fontSize: 13 }, categoryOptionTextSelected: { color: colors.surface } });

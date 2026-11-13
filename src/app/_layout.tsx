@@ -8,6 +8,7 @@ import { CityProvider } from "../context/CityContext";
 import { SelectedLeagueProvider } from "../context/SelectedLeagueContext";
 import { useAuth } from "../hooks/useAuth";
 import { usePushNotifications } from "../hooks/usePushNotifications";
+import { colors } from "../theme";
 
 export default function RootLayout() {
   const { session } = useAuth();
@@ -21,7 +22,9 @@ export default function RootLayout() {
       {/* expo-router's head renders its own (empty) <title> ahead of any in
           +html.tsx, so the browser tab title has to be set through it. */}
       {Platform.OS === "web" ? <Head><title>Tähtiliiga</title></Head> : null}
-      <Stack screenOptions={{ headerShown: false }}>
+      {/* Dark screen background: otherwise the navigator's default white shows
+          beside the centered app column on wide browser windows. */}
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.canvas } }}>
           <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
           <Stack.Screen name="admin" />

@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Redirect, router } from "expo-router";
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import LoadingScreen from "../components/LoadingScreen";
 import Constants from "expo-constants";
 import DeleteAccountButton from "../components/DeleteAccountButton";
 import ScreenHeader from "../components/ScreenHeader";
+import { useAppColumn } from "../hooks/useAppColumn";
 import { useAuth } from "../hooks/useAuth";
 import { legalEffectiveDate, privacySections, termsSections } from "../lib/legalContent";
 import { supabase } from "../lib/supabase";
@@ -30,6 +32,7 @@ const switchColors = (on: boolean) => ({
 });
 
 export default function SettingsScreen() {
+  const appColumn = useAppColumn();
   const { session, loading: loadingSession } = useAuth();
   const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
   const [loadingPreferences, setLoadingPreferences] = useState(true);
@@ -55,12 +58,12 @@ export default function SettingsScreen() {
     if (error) { setPreferences(previous); setPreferencesError("Asetuksen tallennus epäonnistui. Yritä uudelleen."); }
   };
 
-  if (loadingSession) return <View style={styles.loading}><ActivityIndicator color={colors.lime} /></View>;
+  if (loadingSession) return <LoadingScreen />;
   if (!session) return <Redirect href={Platform.OS === "web" ? "/" : "/(auth)/login"} />;
 
   const version = Constants.expoConfig?.version;
 
-  return <View style={styles.page}>
+  return <View style={[styles.page, appColumn]}>
     <ScreenHeader />
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.body}>
@@ -119,7 +122,6 @@ const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
   scroll: { flex: 1 },
   content: { paddingBottom: 40 },
-  loading: { flex: 1, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
   body: { padding: 22 },
   back: { alignSelf: "flex-start", paddingVertical: 8, marginBottom: 12 },
   backText: { color: colors.greenBright, fontWeight: "800" },
@@ -141,7 +143,7 @@ const styles = StyleSheet.create({
   // Same bottom sheet as the Muu tab's info modals.
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)" },
   modalBackdropTap: { flex: 1 },
-  modalBox: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "85%" },
+  modalBox: { width: "100%", maxWidth: 640, alignSelf: "center", backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "85%" },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 22, paddingTop: 22, paddingBottom: 8 },
   modalTitle: { color: colors.ink, fontSize: 18, fontWeight: "800", flex: 1 },
   modalClose: { color: colors.muted, fontSize: 24, fontWeight: "600", lineHeight: 24 },

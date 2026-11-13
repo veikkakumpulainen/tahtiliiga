@@ -1,10 +1,11 @@
 import { Redirect } from "expo-router";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
+import LoadingScreen from "../components/LoadingScreen";
 import { useAuth } from "../hooks/useAuth";
 import { colors } from "../theme";
 
 export default function Index() {
   const { session, loading } = useAuth();
-  if (loading) return <View style={{ flex: 1, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={colors.lime} /></View>;
+  if (loading) return <LoadingScreen />;
   return <Redirect href={session ? "/(tabs)/home" : "/(auth)/login"} />;
 }

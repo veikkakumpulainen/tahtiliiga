@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import ScreenHeader from "../../../../components/ScreenHeader";
 import { useAuth } from "../../../../hooks/useAuth";
+import { useAppColumn } from "../../../../hooks/useAppColumn";
 import { useAppScreenRestriction } from "../../../../hooks/useAppScreenRestriction";
 import { supabase } from "../../../../lib/supabase";
 import { colors } from "../../../../theme";
@@ -13,6 +14,7 @@ type Player = { id: string; first_name: string; last_name: string; player_code: 
 
 export default function AdminTeamRegistrationScreen() {
   useAppScreenRestriction();
+  const appColumn = useAppColumn();
   const { id: leagueId } = useLocalSearchParams<{ id: string }>();
   const { session } = useAuth();
   const [name, setName] = useState("");
@@ -97,7 +99,7 @@ export default function AdminTeamRegistrationScreen() {
     router.back();
   };
 
-  return <View style={styles.page}>
+  return <View style={[styles.page, appColumn]}>
     <ScreenHeader />
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
     <View style={styles.body}>
