@@ -51,6 +51,7 @@ function isValidSet(set: SetScore) {
 
 export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, isAdmin = false }: { teamId?: string; teamName?: string; groupId?: string; ownGroupName?: string; isAdmin?: boolean }) {
   const [matches, setMatches] = useState<Match[]>([]);
+  const [roundName, setRoundName] = useState<string | null>(null);
   const [selected, setSelected] = useState<Match | null>(null);
   const [pickedDate, setPickedDate] = useState<{ year: number; month: number; day: number } | null>(null);
   const [pickedTime, setPickedTime] = useState<string | null>(null);
@@ -145,7 +146,14 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
         return [row.id, (rosterData ?? []) as LineupPlayer[]] as const;
       }));
       const rosterByMatch = new Map(rosterEntries);
-      setMatches(relevantRows.map((row) => {
+      // Heading shows the active round's name (e.g. "Kierros 1", "Karsintakierros 1").
+      const leagueId = relevantRows[0]?.league_id;
+      const { data: activeRound } = leagueId ? await client.from("league_rounds").select("name").eq("league_id", leagueId).eq("status", "active").maybeSingle() : { data: null };
+      setRoundName(activeRound?.name ?? null);
+      // Scheduled matches in chronological order (next one first), unscheduled after them.
+      const scheduledTime = (row: { scheduled_at: string | null }) => row.scheduled_at ? Date.parse(row.scheduled_at) : Number.POSITIVE_INFINITY;
+      const sortedRows = [...relevantRows].sort((a, b) => scheduledTime(a) - scheduledTime(b));
+      setMatches(sortedRows.map((row) => {
         const roster = rosterByMatch.get(row.id) ?? [];
         const homeRoster = roster.filter((player) => player.team_id === row.home_team_id);
         const awayRoster = roster.filter((player) => player.team_id === row.away_team_id);
@@ -523,7 +531,7 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
       <View style={styles.heading}><Text style={styles.title}>Karsintakierros käynnissä</Text></View>
       <Text style={styles.hint}>Joukkueellanne ei ole karsintaottelua, seuraava kierros alkaa ja lohkot julkaistaan{activeQualificationRound.nextRoundStartDate ? ` ${formatFinnishDate(activeQualificationRound.nextRoundStartDate)}` : ""}.</Text>
     </> : <>
-    <View style={styles.heading}><Text style={styles.title}>{onlyQualificationMatches ? "Karsintaottelu" : <>Otteluparit{ownGroupName ? <Text style={styles.titleGroupName}> · {ownGroupName}</Text> : null}</>}</Text><Text style={styles.counter}>{matches.filter((match) => match.completed).length} / {matches.length} pelattu</Text></View>
+    <View style={styles.heading}><Text style={styles.title}>{onlyQualificationMatches ? roundName ?? "Karsintaottelu" : <>{roundName ?? "Otteluparit"}{ownGroupName ? <Text style={styles.titleGroupName}> · {ownGroupName}</Text> : null}</>}</Text><Text style={styles.counter}>{matches.filter((match) => match.completed).length} / {matches.length} pelattu</Text></View>
     <Text style={styles.hint}>{matchesHint}</Text>
     {matches.length === 0 ? <Text style={styles.empty}>Otteluita ei ole vielä muodostettu tälle lohkolle.</Text> : matches.map((match) => <View key={match.id} style={styles.match}>
       <View style={styles.matchTop}><Text style={styles.status}>{match.completed ? "PELATTU" : match.doubleWalkover ? "EI PELATTU" : match.date ? `AJANKOHTA: ${formatFinnishDateTime(match.date).toUpperCase()} · ${(match.venue || "SOPIMATTA").toUpperCase()}` : "AJANKOHTA: SOPIMATTA"}</Text>{isAdmin ? <Text style={styles.own}>HALLINTA</Text> : null}</View>
