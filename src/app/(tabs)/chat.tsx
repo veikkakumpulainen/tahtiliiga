@@ -166,11 +166,12 @@ export default function ChatTabScreen() {
       });
     }
     for (const row of (adminConversationData ?? []) as AdminConversationRow[]) {
-      // The admin sees who they're talking to; the other side sees "Ylläpito".
+      // The admin sees who they're talking to; the other side sees just
+      // "Ylläpito", never which admin it is.
       next.push({
         key: `admin:${row.id}`, type: "admin", id: row.id, leagueId: "",
         title: admin ? row.other_names || "Keskustelu" : "Ylläpito",
-        subtitle: admin ? (row.member_count > 2 ? `${row.member_count - 1} henkilöä` : "Yksityiskeskustelu") : row.other_names,
+        subtitle: admin ? (row.member_count > 2 ? `${row.member_count - 1} henkilöä` : "Yksityiskeskustelu") : "Yksityiskeskustelu",
         canCompose: true, adminOnly: false,
       });
     }
@@ -348,9 +349,11 @@ export default function ChatTabScreen() {
     const lastRead = await AsyncStorage.getItem(`admin-chat-read-${userId}-${conversationId}`);
     const firstUnread = rows.find((item) => item.user_id !== userId && (!lastRead || item.created_at > lastRead));
     setScrollTargetId((firstUnread ?? rows[rows.length - 1])?.id ?? null);
-    setMessages(rows.map((item) => toMessage(item.id, item.user_id === userId ? "Sinä" : `${item.sender_first_name} ${item.sender_last_name}`, item.sender_is_admin ? "Ylläpito" : "", item.message, item.created_at, item.user_id === userId)));
+    // Non-admins see admins' messages as just "Ylläpito".
+    setMessages(rows.map((item) => toMessage(item.id, item.user_id === userId ? "Sinä" : item.sender_is_admin && !isAdmin ? "Ylläpito" : `${item.sender_first_name} ${item.sender_last_name}`,
+      item.sender_is_admin && isAdmin ? "Ylläpito" : "", item.message, item.created_at, item.user_id === userId)));
     markAdminChatRead(conversationId);
-  }, [session?.user.id, markAdminChatRead]);
+  }, [session?.user.id, markAdminChatRead, isAdmin]);
 
   const loadThread = useCallback(async (conversation: Conversation) => {
     if (conversation.type === "group") await loadLohkoMessages(conversation.id);
@@ -699,7 +702,8 @@ export default function ChatTabScreen() {
         <Text style={styles.threadTitle} numberOfLines={1}>{openConversation.title}</Text>
         <Text style={styles.threadSubtitle} numberOfLines={1}>{openConversation.subtitle}</Text>
       </View>
-      {openConversation.type !== "community" ? <Pressable onPress={() => void openMembers()} style={styles.membersButton}>
+      {/* Players don't see the admin conversation's member list (it would name the admins). */}
+      {openConversation.type !== "community" && (openConversation.type !== "admin" || isAdmin) ? <Pressable onPress={() => void openMembers()} style={styles.membersButton}>
         <Text style={styles.membersButtonText}>{openConversation.type === "qualification" ? "Vastustaja" : "Jäsenet"}</Text>
       </Pressable> : null}
       <Pressable onPress={() => setShowInfo(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Tietoa chatista" style={styles.infoIcon}><Text style={styles.infoIconText}>i</Text></Pressable>

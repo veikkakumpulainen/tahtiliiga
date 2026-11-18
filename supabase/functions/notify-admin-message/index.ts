@@ -44,7 +44,25 @@ Deno.serve(async (req) => {
   const senderName = sender ? `${sender.first_name} ${sender.last_name}` : "Uusi viesti";
   const excerpt = message.length > 120 ? `${message.slice(0, 117)}...` : message;
 
-  const sent = await sendExpoPush(recipients, { title: `${senderName} · ${sender?.role === "admin" ? "Ylläpito" : "Yksityisviesti"}`, body: excerpt, data: { path: `/chat?adminChatId=${conversationId}`, messageId } });
+  // Players see an admin's message as just "Ylläpito", never which admin sent
+  // it; other admins still see the name.
+  const fromAdmin = sender?.role === "admin";
+  const { data: adminRows } = fromAdmin && recipients.length
+    ? await supabaseAdmin.from("profiles").select("id").in("id", recipients).eq("role", "admin")
+    : { data: [] };
+  const adminRecipients = new Set((adminRows ?? []).map((row) => row.id as string));
+  const playerRecipients = recipients.filter((id) => !adminRecipients.has(id));
+  const data = { path: `/chat?adminChatId=${conversationId}`, messageId };
+
+  if (fromAdmin) {
+    const [toPlayers, toAdmins] = await Promise.all([
+      sendExpoPush(playerRecipients, { title: "Ylläpito", body: excerpt, data }),
+      sendExpoPush([...adminRecipients], { title: `${senderName} · Ylläpito`, body: excerpt, data }),
+    ]);
+    return new Response(JSON.stringify({ sent: toPlayers + toAdmins }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+
+  const sent = await sendExpoPush(recipients, { title: `${senderName} · Yksityisviesti`, body: excerpt, data: { path: `/chat?adminChatId=${conversationId}`, messageId } });
 
   return new Response(JSON.stringify({ sent }), { status: 200, headers: { "content-type": "application/json" } });
 });
