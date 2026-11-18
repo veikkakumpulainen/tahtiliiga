@@ -28,10 +28,6 @@ type AdminMemberRow = { user_id: string; first_name: string; last_name: string; 
 type PersonResult = { id: string; first_name: string; last_name: string; player_code: number | null };
 
 type DirectConversationRow = { id: string; league_id: string; league_name: string; group_name: string; category: string; include_teams: boolean; own_team_id: string; other_team_id: string; other_team_name: string; other_captain_first_name: string; other_captain_last_name: string };
-// A team the user captains whose lohko chat is open, i.e. one they can start
-// private conversations from.
-type ComposeTeam = { teamId: string; teamName: string; groupId: string; title: string; leagueId: string };
-type CaptainChoice = { teamId: string; teamName: string; captainName: string };
 
 // One row in the chat list. `id` is the group, league, match or direct
 // conversation id the thread's messages hang off, depending on `type`.
@@ -73,7 +69,8 @@ export default function ChatTabScreen() {
   const { lastNotify, lastDeleted, unreadGroupIds, unreadLeagueIds, unreadQualificationMatchIds, unreadDirectIds, unreadAdminChatIds, markGroupRead, markLeagueRead, markQualificationMatchRead, markDirectRead, markAdminChatRead } = useChatNotify();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [composeTeams, setComposeTeams] = useState<ComposeTeam[]>([]);
+  // In a league (an active team member): can message the admins.
+  const [isPlayer, setIsPlayer] = useState(false);
   const [lastMessages, setLastMessages] = useState<Record<string, LastMessage>>({});
   // Conversation keys whose push notifications this user has muted.
   const [mutedKeys, setMutedKeys] = useState<Set<string>>(new Set());
@@ -145,7 +142,6 @@ export default function ChatTabScreen() {
       ownLeagueIds.add(team.league_id);
       next.push({ key: `community:${team.league_id}`, type: "community", id: team.league_id, leagueId: team.league_id, title: "Tiedotteet", subtitle: team.league?.name ?? "", canCompose: admin, adminOnly: false });
     }
-    const nextComposeTeams: ComposeTeam[] = [];
     for (const team of teams) {
       const leagueName = team.league?.name ?? "";
       const category = categoryLabels[team.category] ?? team.category;
@@ -159,7 +155,6 @@ export default function ChatTabScreen() {
       // The lohko chat is closed while a qualification round runs.
       if (!group || team.league?.status !== "ongoing" || qualificationLeagueIds.has(team.league_id)) continue;
       next.push({ key: `group:${group.id}`, type: "group", id: group.id, leagueId: team.league_id, title: `${group.name} · ${category}`, subtitle: leagueName, canCompose: true, adminOnly: false });
-      if (team.captain_id === userId) nextComposeTeams.push({ teamId: team.id, teamName: team.name, groupId: group.id, title: `${group.name} · ${category}`, leagueId: team.league_id });
     }
     for (const row of (directData ?? []) as DirectConversationRow[]) {
       const captainName = `${row.other_captain_first_name} ${row.other_captain_last_name}`;
@@ -214,7 +209,7 @@ export default function ChatTabScreen() {
       || (latest[right.key]?.created_at ?? "").localeCompare(latest[left.key]?.created_at ?? "") || typeOrder[left.type] - typeOrder[right.type];
     setConversations(next.sort(byActivity));
     setLastMessages(latest);
-    setComposeTeams(nextComposeTeams);
+    setIsPlayer(teams.length > 0);
     setLoadingList(false);
   }, [session?.user.id]);
 
@@ -492,40 +487,24 @@ export default function ChatTabScreen() {
         : conversation.type === "admin" ? unreadAdminChatIds.has(conversation.id)
           : unreadLeagueIds.has(conversation.id);
 
-  // "Uusi keskustelu": a captain picks another captain in their lohko. The
-  // server returns the existing conversation if the teams already have one.
+  // "Uusi keskustelu" for a player: a private conversation with the admins.
+  // The captains' conversations open automatically when a round starts, so
+  // they aren't offered here. The server returns the existing conversation
+  // if the player already has one.
   const [showNewConversation, setShowNewConversation] = useState(false);
-  const [captainChoices, setCaptainChoices] = useState<(CaptainChoice & { composeTeam: ComposeTeam })[]>([]);
-  const [loadingChoices, setLoadingChoices] = useState(false);
-  const [startingTeamId, setStartingTeamId] = useState<string | null>(null);
+  const [startingAdminChat, setStartingAdminChat] = useState(false);
   const [newConversationError, setNewConversationError] = useState("");
 
-  const openNewConversation = async () => {
+  const startAdminChat = async () => {
     if (!supabase) return;
-    const client = supabase;
-    setShowNewConversation(true); setNewConversationError(""); setLoadingChoices(true);
-    const results = await Promise.all(composeTeams.map(async (composeTeam) => {
-      const { data } = await client.rpc("get_group_members", { target_group_id: composeTeam.groupId });
-      return ((data ?? []) as TeamRosterRow[]).filter((row) => row.is_captain && row.team_id !== composeTeam.teamId)
-        .map((row) => ({ teamId: row.team_id, teamName: row.team_name, captainName: `${row.first_name} ${row.last_name}`, composeTeam }));
-    }));
-    setCaptainChoices(results.flat());
-    setLoadingChoices(false);
-  };
-
-  const startConversation = async (choice: CaptainChoice & { composeTeam: ComposeTeam }) => {
-    if (!supabase) return;
-    setStartingTeamId(choice.teamId); setNewConversationError("");
-    const { data, error: startError } = await supabase.rpc("start_direct_conversation", { own_team_id: choice.composeTeam.teamId, other_team_id: choice.teamId });
-    if (startError || !data) { setStartingTeamId(null); setNewConversationError("Keskustelun avaaminen epäonnistui. Yritä uudelleen."); return; }
+    setStartingAdminChat(true); setNewConversationError("");
+    const { data, error: startError } = await supabase.rpc("start_conversation_with_admins");
+    if (startError || !data) { setStartingAdminChat(false); setNewConversationError("Keskustelun avaaminen epäonnistui. Yritä uudelleen."); return; }
     await loadConversations();
-    setStartingTeamId(null);
+    setStartingAdminChat(false);
     setShowNewConversation(false);
-    setOpenKey(`direct:${data as string}`);
+    setOpenKey(`admin:${data as string}`);
   };
-
-  const existingDirectKey = (choice: CaptainChoice & { composeTeam: ComposeTeam }) => conversations.find((conversation) => conversation.type === "direct"
-    && conversation.ownTeamId === choice.composeTeam.teamId && conversation.opponentTeamId === choice.teamId)?.key;
 
   // Opens the conversation to every member of both teams. One-way.
   const [includingTeams, setIncludingTeams] = useState(false);
@@ -652,7 +631,7 @@ export default function ChatTabScreen() {
     </Pressable>;
   };
 
-  const showNewConversationButton = isAdmin || composeTeams.length > 0;
+  const showNewConversationButton = isAdmin || isPlayer;
   const infoTexts: Record<ThreadType, [string, string]> = {
     admin: ["Ylläpidon keskustelu", "Tämä on keskustelu liigan ylläpidon kanssa. Viestit näkyvät vain keskustelun jäsenille."],
     community: ["Tiedotteet", "Tiedotteisiin liigan järjestäjä lähettää koko liigaa koskevia infoja."],
@@ -668,8 +647,8 @@ export default function ChatTabScreen() {
       {conversations.map(renderRow)}
     </ScrollView>}
     {/* Floats in the bottom right corner, just above the tab bar. Admins pick
-        anyone to message; captains pick another captain in their lohko. */}
-    {!loadingList && showNewConversationButton ? <Pressable onPress={() => isAdmin ? openPicker("new") : void openNewConversation()} accessibilityRole="button" style={({ pressed }) => [styles.newConversation, pressed && styles.newConversationPressed]}>
+        anyone to message; players can message the admins. */}
+    {!loadingList && showNewConversationButton ? <Pressable onPress={() => { if (isAdmin) { openPicker("new"); return; } setNewConversationError(""); setShowNewConversation(true); }} accessibilityRole="button" style={({ pressed }) => [styles.newConversation, pressed && styles.newConversationPressed]}>
       <Ionicons name="create-outline" size={18} color={colors.lime} />
       <Text style={styles.newConversationText}>Uusi keskustelu</Text>
     </Pressable> : null}
@@ -695,20 +674,15 @@ export default function ChatTabScreen() {
             <Text style={styles.membersTitle}>Uusi keskustelu</Text>
             <Pressable onPress={() => setShowNewConversation(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.membersClose}>×</Text></Pressable>
           </View>
-          <Text style={styles.choiceHint}>Valitse lohkosi joukkueen kapteeni, jolle haluat lähettää yksityisviestin.</Text>
-          {loadingChoices ? <ActivityIndicator color={colors.green} style={styles.membersLoading} /> : <ScrollView showsVerticalScrollIndicator={false}>
-            {captainChoices.length === 0 ? <Text style={styles.choiceHint}>Lohkossasi ei ole muita joukkueita.</Text> : null}
-            {captainChoices.map((choice) => {
-              const existing = existingDirectKey(choice);
-              return <Pressable key={`${choice.composeTeam.teamId}:${choice.teamId}`} disabled={startingTeamId !== null} onPress={() => { if (!existing) { void startConversation(choice); return; } setShowNewConversation(false); setOpenKey(existing); }} style={({ pressed }) => [styles.choiceRow, pressed && styles.rowPressed]}>
-                <View style={styles.rowBody}>
-                  <Text style={styles.rowTitle} numberOfLines={1}>{choice.captainName}</Text>
-                  <Text style={styles.rowLeague} numberOfLines={1}>{choice.teamName}{composeTeams.length > 1 ? ` · ${choice.composeTeam.title}` : ""}</Text>
-                </View>
-                {startingTeamId === choice.teamId ? <ActivityIndicator color={colors.green} /> : existing ? <Text style={styles.choiceExisting}>Avaa</Text> : <Ionicons name="chevron-forward" size={18} color={colors.muted} />}
-              </Pressable>;
-            })}
-          </ScrollView>}
+          <Text style={styles.choiceHint}>Kapteenien yksityiskeskustelut avautuvat automaattisesti, kun kierros alkaa.</Text>
+          <Pressable disabled={startingAdminChat} onPress={() => void startAdminChat()} style={({ pressed }) => [styles.choiceRow, pressed && styles.rowPressed]}>
+            <View style={styles.avatar}><Ionicons name={threadIcons.admin} size={21} color={colors.lime} /></View>
+            <View style={styles.rowBody}>
+              <Text style={styles.rowTitle} numberOfLines={1}>Ylläpito</Text>
+              <Text style={styles.rowLeague} numberOfLines={1}>Yksityiskeskustelu liigan ylläpidon kanssa</Text>
+            </View>
+            {startingAdminChat ? <ActivityIndicator color={colors.green} /> : <Ionicons name="chevron-forward" size={18} color={colors.muted} />}
+          </Pressable>
           {newConversationError ? <Text style={styles.actionError}>{newConversationError}</Text> : null}
         </Pressable>
       </Pressable>
