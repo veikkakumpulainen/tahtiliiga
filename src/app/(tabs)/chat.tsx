@@ -674,7 +674,6 @@ export default function ChatTabScreen() {
             <Text style={styles.membersTitle}>Uusi keskustelu</Text>
             <Pressable onPress={() => setShowNewConversation(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.membersClose}>×</Text></Pressable>
           </View>
-          <Text style={styles.choiceHint}>Kapteenien yksityiskeskustelut avautuvat automaattisesti, kun kierros alkaa.</Text>
           <Pressable disabled={startingAdminChat} onPress={() => void startAdminChat()} style={({ pressed }) => [styles.choiceRow, pressed && styles.rowPressed]}>
             <View style={styles.avatar}><Ionicons name={threadIcons.admin} size={21} color={colors.lime} /></View>
             <View style={styles.rowBody}>
