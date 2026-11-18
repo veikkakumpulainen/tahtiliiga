@@ -22,8 +22,9 @@ const typeOrder: Record<ThreadType, number> = { community: 0, group: 1, qualific
 const lastMessageIdKeys: Record<ThreadType, string> = { group: "group_id", qualification: "match_id", direct: "conversation_id", community: "league_id", admin: "conversation_id" };
 
 // Admin conversations (132_admin_conversations.sql): an admin messages one
-// or more people they pick from a search.
-type AdminConversationRow = { id: string; created_at: string; other_names: string; member_count: number };
+// or more people they pick from a search. Every league player also has their
+// own one with all the admins (player_id, 136_player_admin_conversations.sql).
+type AdminConversationRow = { id: string; created_at: string; other_names: string; member_count: number; player_id: string | null };
 type AdminMemberRow = { user_id: string; first_name: string; last_name: string; player_code: number | null; is_admin: boolean };
 type PersonResult = { id: string; first_name: string; last_name: string; player_code: number | null };
 
@@ -46,6 +47,9 @@ type Conversation = {
   // Direct conversations: the two teams and whether all their members are in.
   ownTeamId?: string;
   includeTeams?: boolean;
+  // Admin's view of a player's own Ylläpito conversation: listed only once
+  // it has messages, since every player has one.
+  playerChat?: boolean;
 };
 type LastMessage = { message: string; created_at: string; user_id: string };
 
@@ -69,8 +73,6 @@ export default function ChatTabScreen() {
   const { lastNotify, lastDeleted, unreadGroupIds, unreadLeagueIds, unreadQualificationMatchIds, unreadDirectIds, unreadAdminChatIds, markGroupRead, markLeagueRead, markQualificationMatchRead, markDirectRead, markAdminChatRead } = useChatNotify();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
-  // In a league (an active team member): can message the admins.
-  const [isPlayer, setIsPlayer] = useState(false);
   const [lastMessages, setLastMessages] = useState<Record<string, LastMessage>>({});
   // Conversation keys whose push notifications this user has muted.
   const [mutedKeys, setMutedKeys] = useState<Set<string>>(new Set());
@@ -171,8 +173,8 @@ export default function ChatTabScreen() {
       next.push({
         key: `admin:${row.id}`, type: "admin", id: row.id, leagueId: "",
         title: admin ? row.other_names || "Keskustelu" : "Ylläpito",
-        subtitle: admin ? (row.member_count > 2 ? `${row.member_count - 1} henkilöä` : "Yksityiskeskustelu") : "Yksityiskeskustelu",
-        canCompose: true, adminOnly: false,
+        subtitle: admin && !row.player_id && row.member_count > 2 ? `${row.member_count - 1} henkilöä` : "Yksityiskeskustelu",
+        canCompose: true, adminOnly: false, playerChat: admin && !!row.player_id,
       });
     }
     for (const league of (adminLeagueRows ?? []) as { id: string; name: string }[]) {
@@ -208,9 +210,8 @@ export default function ChatTabScreen() {
     const byActivity = (left: Conversation, right: Conversation) =>
       Number(right.type === "community") - Number(left.type === "community")
       || (latest[right.key]?.created_at ?? "").localeCompare(latest[left.key]?.created_at ?? "") || typeOrder[left.type] - typeOrder[right.type];
-    setConversations(next.sort(byActivity));
+    setConversations(next.filter((conversation) => !conversation.playerChat || latest[conversation.key]).sort(byActivity));
     setLastMessages(latest);
-    setIsPlayer(teams.length > 0);
     setLoadingList(false);
   }, [session?.user.id]);
 
@@ -490,24 +491,6 @@ export default function ChatTabScreen() {
         : conversation.type === "admin" ? unreadAdminChatIds.has(conversation.id)
           : unreadLeagueIds.has(conversation.id);
 
-  // "Uusi keskustelu" for a player: a private conversation with the admins.
-  // The captains' conversations open automatically when a round starts, so
-  // they aren't offered here. The server returns the existing conversation
-  // if the player already has one.
-  const [showNewConversation, setShowNewConversation] = useState(false);
-  const [startingAdminChat, setStartingAdminChat] = useState(false);
-  const [newConversationError, setNewConversationError] = useState("");
-
-  const startAdminChat = async () => {
-    if (!supabase) return;
-    setStartingAdminChat(true); setNewConversationError("");
-    const { data, error: startError } = await supabase.rpc("start_conversation_with_admins");
-    if (startError || !data) { setStartingAdminChat(false); setNewConversationError("Keskustelun avaaminen epäonnistui. Yritä uudelleen."); return; }
-    await loadConversations();
-    setStartingAdminChat(false);
-    setShowNewConversation(false);
-    setOpenKey(`admin:${data as string}`);
-  };
 
   // Opens the conversation to every member of both teams. One-way.
   const [includingTeams, setIncludingTeams] = useState(false);
@@ -634,7 +617,9 @@ export default function ChatTabScreen() {
     </Pressable>;
   };
 
-  const showNewConversationButton = isAdmin || isPlayer;
+  // Players don't start conversations: the captains' ones open when a round
+  // starts and the Ylläpito one when they join a league.
+  const showNewConversationButton = isAdmin;
   const infoTexts: Record<ThreadType, [string, string]> = {
     admin: ["Ylläpidon keskustelu", "Tämä on keskustelu liigan ylläpidon kanssa. Viestit näkyvät vain keskustelun jäsenille."],
     community: ["Tiedotteet", "Tiedotteisiin liigan järjestäjä lähettää koko liigaa koskevia infoja."],
@@ -649,9 +634,8 @@ export default function ChatTabScreen() {
       {conversations.length === 0 ? <View style={styles.emptyState}><Text style={styles.emptyText}>Kun ilmoittaudut liigaan, sen tiedotteet näkyvät täällä. Lohkochat avautuu, kun kierros alkaa.</Text></View> : null}
       {conversations.map(renderRow)}
     </ScrollView>}
-    {/* Floats in the bottom right corner, just above the tab bar. Admins pick
-        anyone to message; players can message the admins. */}
-    {!loadingList && showNewConversationButton ? <Pressable onPress={() => { if (isAdmin) { openPicker("new"); return; } setNewConversationError(""); setShowNewConversation(true); }} accessibilityRole="button" style={({ pressed }) => [styles.newConversation, pressed && styles.newConversationPressed]}>
+    {/* Floats in the bottom right corner, just above the tab bar. Admins pick anyone to message. */}
+    {!loadingList && showNewConversationButton ? <Pressable onPress={() => openPicker("new")} accessibilityRole="button" style={({ pressed }) => [styles.newConversation, pressed && styles.newConversationPressed]}>
       <Ionicons name="create-outline" size={18} color={colors.lime} />
       <Text style={styles.newConversationText}>Uusi keskustelu</Text>
     </Pressable> : null}
@@ -667,25 +651,6 @@ export default function ChatTabScreen() {
             </>}
           </Pressable>
           {muteError ? <Text style={styles.actionError}>{muteError}</Text> : null}
-        </Pressable>
-      </Pressable>
-    </Modal>
-    <Modal visible={showNewConversation} transparent animationType="fade" onRequestClose={() => setShowNewConversation(false)}>
-      <Pressable style={styles.membersBackdrop} onPress={() => setShowNewConversation(false)}>
-        <Pressable style={styles.membersModal} onPress={(event) => event.stopPropagation()}>
-          <View style={styles.membersHeader}>
-            <Text style={styles.membersTitle}>Uusi keskustelu</Text>
-            <Pressable onPress={() => setShowNewConversation(false)} accessibilityRole="button" accessibilityLabel="Sulje"><Text style={styles.membersClose}>×</Text></Pressable>
-          </View>
-          <Pressable disabled={startingAdminChat} onPress={() => void startAdminChat()} style={({ pressed }) => [styles.choiceRow, pressed && styles.rowPressed]}>
-            <View style={styles.avatar}><Ionicons name={threadIcons.admin} size={21} color={colors.lime} /></View>
-            <View style={styles.rowBody}>
-              <Text style={styles.rowTitle} numberOfLines={1}>Ylläpito</Text>
-              <Text style={styles.rowLeague} numberOfLines={1}>Yksityiskeskustelu liigan ylläpidon kanssa</Text>
-            </View>
-            {startingAdminChat ? <ActivityIndicator color={colors.green} /> : <Ionicons name="chevron-forward" size={18} color={colors.muted} />}
-          </Pressable>
-          {newConversationError ? <Text style={styles.actionError}>{newConversationError}</Text> : null}
         </Pressable>
       </Pressable>
     </Modal>
