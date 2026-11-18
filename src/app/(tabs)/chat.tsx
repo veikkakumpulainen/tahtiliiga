@@ -22,9 +22,8 @@ const typeOrder: Record<ThreadType, number> = { community: 0, group: 1, qualific
 const lastMessageIdKeys: Record<ThreadType, string> = { group: "group_id", qualification: "match_id", direct: "conversation_id", community: "league_id", admin: "conversation_id" };
 
 // Admin conversations (132_admin_conversations.sql): an admin messages one
-// or more people they pick from a search. Every league player also has their
-// own one with all the admins (player_id, 136_player_admin_conversations.sql).
-type AdminConversationRow = { id: string; created_at: string; other_names: string; member_count: number; player_id: string | null };
+// or more people they pick from a search.
+type AdminConversationRow = { id: string; created_at: string; other_names: string; member_count: number };
 type AdminMemberRow = { user_id: string; first_name: string; last_name: string; player_code: number | null; is_admin: boolean };
 type PersonResult = { id: string; first_name: string; last_name: string; player_code: number | null };
 
@@ -47,9 +46,6 @@ type Conversation = {
   // Direct conversations: the two teams and whether all their members are in.
   ownTeamId?: string;
   includeTeams?: boolean;
-  // Admin's view of a player's own Ylläpito conversation: listed only once
-  // it has messages, since every player has one.
-  playerChat?: boolean;
 };
 type LastMessage = { message: string; created_at: string; user_id: string };
 
@@ -173,8 +169,8 @@ export default function ChatTabScreen() {
       next.push({
         key: `admin:${row.id}`, type: "admin", id: row.id, leagueId: "",
         title: admin ? row.other_names || "Keskustelu" : "Ylläpito",
-        subtitle: admin && !row.player_id && row.member_count > 2 ? `${row.member_count - 1} henkilöä` : "Yksityiskeskustelu",
-        canCompose: true, adminOnly: false, playerChat: admin && !!row.player_id,
+        subtitle: admin && row.member_count > 2 ? `${row.member_count - 1} henkilöä` : "Yksityiskeskustelu",
+        canCompose: true, adminOnly: false,
       });
     }
     for (const league of (adminLeagueRows ?? []) as { id: string; name: string }[]) {
@@ -210,7 +206,7 @@ export default function ChatTabScreen() {
     const byActivity = (left: Conversation, right: Conversation) =>
       Number(right.type === "community") - Number(left.type === "community")
       || (latest[right.key]?.created_at ?? "").localeCompare(latest[left.key]?.created_at ?? "") || typeOrder[left.type] - typeOrder[right.type];
-    setConversations(next.filter((conversation) => !conversation.playerChat || latest[conversation.key]).sort(byActivity));
+    setConversations(next.sort(byActivity));
     setLastMessages(latest);
     setLoadingList(false);
   }, [session?.user.id]);
@@ -617,8 +613,7 @@ export default function ChatTabScreen() {
     </Pressable>;
   };
 
-  // Players don't start conversations: the captains' ones open when a round
-  // starts and the Ylläpito one when they join a league.
+  // Players don't start conversations: the captains' ones open when a round starts.
   const showNewConversationButton = isAdmin;
   const infoTexts: Record<ThreadType, [string, string]> = {
     admin: ["Ylläpidon keskustelu", "Tämä on keskustelu liigan ylläpidon kanssa. Viestit näkyvät vain keskustelun jäsenille."],
