@@ -601,7 +601,7 @@ export default function GroupMatches({ teamId, teamName, groupId, ownGroupName, 
     </View>)}
     </>}
     <Modal visible={Boolean(selected)} transparent animationType="slide" onRequestClose={() => setSelected(null)}>
-      <View style={styles.modalBackdrop}><ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled"><View style={styles.modal}>
+      <View style={styles.modalBackdrop}><ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}><View style={styles.modal}>
         <View style={styles.modalHeader}><Text style={styles.modalTitle}>{selected?.home} vs {selected?.away}</Text><Pressable onPress={() => setSelected(null)}><Text style={styles.close}>×</Text></Pressable></View>
         <View style={styles.modeRow}>
           <Pressable onPress={() => setEditorSection("details")} style={[styles.mode, editorSection === "details" && styles.modeSelected]}><Text style={[styles.modeText, editorSection === "details" && styles.modeTextSelected]}>Tiedot</Text></Pressable>
