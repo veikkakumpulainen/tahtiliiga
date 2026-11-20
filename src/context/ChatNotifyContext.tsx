@@ -27,7 +27,8 @@ async function findUnread(rows: Record<string, MessageRow[]>, keyPrefix: string,
 }
 
 export type ChatNotifyEvent = { group_id?: string; league_id?: string; match_id?: string; direct_id?: string; admin_chat_id?: string; message_id: string; receivedAt: number };
-export type ChatDeleteEvent = { messageIds: string[]; receivedAt: number };
+// closedAdminChatId: an admin closed (deleted) that admin conversation (138).
+export type ChatDeleteEvent = { messageIds: string[]; closedAdminChatId?: string; receivedAt: number };
 
 type ChatNotifyContextValue = {
   lastNotify: ChatNotifyEvent | null;
@@ -162,8 +163,8 @@ export function ChatNotifyProvider({ children }: { children: ReactNode }) {
       // the ids in place, and the unread dots are recomputed in case the
       // deleted message was the only unread one in its thread.
       channel.on("broadcast", { event: "chat_deleted" }, ({ payload }) => {
-        const data = payload as { message_ids?: string[] };
-        setLastDeleted({ messageIds: data.message_ids ?? [], receivedAt: Date.now() });
+        const data = payload as { message_ids?: string[]; admin_chat_id?: string; admin_chat_closed?: boolean };
+        setLastDeleted({ messageIds: data.message_ids ?? [], closedAdminChatId: data.admin_chat_closed ? data.admin_chat_id : undefined, receivedAt: Date.now() });
         void refresh();
       });
       channel.subscribe();

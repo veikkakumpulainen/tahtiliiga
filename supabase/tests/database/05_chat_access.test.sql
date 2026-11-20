@@ -2,7 +2,7 @@
 -- näkyvät vain osallistujille.
 begin;
 \ir helpers.psql
-select plan(18);
+select plan(22);
 
 create temp table ctx as
 select tests.create_user('admin@test.fi', 'Ylla', 'Pito', 'male', true) as admin_id;
@@ -45,6 +45,10 @@ select isnt(tests.run_as(captain_b, format('insert into public.admin_messages (c
 select isnt(tests.run_as(captain_a, format('select public.add_admin_conversation_members(%L, array[%L]::uuid[])', admin_chat_id, captain_b)), null, 'a player cannot add people') from ctx;
 select is(tests.run_as(admin_id, format('select public.add_admin_conversation_members(%L, array[%L]::uuid[])', admin_chat_id, captain_b)), null, 'the admin adds another person') from ctx;
 select is(tests.count_as(captain_b, format('select * from public.get_admin_messages(%L)', admin_chat_id)), 1, 'the added person sees the earlier messages') from ctx;
+select isnt(tests.run_as(captain_a, format('select public.close_admin_conversation(%L)', admin_chat_id)), null, 'a player cannot close the conversation') from ctx;
+select is(tests.run_as(admin_id, format('select public.close_admin_conversation(%L)', admin_chat_id)), null, 'the admin closes the conversation') from ctx;
+select is(tests.count_as(captain_a, 'select * from public.get_my_admin_conversations()'), 0, 'the closed conversation is gone from the player''s list') from ctx;
+select is(tests.count_as(admin_id, 'select * from public.get_my_admin_conversations()'), 0, 'the closed conversation is gone from the admin''s list') from ctx;
 
 select * from finish();
 rollback;

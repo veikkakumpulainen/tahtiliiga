@@ -272,6 +272,7 @@ export default function ChatTabScreen() {
   const openMembers = async () => {
     if (!supabase || !openConversation) return;
     setShowMembers(true);
+    setConfirmClose(false); setCloseError("");
     setLoadingMembers(true);
     if (openConversation.type === "admin") {
       await loadAdminMembers(openConversation.id);
@@ -401,6 +402,17 @@ export default function ChatTabScreen() {
 
   // Someone deleted messages: drop them from the open list in place, so the
   // scroll position stays where the reader left it.
+  // An admin closed an admin conversation: leave it if it's open (going back
+  // to the list reloads it), otherwise just reload the list.
+  useEffect(() => {
+    const closedId = lastDeleted?.closedAdminChatId;
+    if (!closedId) return;
+    if (openThreadKey === `admin:${closedId}`) closeThread();
+    else if (!openThreadKey) void loadConversations();
+    // Only a new ping should trigger this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastDeleted]);
+
   useEffect(() => {
     if (!lastDeleted?.messageIds.length) return;
     const deletedIds = new Set(lastDeleted.messageIds);
@@ -550,6 +562,20 @@ export default function ChatTabScreen() {
     setPickerBusy(false);
     setPickerMode(null);
     setOpenKey(`admin:${data as string}`);
+  };
+
+  // Admin closes the open admin conversation: deleted for every member (138).
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [closeError, setCloseError] = useState("");
+  const closeAdminConversation = async () => {
+    if (!supabase || !openConversation || openConversation.type !== "admin") return;
+    setClosing(true); setCloseError("");
+    const { error: closeSaveError } = await supabase.rpc("close_admin_conversation", { target_conversation_id: openConversation.id });
+    setClosing(false);
+    if (closeSaveError) { setCloseError("Keskustelun sulkeminen epäonnistui. Yritä uudelleen."); return; }
+    setConfirmClose(false);
+    closeThread();
   };
 
   const existingMemberIds = new Set(pickerMode === "add" ? adminMembers.map((member) => member.user_id) : []);
@@ -717,6 +743,13 @@ export default function ChatTabScreen() {
             <Ionicons name="person-add-outline" size={18} color={colors.green} />
             <Text style={styles.muteButtonText}>Lisää henkilöitä</Text>
           </Pressable> : null}
+          {openConversation.type === "admin" && isAdmin ? <>
+            <Pressable disabled={closing} onPress={() => confirmClose ? void closeAdminConversation() : setConfirmClose(true)} style={[styles.deleteButton, styles.includeButton, confirmClose && styles.deleteButtonConfirm]}>
+              {closing ? <ActivityIndicator color={colors.surface} /> : <Text style={[styles.deleteButtonText, confirmClose && styles.deleteButtonTextConfirm]}>{confirmClose ? "Vahvista sulkeminen" : "Sulje keskustelu"}</Text>}
+            </Pressable>
+            {confirmClose ? <Text style={styles.choiceHint}>Keskustelu ja sen viestit poistuvat kaikilta jäseniltä pysyvästi.</Text> : null}
+            {closeError ? <Text style={styles.actionError}>{closeError}</Text> : null}
+          </> : null}
           {openConversation.type === "direct" && !openConversation.includeTeams ? <>
             <Pressable disabled={includingTeams} onPress={() => void includeTeams()} style={[styles.muteButton, styles.includeButton]}>
               {includingTeams ? <ActivityIndicator color={colors.green} /> : <>
